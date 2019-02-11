@@ -4,59 +4,14 @@ import load_trace
 import numpy as np
 import videoInfo as video
 import math
-
-
+import numpy as np
+from abrBOLA import BOLA
 
 COOCKED_TRACE_DIR = "./train_sim_traces/"
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 PLAYBACK_DELAY_THRESHOLD = 4
 # np.random.seed(2300)
-
-class BOLA():
-    def __init__(self, videoInfo):
-        self._videoInfo = videoInfo
-        self._vms = None
-    
-    def init(self):
-        SM = float(self._videoInfo.bitrates[-1])
-        self.vms = [math.log(sm/SM) for sm in self._videoInfo.bitrates]
-
-    def getNextDownloadTime(self, maxBufLen, bufferUpto, playbackTime, now, segId):
-        V = 0.93
-        lambdaP = 13
-        sleepTime = 0
-        buflen = bufferUpto - playbackTime
-        if (maxBufLen - self._videoInfo.segmentDuration) <= buflen:
-            sleepTime = buflen + self._videoInfo.segmentDuration - maxBufLen
-
-#         sizes = self._videoInfo.fileSizes
-
-        maxM = 0
-        maxRatio = -math.inf
-        bestSleepTime = sleepTime
-
-        while buflen > self._videoInfo.segmentDuration:
-            qt = buflen
-            downloadable = False
-            for m,_ in enumerate(self._videoInfo.bitrates):
-                if (V * self.vms[m] + V*lambdaP) >= qt:
-                    downloadable = True
-            if downloadable:
-                for m,_ in enumerate(self._videoInfo.bitrates):
-                    ratio = ((V * self.vms[m] + V*lambdaP) - qt)
-                    ratio /= self._videoInfo.fileSizes[m][segId]
-#                     assert ratio >= 0
-                    if maxRatio < ratio:
-                        maxM = m
-                        bestSleepTime = sleepTime
-                        maxRatio = ratio
-            sleepTime += 1
-            buflen -= 1
-        print(bestSleepTime, maxM, segId)
-        return bestSleepTime, maxM
-
-
 class Agent():
     def __init__(self, videoInfo, simulator, traces = None, setQuality = None):
         self._vVideoInfo = videoInfo
@@ -65,7 +20,7 @@ class Agent():
         self._vNextSegmentIndex = 0
         self._vPlaybacktime = 0.0
         self._vBufferUpto = 0
-        self._vPaused = True
+#         self._vPaused = True
         self._vLastEventTime = simulator.getNow()
         self._vTotalStallTime = 0
         self._vStallsAt = []
@@ -81,6 +36,8 @@ class Agent():
         self._vTimeouts = []
         self._vRequests = [] #7-tuple throughput, timetaken, bytes/clen, startingTime, segIndex, segDur, bitrate
         self._vSetQuality = setQuality.getNextDownloadTime if setQuality else self._rWhenToDownload
+        self._vStartingPlaybackTime = 0
+        self._vStartingSegId = 0
 
     def _rNextQuality(self, ql, timetaken, segDur, segIndex, clen):
         assert segIndex == self._vNextSegmentIndex
@@ -90,7 +47,7 @@ class Agent():
         self._vRequests.append((throughput, timetaken, clen, \
                 startingTime, segIndex, segDur, ql))
 
-        _, times, clens = list(zip(*self._vRequests))[:3] 
+        _, times, clens = list(zip(*self._vRequests))[:3]
         avg = sum(clens)*8/sum(times)
         level = 0
         for ql, q in enumerate(self._vVideoInfo.bitrates):
@@ -98,7 +55,7 @@ class Agent():
                 break
             level = ql
         self._vCurrentBitrateIndex = level
-    
+
     def _rWhenToDownload(self, *kw):
         buflen = self._vBufferUpto - self._vPlaybacktime
         if (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) > buflen:
@@ -107,6 +64,7 @@ class Agent():
         return sleepTime, self._vCurrentBitrateIndex
 
     def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None):
+        assert segIndex == self._vNextSegmentIndex
         if simIds and TIMEOUT_SIMID_KEY in simIds:
             self._vSimulator.cancelTask(simIds[TIMEOUT_SIMID_KEY])
         self._rNextQuality(ql, timetaken, segDur, segIndex, clen)
@@ -139,6 +97,8 @@ class Agent():
                 return
 
             self._vIsStarted = True
+            self._vStartingPlaybackTime = playbackTime
+            self._vStartingSegId = segIndex
             self._vStartUpDelay = startUpDelay
 
 
@@ -170,7 +130,7 @@ class Agent():
     def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
         if simIds != None and REQUESTION_SIMID_KEY in simIds:
             self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
-        
+
         self._vLastBandwidthPtr = lastBandwidthPtr
         self._vTimeouts.append((self._vNextSegmentIndex, self._vCurrentBitrateIndex))
         self._vCurrentBitrateIndex = 0
@@ -220,7 +180,7 @@ class Agent():
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAt(now + time, self._rAddToBuffer, self._vCurrentBitrateIndex, time, nextDur, self._vNextSegmentIndex, chsize, simIds)
-        
+
         #self._vPendingRequests[self._vNextSegmentIndex] = reqId
 
     def _rFinish(self):
@@ -255,10 +215,10 @@ def main():
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         bola = BOLA(vi)
-        bola.init()
         ag = Agent(vi, simulator, trace, bola)
+        bola.init(ag)
         simulator.runAt(101.0 + x, ag.start, 5)
-        break
+#         break
     simulator.run()
 
 if __name__ == "__main__":
