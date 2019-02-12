@@ -69,6 +69,9 @@ class PriorityQueue:
         self.minHeapify(index)
         return x[2]
 
+    def isRefExists(self, ref):
+        return ref in self.index
+
     def minHeapify(self, i = 0):
         while True:
             l = left(i)

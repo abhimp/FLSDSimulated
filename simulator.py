@@ -6,9 +6,9 @@ class Simulator():
         self.queue = PriorityQueue()
         self.now = 0.0
 
-    def runAt(self, at, callback, *args):
+    def runAt(self, at, callback, *args, **kw):
         at = float(at)
-        ref = self.queue.insert(at, (at, callback, args))
+        ref = self.queue.insert(at, (at, callback, args, kw))
         return ref
 
     def getNow(self):
@@ -19,14 +19,17 @@ class Simulator():
 
     def run(self):
         while not self.queue.isEmpty():
-            at, callback, args = self.queue.extractMin()
+            at, callback, args, kw = self.queue.extractMin()
             self.now = at
-            callback(*args)
+            callback(*args, **kw)
 
-    def runNow(self, callback, *args):
+    def isPending(self, ref):
+        return self.queue.isRefExists(ref)
+
+    def runNow(self, callback, *args, **kw):
         nexTime = self.now()
 
-        return self.queue.insert(nexTime, (self.now, callback, kw))
+        return self.queue.insert(nexTime, (self.now, callback, args, kw))
 
 def smtest(sm, cmd):
     print(sm.getNow(), cmd)

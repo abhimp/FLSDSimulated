@@ -39,6 +39,7 @@ class BOLA():
         if M < lastM:
             r = agent._vRequests[-1][0] #throughput
             mp = min([m for m,sm in enumerate(self._videoInfo.bitrates) if sm/p < max(r, SM)] + [len(self._videoInfo.bitrates)])
+            mp = 0 if mp >= len(self._videoInfo.bitrates) else mp
             if mp <= M:
                 mp = M
             elif mp > lastM:

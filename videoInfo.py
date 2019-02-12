@@ -10,6 +10,7 @@ class VideoInfo():
         s.duration = vi.duration
         s.minimumBufferTime = vi.minimumBufferTime
         s.segmentDurations = []
+        s.segmentCount = len(s.fileSizes[0])
 #         dur = 0
 #         for x in s.fileSizes[0]:
 #             if s.duration - dur > vi.segmentDuration:
@@ -35,7 +36,7 @@ def loadVideoTime(fileName):
         importlib.sys.path = path
     return VideoInfo(videoInfo)
 
-def dummpyVideoInfo():
+def dummyVideoInfo():
     import numpy as np
     class dummy():
         def __init__(s):
