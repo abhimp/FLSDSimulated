@@ -5,13 +5,12 @@ import videoInfo as video
 import math
 import numpy as np
 from abrBOLA import BOLA
-from group import Group
+from group import Group, GroupManager
 
 COOCKED_TRACE_DIR = "./train_sim_traces/"
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 PLAYBACK_DELAY_THRESHOLD = 4
-GLOBAL_DELAY_PLAYBACK = 50 #Total arbit
 
 class Agent():
     __count = 0
@@ -49,9 +48,12 @@ class Agent():
         self._vPendingRequests = set()
         self._vOtherPeerRequest = {}
         self._vDownloadPending = False
+        self._vDead = False
 
 #=============================================
     def _rNextQuality(self, ql, timetaken, segDur, segIndex, clen):
+        if self._vDead: return
+
         assert segIndex == self._vNextSegmentIndex
         totaldata = clen
         throughput = float(totaldata)/timetaken*8
@@ -70,6 +72,8 @@ class Agent():
 
 #=============================================
     def _rWhenToDownload(self, *kw):
+        if self._vDead: return
+
         buflen = self._vBufferUpto - self._vPlaybacktime
         if (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) > buflen:
             return 0, self._vCurrentBitrateIndex
@@ -78,9 +82,13 @@ class Agent():
 
 #=============================================
     def _rSendRequestedData(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
+        if self._vDead: return
+
         now = self._vSimulator.getNow()
         if segIndex in self._vOtherPeerRequest:
             for node in self._vOtherPeerRequest[segIndex]:
+                if not self._vGroup.isNeighbour(self, node):
+                    continue
                 delay = np.random.uniform(0.1, 0.5)
                 self._vSimulator.runAt(now+delay, node._rAddToBuffer, ql, timetaken + delay, segDur, segIndex, clen, external = True)
                 self._vTotalUploaded += clen
@@ -89,6 +97,8 @@ class Agent():
 
 #=============================================
     def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
+        if self._vDead: return
+
         self._rSendRequestedData(ql, timetaken, segDur, segIndex, clen, simIds, external)
 #         assert segIndex not in self._vCatched
         if segIndex not in self._vCatched:
@@ -154,6 +164,8 @@ class Agent():
 
 #=============================================
     def _rDownloadNextData(self, buflen):
+        if self._vDead: return
+
         now = self._vSimulator.getNow()
         nextSegId = self._vNextSegmentIndex
         nextQuality = self._vCurrentBitrateIndex
@@ -161,11 +173,11 @@ class Agent():
             bitrate, timeTaken, segDur, segId, clen, simIds, external = self._vCatched[nextSegId]
             self._rAddToBuffer(bitrate, timeTaken, segDur, segId, clen, simIds, external)
             return
-        sleepTime = 0 if buflen < (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) else(buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen)
+        sleepTime = 0 if buflen < (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) else (buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen)
         if self._vGroup:
             downloader = self._vGroup.currentSchedule(self, nextSegId)
             if downloader == self:
-                nextQuality = self._vGroup.qualityLevel
+                nextQuality = self._vGroup.getQualityLevel(self)
             elif downloader:
                 downloader._rRequestSegment(self, nextSegId)
                 while not self._vDownloadPending:
@@ -189,6 +201,8 @@ class Agent():
 
 #=============================================
     def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
+        if self._vDead: return
+
         if simIds != None and REQUESTION_SIMID_KEY in simIds:
             self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
 
@@ -197,7 +211,10 @@ class Agent():
         self._vCurrentBitrateIndex = 0
         self._rFetchSegment(self._vNextSegmentIndex, self._vCurrentBitrateIndex, sleepTime)
 
+#=============================================
     def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
+        if self._vDead: return
+
         if self._vDownloadPending:
             print("Download pending for self")
             return
@@ -211,6 +228,8 @@ class Agent():
 
 #=============================================
     def _rGetTimeOutTime(self):
+        if self._vDead: return
+
         timeout = self._vVideoInfo.segmentDuration
         bufLeft = self._vBufferUpto - self._vPlaybacktime
         if bufLeft - timeout > timeout:
@@ -219,14 +238,18 @@ class Agent():
 
 #=============================================
     def _rIsAvailable(self, segId):
+        if self._vDead: return
+
         assert segId < self._vVideoInfo.segmentCount
         now = self._vSimulator.getNow()
         ePlaybackTime = now - self._vGlobalStartedAt
         segStartTime = (segId+1)*self._vVideoInfo.segmentDuration
-        return ePlaybackTime + GLOBAL_DELAY_PLAYBACK - segStartTime
+        return ePlaybackTime + self._vVideoInfo.globalDelayPlayback - segStartTime
 
 #=============================================
     def _rRequestSegment(self, node, segId):
+        if self._vDead: return
+
         now = self._vSimulator.getNow()
 
         if segId in self._vCatched:
@@ -236,12 +259,14 @@ class Agent():
             self._vTotalUploaded += clen
             return True
 
-        otherPeers = self._vOtherPeerRequest.setdefault(segId, [])
-        otherPeers.append(node)
+        otherPeers = self._vOtherPeerRequest.setdefault(segId, set())
+        otherPeers.add(node)
         return True
 
 #=============================================
     def _rFetchNextSeg(self, nextSegId, nextQuality, sleepTime = 0, ignoreGroup = False):
+        if self._vDead: return
+
         now = self._vSimulator.getNow()
         simIds = {}
 
@@ -279,6 +304,8 @@ class Agent():
 
 #=============================================
     def _rCalculateQoE(self):
+        if self._vDead: return
+
         lmbda = 1
         mu = 4.3
         mu_s = 1 
@@ -295,13 +322,15 @@ class Agent():
 
 #=============================================
     def _rFinish(self):
+        if self._vDead: return
+
         self._vFinished = True
         print(self._vTraceFile)
         print("Simulation finished at:", self._vSimulator.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay)
         print("QoE:", self._rCalculateQoE())
 #         print("Quality played:", self._vQualitiesPlayed)
         print("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
-                "ration D/U:", self._vTotalDownloaded/self._vTotalUploaded)
+                "ration U/D:", self._vTotalUploaded/self._vTotalDownloaded)
 
     def start(self, startedAt = -1):
         segId = self._vNextSegmentIndex
@@ -328,7 +357,7 @@ def main():
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
-    grp = Group(5)#np.random.randint(len(vi.bitrates)))
+    grp = GroupManager(4, 5)#np.random.randint(len(vi.bitrates)))
     ags = []
     for x in range(5):
         idx = np.random.randint(len(traces))

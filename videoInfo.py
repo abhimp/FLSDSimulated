@@ -1,6 +1,8 @@
 import importlib
 import os
 
+GLOBAL_DELAY_PLAYBACK = 50 #Total arbit
+
 
 class VideoInfo():
     def __init__(s, vi):
@@ -11,6 +13,7 @@ class VideoInfo():
         s.minimumBufferTime = vi.minimumBufferTime
         s.segmentDurations = []
         s.segmentCount = len(s.fileSizes[0])
+        s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
 #         dur = 0
 #         for x in s.fileSizes[0]:
 #             if s.duration - dur > vi.segmentDuration:
