@@ -2,12 +2,13 @@ import numpy as np
 import math
 
 class BOLA():
-    def __init__(self, videoInfo):
+    def __init__(self, videoInfo, agent):
         self._videoInfo = videoInfo
         self._vms = None
         self._agent = None
+        self.__init(agent)
     
-    def init(self, agent):
+    def __init(self, agent):
         SM = float(self._videoInfo.bitrates[-1])
         self._vms = [math.log(sm/SM) for sm in self._videoInfo.bitrates]
         self._agent = agent

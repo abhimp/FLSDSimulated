@@ -6,8 +6,12 @@ class Simulator():
         self.queue = PriorityQueue()
         self.now = 0.0
 
+    def runAfter(self, after, callback, *args, **kw):
+        self.runAt(self.now+after, callback, *args, **kw)
+
     def runAt(self, at, callback, *args, **kw):
         at = float(at)
+        assert at >= self.now
         ref = self.queue.insert(at, (at, callback, args, kw))
         return ref
 
