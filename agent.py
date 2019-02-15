@@ -203,7 +203,7 @@ class Agent():
 
 #=============================================
     def _rIsAvailable(self, segId):
-        if self._vDead: return
+        if self._vDead: return -1
 
         assert segId < self._vVideoInfo.segmentCount
         now = self._vEnv.getNow()

@@ -95,8 +95,8 @@ class GroupManager():
             grps = s.groups.setdefault(ql, [])
             grps.append(group)
 
-        group.add(node, segId)
         s.peers[node] = group
+        group.add(node, segId)
 
     def remove(s, node, segId = 0):
         if node not in s.peers:
@@ -122,6 +122,8 @@ class GroupManager():
             raise Exception("node not found")
         return s.peers[node].qualityLevel
 
+    def getRtt(self, node1, node2):
+        return self.network.getRtt(node1.networkId, node2.networkId)
 
     def transmissionTime(self, node1, node2, size):
         if not self.network:
