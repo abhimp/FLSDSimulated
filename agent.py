@@ -129,7 +129,7 @@ class Agent():
             if  self._vCanSkip and expectedPlaybackTime + PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
                 #need to skip this segment
                 self._vNextSegmentIndex += 1
-                self._vEnv._rDownloadNextData(self._vNextSegmentIndex, self._vCurrentBitrateIndex, 0, 0)
+                self._rDownloadNextData(0)
                 self._vSegmentSkiped += 1
                 return
 
@@ -175,7 +175,7 @@ class Agent():
         sleepTime, nextQuality = self._vSetQuality(self._vMaxPlayerBufferLen, \
             self._vBufferUpto, self._vPlaybacktime, now, self._vNextSegmentIndex)
         self._vCurrentBitrateIndex = nextQuality
-        self._vEnv._rDownloadNextData(nextSegId, nextQuality, sleepTime, buflen)
+        self._vEnv._rDownloadNextData(nextSegId, nextQuality, sleepTime)
 
 #=============================================
     def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
@@ -255,5 +255,5 @@ class Agent():
             self._vCanSkip = True
             self._vGlobalStartedAt = startedAt
         self._vLastEventTime = now
-        self._vEnv._rDownloadNextData(self._vNextSegmentIndex, self._vCurrentBitrateIndex, 0, 0)
+        self._rDownloadNextData(0)
 

@@ -56,7 +56,7 @@ class SimpleEnviornment():
     
 
 #=============================================
-    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime, buflen):
+    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if self._vDead: return
 
         self._rFetchSegment(nextSegId, nextQuality, sleepTime)

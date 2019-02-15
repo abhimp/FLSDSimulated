@@ -11,9 +11,12 @@ class Group():
     def __schedule(s, segId):
         nodeslist = list(s.nodes)
         nodeslist.sort(key=lambda x: - s.nodeAddedWithSegId[x])
-        for i, segId in enumerate(range(segId, 1000)):
+        for i, seg in enumerate(range(segId, 1000)):
             x = i % len(nodeslist)
-            s.schedules[segId] = nodeslist[x]
+            s.schedules[seg] = nodeslist[x]
+
+        for n in s.nodes:
+            n.schedulesChanged(segId)
 
     def numNodes(s):
         return len(s.nodes)

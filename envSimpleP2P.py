@@ -32,7 +32,7 @@ class SimpleP2PEnv(SimpleEnviornment):
         return self._vCatched.get((segId, segQuality))
 
 #=============================================
-    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime, buflen):
+    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if self._vDead: return
 
         timeneeded = 0
