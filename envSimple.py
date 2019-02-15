@@ -5,20 +5,36 @@ import videoInfo as video
 import numpy as np
 from abrBOLA import BOLA
 
+from p2pnetwork import P2PNetwork
+
 COOCKED_TRACE_DIR = "./train_sim_traces/"
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
 class SimpleEnviornment():
-    def __init__(self, vi, traces, simulator, abr = None):
+    def __init__(self, vi, traces, simulator, abr = None, peerId = None):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
         self._vAgent = Agent(vi, self, abr)
         self._vSimulator = simulator
         self._vDead = False
-        self._vDownloadPending = False
         self._vVideoInfo = vi
         self._vFinished = False
+        self._vConnectionSpeed = np.mean(self._vCookedBW)
+        self._vLastDownloadedAt = 0
+        self._vPeerId = peerId if peerId else np.random.randint(1000000)
+
+    @property
+    def networkId(self):
+        return self._vPeerId
+
+    @property
+    def connectionSpeed(self):
+        return self._vConnectionSpeed
+
+    @property
+    def connectionSpeedBPS(self):
+        return self._vConnectionSpeed * 1000000
 
     def addAgent(self, ag):
         self._vAgent = ag
@@ -49,38 +65,27 @@ class SimpleEnviornment():
     def start(self, startedAt = -1):
         if not self._vAgent:
             raise Exception("Node agent to start")
+        self._vLastDownloadedAt = self.getNow()
         self._vAgent.start(startedAt)
 
 #=============================================
     def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
         if self._vDead: return
-
-        if self._vDownloadPending:
-            print("Download pending for self", nextSegId, self._vAgent.nextSegmentIndex)
-            return
-        if nextSegId > self._vAgent.nextSegmentIndex:
-            print("Early downloading", nextSegId, self._vAgent.nextSegmentIndex)
-        if sleepTime == 0.0:
-            self._rFetchNextSeg(nextSegId, nextQuality)
-        else:
-            assert sleepTime >= 0
-#             nextFetchTime = self._vSimulator.getNow() + sleepTime
-            self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality, sleepTime)
-        self._vDownloadPending = True
+        assert sleepTime >= 0
+        self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality)
 
 #=============================================
     def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
         if self._vDead: return
 
-        self._vDownloadPending = False
-
         self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, external)
 
 #=============================================
-    def _rFetchNextSeg(self, nextSegId, nextQuality, sleepTime = 0, ignoreGroup = False):
+    def _rFetchNextSeg(self, nextSegId, nextQuality):
         if self._vDead: return
 
         now = self._vSimulator.getNow()
+        sleepTime = now - self._vLastDownloadedAt
         simIds = {}
 
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
@@ -112,7 +117,8 @@ class SimpleEnviornment():
 
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
-        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAt(now + time, self._rAddToBuffer, nextQuality, time, nextDur, nextSegId, chsize, simIds)
+        self._vLastDownloadedAt = now + time
+        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, nextQuality, time, nextDur, nextSegId, chsize, simIds)
 
 
 #=============================================
@@ -123,8 +129,9 @@ def main():
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
+    network = P2PNetwork()
     ags = []
-    for x in range(5):
+    for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         env = SimpleEnviornment(vi, trace, simulator, BOLA)

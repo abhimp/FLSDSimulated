@@ -2,20 +2,42 @@ from envSimple import *
 from group import GroupManager
 
 class GroupP2PEnv(SimpleEnviornment):
-    def __init__(self, vi, traces, simulator, abr = None, grp = None):
-        super().__init__(vi, traces, simulator, abr)
+    def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None):
+        super().__init__(vi, traces, simulator, abr, peerId)
 #         self._vAgent = Agent(vi, self, abr)
+        self._vDownloadPending = False
         self._vGroup = grp
         self._vCatched = {}
         self._vOtherPeerRequest = {}
         self._vTotalDownloaded = 0
         self._vTotalUploaded = 0
         self._vStarted = False
+        self._vPendingSelfSegment = {}
+        self._vRequestedSegmentTo = {}
 
     def playerStartedCB(self, *kw, **kwa):
         if self._vGroup:
             self._vGroup.add(self, self._vAgent.nextSegmentIndex+2)
         self._vStarted = True
+
+#=============================================
+    def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
+        if self._vDead: return
+
+        if self._vDownloadPending:
+            if nextSegId == self._vAgent.nextSegmentIndex:
+                self._vPendingSelfSegment[nextSegId] = (nextSegId, nextQuality, sleepTime, self.getNow())
+#             print("Download pending for self", nextSegId, self._vAgent.nextSegmentIndex)
+            return
+#         if nextSegId > self._vAgent.nextSegmentIndex:
+#             print("Early downloading", nextSegId, self._vAgent.nextSegmentIndex)
+        if sleepTime == 0.0:
+            self._rFetchNextSeg(nextSegId, nextQuality)
+            self._vDownloadPending = True
+        else:
+            assert sleepTime >= 0
+#             nextFetchTime = self._vSimulator.getNow() + sleepTime
+            self._vSimulator.runAfter(sleepTime, self._rFetchSegment, nextSegId, nextQuality)
 
 #=============================================
     def _rFinish(self):
@@ -47,8 +69,22 @@ class GroupP2PEnv(SimpleEnviornment):
         if segIndex not in self._vCatched:
             self._vCatched[segIndex] = (ql, timetaken, segDur, segIndex, clen, simIds, external) 
 
+        if segIndex in self._vPendingSelfSegment:
+            del self._vPendingSelfSegment[self._vAgent.nextSegmentIndex]
+
         if segIndex != self._vAgent.nextSegmentIndex:
 #             print("invalid segIndex:", segIndex, self._vAgent.nextSegmentIndex)
+            if self._vAgent.nextSegmentIndex in self._vPendingSelfSegment:
+                nextSegId, nextQuality, sleepTime, addedAt = self._vPendingSelfSegment[self._vAgent.nextSegmentIndex]
+                diff = self.getNow() - addedAt
+                sleepTime = 0 if diff >= sleepTime else sleepTime - diff
+                self._rFetchSegment(nextSegId, nextQuality, sleepTime)
+                del self._vPendingSelfSegment[self._vAgent.nextSegmentIndex]
+#             elif self._vAgent.nextSegmentIndex in self._vCatched:
+#                 bitrate, timeTaken, segDur, segId, clen, simIds, external = self._vCatched[nextSegId]
+#                 self._rAddToBuffer(bitrate, timeTaken, segDur, segId, clen, simIds, external)
+#             else:
+#                 print("No further downloader", self._vPendingSelfSegment.keys())
             return
         if simIds and TIMEOUT_SIMID_KEY in simIds:
             self._vSimulator.cancelTask(simIds[TIMEOUT_SIMID_KEY])
@@ -58,13 +94,20 @@ class GroupP2PEnv(SimpleEnviornment):
             self._vTotalDownloaded += clen
         self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, external)
 
+#=============================================
+    def _rDownloadNextDataTimeout(self, nextSegId, nextQuality, sleepTime, buflen):
+        if self._vDead: return
+
+        if nextSegId in self._vCatched:
+            return
+        self._rDownloadNextData(self, nextSegId, nextQuality, sleepTime, buflen)
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime, buflen):
         if self._vDead: return
         now = self.getNow()
-        nextSegId = self._vAgent.nextSegmentIndex
-        nextQuality = self._vAgent.currentBitrateIndex
+#         nextSegId = self._vAgent.nextSegmentIndex
+#         nextQuality = self._vAgent.currentBitrateIndex
         if nextSegId in self._vCatched:
             bitrate, timeTaken, segDur, segId, clen, simIds, external = self._vCatched[nextSegId]
             self._rAddToBuffer(bitrate, timeTaken, segDur, segId, clen, simIds, external)
@@ -75,8 +118,12 @@ class GroupP2PEnv(SimpleEnviornment):
             downloader = self._vGroup.currentSchedule(self, nextSegId)
             if downloader == self:
                 nextQuality = self._vGroup.getQualityLevel(self)
-            elif downloader:
-                downloader._rRequestSegment(self, nextSegId)
+            elif downloader and downloader._rRequestSegment(self, nextSegId):
+                
+                self._vRequestedSegmentTo.setdefault(nextSegId, set()).add(downloader)
+#                 timeoutAfter = self._vAgent._rGetTimeOutTime()
+#                 sleepTime = 0 if timeoutAfter > sleepTime else sleepTime - timeoutAfter 
+#                 self.runAfter(timeoutAfter, self._rDownloadNextDataTimeout, nextSegId, nextQuality, sleepTime, buflen)
                 while not self._vDownloadPending:
                     nextSegId += 1
                     if nextSegId >= self._vVideoInfo.segmentCount:
@@ -101,9 +148,12 @@ class GroupP2PEnv(SimpleEnviornment):
 
         now = self.getNow()
 
+        if segId in self._vRequestedSegmentTo: return False
+        if node in self._vRequestedSegmentTo.get(segId, set()): return False
+
         if segId in self._vCatched:
             bitrate, timeTaken, segDur, segId, clen, simIds, external = self._vCatched[segId]
-            timeTaken = 5 #TODO arbit
+            timeTaken = self._vGroup.transmissionTime(self, node, clen)#TODO arbit
             self._vSimulator.runAt(now + timeTaken, node._rAddToBuffer, bitrate, timeTaken, segDur, segId, clen, external = True)
             self._vTotalUploaded += clen
             return True
@@ -114,26 +164,25 @@ class GroupP2PEnv(SimpleEnviornment):
 
 #=============================================
     def start(self, startedAt = -1):
-        if not self._vAgent:
-            raise Exception("Node agent to start")
-        self._vAgent.start(startedAt)
+        super().start(startedAt)
         self._vAgent.addStartupCB(self.playerStartedCB)
 
 
 
 def main():
-#     np.random.seed(2300)
+#     np.random.seed(2301)
     simulator = Simulator()
     traces = load_trace.load_trace(COOCKED_TRACE_DIR)
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
-    grp = GroupManager(4, 5)#np.random.randint(len(vi.bitrates)))
+    network = P2PNetwork()
+    grp = GroupManager(4, 7, vi, network)#np.random.randint(len(vi.bitrates)))
     ags = []
-    for x in range(4):
+    for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = GroupP2PEnv(vi, trace, simulator, None, grp)
+        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
 #         env = SimpleEnviornment(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)

@@ -1,11 +1,12 @@
 
 class Group():
-    def __init__(s, ql):
+    def __init__(s, ql, network):
         s.nodes = []
         s.schedules = {}
         s.segMents = 0
         s.nodeAddedWithSegId = {}
         s.qualityLevel = ql
+        s.network = None
 
     def __schedule(s, segId):
         nodeslist = list(s.nodes)
@@ -44,24 +45,52 @@ class Group():
     def isNeighbour(s, node):
         return node in s.nodeAddedWithSegId
 
+    def isSuitable(self, node):
+        if not self.network: return True
+        for n in self.nodes:
+            if not self.network.isClose(node.networkId, n.networkId):
+                return False
+        return True
+
+SPEED_TOLARANCE_PERCENT = 0
+
 class GroupManager():
-    def __init__(self, peersPerGroup = 3, defaultQL = 3):
-        self.groups = []
+    def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
+        self.groups = {}
         self.peers = {}
         self.peersPerGroup = peersPerGroup
         self.defaultQL = defaultQL
+        self.videoInfo = videoInfo
+        self.network = network
 
     def add(s, node, segId = 0, ql = -1):
         ql = s.defaultQL if ql < 0 else ql
+
+        conn = node.connectionSpeedBPS
+        
+        if s.videoInfo:
+            connQl = ql
+            connTol = conn * (1 + SPEED_TOLARANCE_PERCENT/100.0)
+            while connQl > 0:
+                if connTol >= s.videoInfo.bitrates[connQl]:
+                    break
+                connQl -= 1
+            if ql != connQl:
+                print("assiging ql:", connQl, "instead of", ql)
+            ql = connQl
+
+
         group = None
-        for grp in s.groups:
-            if grp.numNodes() < s.peersPerGroup and grp.qualityLevel == ql:
+        for grp in s.groups.get(ql, []):
+            assert grp.qualityLevel == ql
+            if grp.numNodes() < s.peersPerGroup and grp.isSuitable(node):
                 group = grp
                 break
 
         if not group:
-            group = Group(ql)
-            s.groups.append(group)
+            group = Group(ql, s.network)
+            grps = s.groups.setdefault(ql, [])
+            grps.append(group)
 
         group.add(node, segId)
         s.peers[node] = group
@@ -71,8 +100,8 @@ class GroupManager():
             return
         grp = s.peers[node]
         grp.remove(node, segId)
-        if grp.numNodes() == 0:
-            s.groups.remove(grp)
+#         if grp.numNodes() == 0:
+#             s.groups.remove(grp)
         del s.peers[node]
 
     def currentSchedule(s, node, segId):
@@ -89,4 +118,10 @@ class GroupManager():
         if node not in s.peers:
             raise Exception("node not found")
         return s.peers[node].qualityLevel
+
+
+    def transmissionTime(self, node1, node2, size):
+        if not self.network:
+            raise Exception("No p2p")
+        return self.network.transmissionTime(node1.networkId, node2.networkId, size)
 
