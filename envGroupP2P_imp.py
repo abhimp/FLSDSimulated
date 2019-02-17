@@ -29,8 +29,11 @@ class GroupP2PEnv(SimpleEnviornment):
         self._vTotalDownloaded = 0
         self._vTotalUploaded = 0
         self._vStarted = False
+        self._vFinished = False
 
         self._vSegmentStatus = [SegmentDlStat() for x in range(self._vVideoInfo.segmentCount)]
+        self._vPendingRequestedSegments = {}
+        self._vGroupNodes = None
         self._vQueue = []
 
     def playerStartedCB(self, *kw, **kwa):
@@ -38,7 +41,12 @@ class GroupP2PEnv(SimpleEnviornment):
             self._vGroup.add(self, self._vAgent.nextSegmentIndex+2)
         self._vStarted = True
 
-    def schedulesChanged(self, changedFrom):
+    def die(self):
+        self._vDead = True
+        self._vGroup.remove(self, self._vAgent.nextSegmentIndex)
+
+    def schedulesChanged(self, changedFrom, nodes):
+        self._vGroupNodes = nodes
         pass
 
     def _rGetRtt(self, node):
@@ -58,6 +66,7 @@ class GroupP2PEnv(SimpleEnviornment):
                 "ration U/D:", self._vTotalUploaded/self._vTotalDownloaded)
         print("video id:", self._vPeerId)
         print("=============================")
+        self._vFinished = True
 
 #=============================================
     def _rDownloadNextDataTimeout(self, nextSegId, nextQuality, sleepTime):
@@ -133,7 +142,7 @@ class GroupP2PEnv(SimpleEnviornment):
             nextSegId, nextQuality, sleepTime, at = self._vQueue.pop(0)
             assert sleepTime <= 0
             seg = self._vSegmentStatus[nextSegId]
-            downloader = self._vGroup.currentSchedule(self, nextSegId)
+            downloader = self.getDownloaderFor(nextSegId) #_vGroup.currentSchedule(self, nextSegId)
             if downloader != self and downloader:
                 rtt = self._rGetRtt(downloader)
                 self.runAfter(rtt, downloader._rRequestSegment, self, nextSegId, nextQuality)
@@ -160,14 +169,19 @@ class GroupP2PEnv(SimpleEnviornment):
             ql = self._vGroup.getQualityLevel(self)
             self._rDownloadNextData(segId, ql, 0 if waitTime <= 0 else waitTime)
 
-
+#=============================================
+    def getDownloaderFor(self, segId):
+        downloader = self._vGroup.currentSchedule(self, segId)
+        if downloader not in self._vGroupNodes:
+            return None
+    
 #=============================================
 # findout next segId to be downloaded
     def _rFindNextDownloadableSegment(self, nextSegId):
         now = self.getNow()
         while nextSegId < self._vVideoInfo.segmentCount:
             waitTime = self._vAgent._rIsAvailable(nextSegId)
-            downloader = self._vGroup.currentSchedule(self, nextSegId)
+            downloader = self.getDownloaderFor(nextSegId) #self._vGroup.currentSchedule(self, nextSegId)
             if not downloader or downloader == self:
                 return (nextSegId, waitTime)
             nextSegId += 1
@@ -175,11 +189,13 @@ class GroupP2PEnv(SimpleEnviornment):
 
 #=============================================
     def _rSendToOtherPeer(self, node, ql, timetaken, segDur, segIndex, clen):
+        if self._vDead: return
         self._vTotalUploaded += clen
         node._rAddToPeerBuffer(ql, timetaken, segDur, segIndex, clen)
 
 #=============================================
     def _rPeerRequestFailed(self, segId, ql):
+        if self._vDead: return
         now = self.getNow()
         seg = self._vSegmentStatus[segId]
         if seg.status != SEGMENT_PEER_WAITING:
@@ -190,8 +206,10 @@ class GroupP2PEnv(SimpleEnviornment):
 #=============================================
 # receive segment request from other peer
     def _rRequestSegment(self, node, segId, ql):
+        if self._vDead: return
         seg = self._vSegmentStatus[segId]
         if seg.status == SEGMENT_WORKING:
+            self._vPendingRequestedSegments.setdefault(segId, {})[node] = ql
             return #don't need to bother
         if seg.status == SEGMENT_CACHED:
             ql, timetaken, segDur, segIndex, clen, _, __ = self._vCatched[segId]
@@ -205,8 +223,17 @@ class GroupP2PEnv(SimpleEnviornment):
 #=============================================
 # server pending request to other peers
     def _rSendRequestedData(self, *kw):
+        ql, timetaken, segDur, segIndex, clen = kw
+        rnodes = self._vPendingRequestedSegments.get(segIndex, {})
         for node in self._vGroup.getAllNode(self, self):
             self._rSendToOtherPeer(node, *kw)
+            if node in rnodes:
+                del rnodes[node]
+        for node in rnodes:
+            rtt = self._rGetRtt(node)
+            self.runAfter(rtt, node._rPeerRequestFailed, segIndex, rnodes[node])
+        if len(rnodes):
+            del self._vPendingRequestedSegments[segIndex]
         pass
 
 #=============================================
@@ -214,7 +241,15 @@ class GroupP2PEnv(SimpleEnviornment):
         super().start(startedAt)
         self._vAgent.addStartupCB(self.playerStartedCB)
 
-
+def randomDead(simulator, agents):
+    nextDead = np.random.randint(len(agents))
+    agents[nextDead].die()
+    del agents[nextDead]
+    ranwait = np.random.uniform(0, 100)
+    for x in agents:
+        if not x._vDead and not x._vFinished:
+            simulator.runAfter(ranwait, randomDead, simulator, agents)
+            break
 
 def main():
     randstate.storeCurrentState() #comment this line to use same state as before
@@ -227,16 +262,19 @@ def main():
     network = P2PNetwork()
     grp = GroupManager(4, 7, vi, network)#np.random.randint(len(vi.bitrates)))
     ags = []
+    maxTime = 0
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
 #         env = SimpleEnviornment(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
+        maxTime = 101.0 + x
         ags.append(env)
+    simulator.runAt(maxTime + 50, randomDead, simulator, ags)
     simulator.run()
     for i,a in enumerate(ags):
-        assert a._vFinished
+        assert a._vFinished # or a._vDead
 
 if __name__ == "__main__":
     for x in range(1000):

@@ -2,7 +2,7 @@
 class Group():
     def __init__(s, ql, network):
         s.nodes = []
-        s.schedules = {}
+        s._schedules = {}
         s.segMents = 0
         s.nodeAddedWithSegId = {}
         s.qualityLevel = ql
@@ -13,10 +13,14 @@ class Group():
         nodeslist.sort(key=lambda x: - s.nodeAddedWithSegId[x])
         for i, seg in enumerate(range(segId, 1000)):
             x = i % len(nodeslist)
-            s.schedules[seg] = nodeslist[x]
+            s._schedules[seg] = nodeslist[x]
 
         for n in s.nodes:
-            n.schedulesChanged(segId)
+            n.schedulesChanged(segId, s.nodes)
+
+    @property
+    def schedule(s):
+        return s._schedules
 
     def numNodes(s):
         return len(s.nodes)
@@ -33,16 +37,17 @@ class Group():
             return
         s.nodes.remove(node)
         del s.nodeAddedWithSegId[node]
-        s.__schedule(segId)
+        if len(s.nodes):
+            s.__schedule(segId)
 
     def currentSchedule(s, node, segId):
         if node not in s.nodes:
             raise Exception("Node not in the group")
-        if segId not in s.schedules:
+        if segId not in s._schedules:
             return
         if segId < s.nodeAddedWithSegId[node]:
             return
-        downloader = s.schedules[segId]
+        downloader = s._schedules[segId]
         return downloader
 
     def getAllNode(s, *excepts): # set substraction probably good but it will be random
@@ -63,6 +68,7 @@ SPEED_TOLARANCE_PERCENT = 0
 class GroupManager():
     def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
         self.groups = {}
+        self.groupBuckets = {}
         self.peers = {}
         self.peersPerGroup = peersPerGroup
         self.defaultQL = defaultQL
@@ -81,10 +87,9 @@ class GroupManager():
                 if connTol >= s.videoInfo.bitrates[connQl]:
                     break
                 connQl -= 1
-            if ql != connQl:
-                print("assiging ql:", connQl, "instead of", ql)
+#             if ql != connQl:
+#                 print("assiging ql:", connQl, "instead of", ql)
             ql = connQl
-
 
         group = None
         for grp in s.groups.get(ql, []):
@@ -100,15 +105,33 @@ class GroupManager():
 
         s.peers[node] = group
         group.add(node, segId)
+        s.adjustBuckets(group)
+
+    def adjustBuckets(s, grp):
+        ql = grp.qualityLevel
+        bucket = s.groupBuckets.setdefault(ql, {})
+        lastCount = 0
+        for c in bucket:
+            if grp in bucket[c]:
+                lastCount = c
+                bucket[c].remove(grp)
+                break
+        cnt = len(grp.getAllNode())
+        grpSet = bucket.setdefault(cnt, set())
+        grpSet.add(grp)
+
+
 
     def remove(s, node, segId = 0):
         if node not in s.peers:
             return
         grp = s.peers[node]
         grp.remove(node, segId)
-#         if grp.numNodes() == 0:
-#             s.groups.remove(grp)
+        if grp.numNodes() == 0:
+            grps = s.groups.setdefault(grp.qualityLevel, [])
+            grps.remove(grp)
         del s.peers[node]
+        s.adjustBuckets(grp)
 
     def currentSchedule(s, node, segId):
         if node not in s.peers:
@@ -135,3 +158,7 @@ class GroupManager():
 
     def getAllNode(self, node, *excepts): # set substraction probably good but it will be random
         return self.peers[node].getAllNode(*excepts)
+
+    def getSchedule(self, node): # set substraction probably good but it will be random
+        return self.peers[node].schedule
+
