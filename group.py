@@ -63,7 +63,7 @@ class Group():
                 return False
         return True
 
-SPEED_TOLARANCE_PERCENT = 0
+SPEED_TOLARANCE_PERCENT = 50
 
 class GroupManager():
     def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
@@ -105,7 +105,7 @@ class GroupManager():
 
         s.peers[node] = group
         group.add(node, segId)
-        s.adjustBuckets(group)
+#         s.adjustBuckets(group)
 
     def adjustBuckets(s, grp):
         ql = grp.qualityLevel
@@ -116,7 +116,9 @@ class GroupManager():
                 lastCount = c
                 bucket[c].remove(grp)
                 break
+        
         cnt = len(grp.getAllNode())
+
         grpSet = bucket.setdefault(cnt, set())
         grpSet.add(grp)
 

@@ -23,6 +23,7 @@ class P2PNetwork():
         return nx.shortest_path_length(self.grp, n1, n2)
 
     def isClose(self, n1, n2):
+#         return True
         dist = self.getDistance(n1, n2)
         return dist < 3 #threshold
 
