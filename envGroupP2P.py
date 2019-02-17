@@ -79,7 +79,7 @@ class GroupP2PEnv(SimpleEnviornment):
             for node in self._vOtherPeerRequest[segIndex]:
                 if not self._vGroup.isNeighbour(self, node):
                     continue
-                delay = np.random.uniform(0.1, 0.5)
+                delay = self._vGroup.getRtt(self, node) # np.random.uniform(0.1, 0.5)
                 self._vSimulator.runAt(now+delay, node._rAddToBuffer, ql, timetaken + delay, segDur, segIndex, clen, external = True)
                 self._vTotalUploaded += clen
             del self._vOtherPeerRequest[segIndex]

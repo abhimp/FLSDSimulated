@@ -45,6 +45,9 @@ class Group():
         downloader = s.schedules[segId]
         return downloader
 
+    def getAllNode(s, *excepts): # set substraction probably good but it will be random
+        return [x for x in s.nodes if x not in excepts]
+
     def isNeighbour(s, node):
         return node in s.nodeAddedWithSegId
 
@@ -130,3 +133,5 @@ class GroupManager():
             raise Exception("No p2p")
         return self.network.transmissionTime(node1.networkId, node2.networkId, size)
 
+    def getAllNode(self, node, *excepts): # set substraction probably good but it will be random
+        return self.peers[node].getAllNode(*excepts)
