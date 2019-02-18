@@ -1,4 +1,4 @@
-from envSimple import SimpleEnviornment, np, Simulator, load_trace, COOCKED_TRACE_DIR, video, P2PNetwork
+from envSimple import SimpleEnviornment, np, Simulator, load_trace, video, P2PNetwork
 from group import GroupManager
 import math
 import randStateInit as randstate
@@ -337,16 +337,10 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             simulator.runAfter(ranwait, randomDead, vi, traces, grp, simulator, agents, deadAgents)
             break
 
-def main():
-    randstate.storeCurrentState() #comment this line to use same state as before
-    randstate.loadCurrentState()
+def experimentGroupP2P(traces, vi, network):
     simulator = Simulator()
-    traces = load_trace.load_trace(COOCKED_TRACE_DIR)
-    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
-    assert len(traces[0]) == len(traces[1]) == len(traces[2])
-    traces = list(zip(*traces))
-    network = P2PNetwork()
     grp = GroupManager(4, 7, vi, network)#np.random.randint(len(vi.bitrates)))
+
     deadAgents = []
     ags = []
     maxTime = 0
@@ -362,6 +356,17 @@ def main():
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
+
+def main():
+    randstate.storeCurrentState() #comment this line to use same state as before
+    randstate.loadCurrentState()
+    traces = load_trace.load_trace()
+    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    assert len(traces[0]) == len(traces[1]) == len(traces[2])
+    traces = list(zip(*traces))
+    network = P2PNetwork()
+
+    experimentGroupP2P(traces, vi, network)
 
 if __name__ == "__main__":
     for x in range(1000):

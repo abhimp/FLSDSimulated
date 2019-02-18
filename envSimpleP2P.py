@@ -66,18 +66,12 @@ class SimpleP2PEnv(SimpleEnviornment):
 
         self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, external)
 
-
-
-def main():
-#     np.random.seed(2300)
+def experimentSimpleP2P(traces, vi, network):
     simulator = Simulator()
-    traces = load_trace.load_trace(COOCKED_TRACE_DIR)
-    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
-    assert len(traces[0]) == len(traces[1]) == len(traces[2])
-    traces = list(zip(*traces))
     grp = P2PGroup()
     ags = []
-    for x in range(5):
+#     s,ccor x in range(5):
+    for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         env = SimpleP2PEnv(vi, trace, simulator, BOLA, grp)
@@ -86,6 +80,16 @@ def main():
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished
+
+def main():
+#     np.random.seed(2300)
+    simulator = Simulator()
+    traces = load_trace.load_trace(COOCKED_TRACE_DIR)
+    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    assert len(traces[0]) == len(traces[1]) == len(traces[2])
+    traces = list(zip(*traces))
+
+    experimentSimpleP2P(traces, vi, network)
 
 if __name__ == "__main__":
     for x in range(1):

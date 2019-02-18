@@ -3,8 +3,10 @@ import os
 
 COOKED_TRACE_FOLDER = './cooked_traces/'
 
+COOCKED_TRACE_DIR = "./train_sim_traces/"
 
-def load_trace(cooked_trace_folder=COOKED_TRACE_FOLDER):
+
+def load_trace(cooked_trace_folder=COOCKED_TRACE_DIR):
     cooked_files = os.listdir(cooked_trace_folder)
     all_cooked_time = []
     all_cooked_bw = []

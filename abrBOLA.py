@@ -18,6 +18,8 @@ class BOLA():
         lambdaP = 5 # 13
         sleepTime = 0
         agent = self._agent
+        if len(agent._vRequests) == 0:
+            return 0, 0
         buflen = agent._vBufferUpto - agent._vPlaybacktime
         if (agent._vMaxPlayerBufferLen - self._videoInfo.segmentDuration) <= buflen:
             sleepTime = buflen + self._videoInfo.segmentDuration - agent._vMaxPlayerBufferLen

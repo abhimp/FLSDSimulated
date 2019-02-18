@@ -7,7 +7,6 @@ from abrBOLA import BOLA
 
 from p2pnetwork import P2PNetwork
 
-COOCKED_TRACE_DIR = "./train_sim_traces/"
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
@@ -72,6 +71,7 @@ class SimpleEnviornment():
     def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
         if self._vDead: return
         assert sleepTime >= 0
+        assert nextSegId < self._vVideoInfo.segmentCount
         self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality)
 
 #=============================================
@@ -121,15 +121,8 @@ class SimpleEnviornment():
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, nextQuality, time, nextDur, nextSegId, chsize, simIds)
 
 
-#=============================================
-def main():
-#     np.random.seed(2300)
+def experimentSimpleEnv(traces, vi, network):
     simulator = Simulator()
-    traces = load_trace.load_trace(COOCKED_TRACE_DIR)
-    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
-    assert len(traces[0]) == len(traces[1]) == len(traces[2])
-    traces = list(zip(*traces))
-    network = P2PNetwork()
     ags = []
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
@@ -140,6 +133,17 @@ def main():
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished
+
+
+#=============================================
+def main():
+#     np.random.seed(2300)
+    traces = load_trace.load_trace()
+    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    assert len(traces[0]) == len(traces[1]) == len(traces[2])
+    traces = list(zip(*traces))
+    network = P2PNetwork()
+    experimentSimpleEnv(traces, vi, network)
 
 if __name__ == "__main__":
     for x in range(1):

@@ -129,6 +129,9 @@ class Agent():
             if  self._vCanSkip and expectedPlaybackTime + PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
                 #need to skip this segment
                 self._vNextSegmentIndex += 1
+                if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
+                    self._vEnv.finishedAfter(1)
+                    return
                 self._rDownloadNextData(0)
                 self._vSegmentSkiped += 1
                 return
@@ -214,7 +217,8 @@ class Agent():
 #=============================================
     def _rCalculateQoE(self):
         if self._vDead: return
-
+        if self._vPlaybacktime == 0:
+            return
         lmbda = 1
         mu = 4.3
         mu_s = 1 
