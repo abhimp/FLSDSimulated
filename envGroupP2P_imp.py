@@ -58,8 +58,25 @@ class GroupP2PEnv(SimpleEnviornment):
         self._vDead = True
         self._vGroup.remove(self, self._vAgent.nextSegmentIndex)
 
-    def schedulesChanged(self, changedFrom, nodes):
+    def schedulesChanged(self, changedFrom, nodes, sched):
         self._vGroupNodes = nodes
+        pendingSegIds = list(self._vPendingRequestedSegments.keys())
+        for segId in pendingSegIds:
+            downloader = sched.get(segId, None)
+            if downloader and downloader != self:
+                self.denyPendingRequests(segId)
+
+    def denyPendingRequests(self, segId):
+        return
+        if segId not in self._vPendingRequestedSegments:
+            return
+        waiter = self._vPendingRequestedSegments[segId]
+        for node in waiter:
+            rtt = self._rGetRtt(node)
+            ql = waiter[node]
+            self.runAfter(rtt, node._rPeerRequestFailed, segId, ql)
+        del self._vPendingRequestedSegments[segId]
+
         pass
 
     def _rGetRtt(self, node):
@@ -101,6 +118,10 @@ class GroupP2PEnv(SimpleEnviornment):
             self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, False)
         if self._vStarted:
            self._rSendRequestedData(ql, timetaken, segDur, segIndex, clen)
+        elif segIndex in self._vPendingRequestedSegments:
+            self.denyPendingRequests(segIndex)
+
+
 
 #=============================================
 # exit point from this class to envSimple
@@ -125,13 +146,15 @@ class GroupP2PEnv(SimpleEnviornment):
         self._rDownloadNextData(nextSegId, nextQuality, 0)
 
 #=============================================
-    def _rAddToPeerBuffer(self, ql, timetaken, segDur, segIndex, clen):
+    def _rAddToPeerBuffer(self, sender, ql, timetaken, segDur, segIndex, clen):
         if self._vDead: return
+        assert sender != self
         seg = self._vSegmentStatus[segIndex]
         if self._vAgent.nextSegmentIndex == segIndex:
             self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, None, True)
         if seg.status == SEGMENT_CACHED:
             return
+        sender._vTotalUploaded += clen
         seg.status = SEGMENT_CACHED
         self._vCatched[segIndex] = (ql, timetaken, segDur, segIndex, clen, None, True)
 
@@ -174,6 +197,7 @@ class GroupP2PEnv(SimpleEnviornment):
                         else:
                             self.runAfter(wait, self._rDownloadNextDataForMe)
                     else:
+                        self.denyPendingRequests(nextSegId)
                         seg.status = SEGMENT_PEER_WAITING
                         seg.requestedTo = downloader
                         self.runAfter(self._rGetRtt(downloader), downloader._rRequestSegment, self, nextSegId, ql)
@@ -230,8 +254,8 @@ class GroupP2PEnv(SimpleEnviornment):
 #=============================================
     def _rSendToOtherPeer(self, node, ql, timetaken, segDur, segIndex, clen):
         if self._vDead: return
-        self._vTotalUploaded += clen
-        node._rAddToPeerBuffer(ql, timetaken, segDur, segIndex, clen)
+#         self._vTotalUploaded += clen
+        node._rAddToPeerBuffer(self, ql, timetaken, segDur, segIndex, clen)
 
 #=============================================
     def _rPeerRequestFailed(self, segId, ql):
@@ -249,6 +273,7 @@ class GroupP2PEnv(SimpleEnviornment):
     def _rRequestSegment(self, node, segId, ql):
         if self._vDead: return
         seg = self._vSegmentStatus[segId]
+#         if seg.status != SEGMENT_CACHED:
         if seg.status == SEGMENT_WORKING:
             self._vPendingRequestedSegments.setdefault(segId, {})[node] = ql
             return #don't need to bother
@@ -271,7 +296,9 @@ class GroupP2PEnv(SimpleEnviornment):
             remSeg = node._vSegmentStatus[segIndex]
             if remSeg.status != SEGMENT_WORKING and remSeg.status != SEGMENT_CACHED:
                 remSeg.status = SEGMENT_PEER_WAITING
-                self._rSendToOtherPeer(node, *kw)
+#                 self._rSendToOtherPeer(node, *kw)
+                time = self._rTransmissionTime(node, clen)
+                self.runAfter(time, self._rSendToOtherPeer, node, ql, timetaken, segDur, segIndex, clen)
             if node in rnodes:
                 del rnodes[node]
         for node in rnodes:

@@ -16,7 +16,7 @@ class Group():
             s._schedules[seg] = nodeslist[x]
 
         for n in s.nodes:
-            n.schedulesChanged(segId, s.nodes)
+            n.schedulesChanged(segId, s.nodes, s._schedules)
 
     @property
     def schedule(s):
