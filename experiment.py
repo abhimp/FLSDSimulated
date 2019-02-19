@@ -10,7 +10,8 @@ from envSimpleP2P import experimentSimpleP2P
 import matplotlib.pyplot as plt
 
 def plotAvgBitRate(results):
-    plt.clf()
+#     plt.clf()
+    plt.figure()
     pltData = []
     for name, res in results.items():
         Xs, Ys = [], []
@@ -23,10 +24,11 @@ def plotAvgBitRate(results):
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("Average Bitrate played")
     plt.ylabel("Player Id")
-    plt.show()
+#     plt.show()
 
 def plotAvgQualityIndex(results):
-    plt.clf()
+#     plt.clf()
+    plt.figure()
     pltData = []
     for name, res in results.items():
         Xs, Ys = [], []
@@ -39,10 +41,11 @@ def plotAvgQualityIndex(results):
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("Average Quality Index played")
     plt.ylabel("Player Id")
-    plt.show()
+#     plt.show()
 
 def plotAvgQualityIndexVariation(results):
-    plt.clf()
+#     plt.clf()
+    plt.figure()
     pltData = []
     for name, res in results.items():
         Xs, Ys = [], []
@@ -55,10 +58,11 @@ def plotAvgQualityIndexVariation(results):
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("Average Quality Index variation")
     plt.ylabel("Player Id")
-    plt.show()
+#     plt.show()
 
 def plotQoE(results):
-    plt.clf()
+#     plt.clf()
+    plt.figure()
     pltData = []
     for name, res in results.items():
         Xs, Ys = [], []
@@ -71,7 +75,7 @@ def plotQoE(results):
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("QoE")
     plt.ylabel("Player Id")
-    plt.show()
+#     plt.show()
 
 def runExperiments(cb, traces, vi, network):
     return cb(traces, vi, network)
@@ -101,6 +105,8 @@ def main():
     plotAvgBitRate(results)
     plotAvgQualityIndex(results)
     plotAvgQualityIndexVariation(results)
+
+    plt.show()
 
 
 #         experimentGroupP2P(traces, vi, network)
