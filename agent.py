@@ -215,6 +215,66 @@ class Agent():
         return segStartTime - ePlaybackTime + self._vVideoInfo.globalDelayPlayback
 
 #=============================================
+    @property
+    def avgQualityIndex(self):
+        if len(self._vQualitiesPlayed) == 0: return 0
+
+        bitratePlayed = self._vQualitiesPlayed
+        return float(sum(bitratePlayed))/len(bitratePlayed)
+
+#=============================================
+    @property
+    def avgQualityIndexVariation(self):
+        if len(self._vQualitiesPlayed) == 0: return 0
+
+        bitratePlayed = self._vQualitiesPlayed
+        avgQualityVariation = [abs(bt - bitratePlayed[x - 1]) for x,bt in enumerate(bitratePlayed) if x > 0]
+        avgQualityVariation = 0 if len(avgQualityVariation) == 0 else sum(avgQualityVariation)/float(len(avgQualityVariation))
+
+        return avgQualityVariation
+
+#=============================================
+    @property
+    def avgBitrate(self):
+        if len(self._vQualitiesPlayed) == 0: return 0
+
+        bitratePlayed = self._vQualitiesPlayed
+        bitratePlayed = [self._vVideoInfo.bitrates[x] for x in self._vQualitiesPlayed]
+        return float(sum(bitratePlayed))/len(bitratePlayed)
+
+#=============================================
+    @property
+    def avgBitrateVariation(self):
+        if len(self._vQualitiesPlayed) == 0: return 0
+
+        bitratePlayed = self._vQualitiesPlayed
+        bitratePlayed = [self._vVideoInfo.bitrates[x] for x in self._vQualitiesPlayed]
+        avgQualityVariation = [abs(bt - bitratePlayed[x - 1]) for x,bt in enumerate(bitratePlayed) if x > 0]
+        avgQualityVariation = 0 if len(avgQualityVariation) == 0 else sum(avgQualityVariation)/float(len(avgQualityVariation))
+
+        return avgQualityVariation
+
+#=============================================
+    @property
+    def startUpDelay(self):
+        return self._vStartUpDelay
+
+#=============================================
+    @property
+    def totalStallTime(self):
+        return self._vTotalStallTime
+
+#=============================================
+    @property
+    def totalStallTime(Self):
+        if len(self._vQualitiesPlayed) == 0: return 0
+
+        return self._vTotalUploaded*1./len(self._vStallsAt)
+        
+    @property
+    def QoE(self):
+        return self._rCalculateQoE()
+#=============================================
     def _rCalculateQoE(self):
         if self._vDead: return
         if self._vPlaybacktime == 0:

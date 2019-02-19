@@ -133,6 +133,7 @@ def experimentSimpleEnv(traces, vi, network):
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished
+    return ags
 
 
 #=============================================

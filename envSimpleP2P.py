@@ -1,8 +1,9 @@
 from envSimple import *
 
 class P2PGroup():
-    def __init__(self):
+    def __init__(self, network):
         self._vPeers = []
+        self._vNetwork = network
     
     def addNode(self, node):
         if node in self._vPeers:
@@ -15,11 +16,18 @@ class P2PGroup():
     def getNodes(self):
         return list(self._vPeers)
 
+    def getRTT(self, node1, node2):
+        return self._vNetwork.getRtt(node1._vPeerId, node2._vPeerId)
+
+    def isClose(self, node1, node2):
+        return self._vNetwork.isClose(node1._vPeerId, node2._vPeerId)
+
 class SimpleP2PEnv(SimpleEnviornment):
-    def __init__(self, vi, traces, simulator, abr = None, grp = None):
+    def __init__(self, vi, traces, simulator, abr = None, grp = None, nodeId = -1):
         super().__init__(vi, traces, simulator, abr)
         self._vCatched = {}
         self._vGroup = grp
+        self._vPeerId = nodeId
 
 #=============================================
     def start(self, startedAt = -1):
@@ -40,11 +48,17 @@ class SimpleP2PEnv(SimpleEnviornment):
         for node in self._vGroup._vPeers:
             if node == self:
                 continue
+            if not self._vGroup.isClose(self, node):
+                continue
+            if node._vAgent.currentBitrateIndex != self._vAgent.currentBitrateIndex:
+                continue
             data = node.getData(nextSegId, nextQuality)
+            timeneeded += self._vGroup.getRTT(self, node) #np.random.uniform(0.02,0.5)
             if data:
                 break
+            if timeneeded > sleepTime:
+                break
 
-            timeneeded += np.random.uniform(0.02,0.5)
             #TODO need to add a timeout
 
         if data:
@@ -54,8 +68,7 @@ class SimpleP2PEnv(SimpleEnviornment):
             self._vSimulator.runAfter(timeneeded, self._rAddToBuffer, ql, timetaken, segDur, segIndex, clen, simIds, external)
             return
 
-
-        self._rFetchSegment(nextSegId, nextQuality, sleepTime)
+        self._rFetchSegment(nextSegId, nextQuality, timeneeded)
 
 #=============================================
     def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
@@ -68,23 +81,26 @@ class SimpleP2PEnv(SimpleEnviornment):
 
 def experimentSimpleP2P(traces, vi, network):
     simulator = Simulator()
-    grp = P2PGroup()
+    grp = P2PGroup(network)
     ags = []
 #     s,ccor x in range(5):
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = SimpleP2PEnv(vi, trace, simulator, BOLA, grp)
+        env = SimpleP2PEnv(vi, trace, simulator, BOLA, grp, nodeId)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished
+    
+    return ags
 
 def main():
 #     np.random.seed(2300)
     simulator = Simulator()
-    traces = load_trace.load_trace(COOCKED_TRACE_DIR)
+    traces = load_trace.load_trace()
+    network = P2PNetwork()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))

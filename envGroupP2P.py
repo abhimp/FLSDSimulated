@@ -352,10 +352,11 @@ def experimentGroupP2P(traces, vi, network):
         simulator.runAt(101.0 + x, env.start, 5)
         maxTime = 101.0 + x
         ags.append(env)
-    simulator.runAt(maxTime + 50, randomDead, vi, traces, grp, simulator, ags, deadAgents)
+#     simulator.runAt(maxTime + 50, randomDead, vi, traces, grp, simulator, ags, deadAgents)
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
+    return ags
 
 def main():
     randstate.storeCurrentState() #comment this line to use same state as before
