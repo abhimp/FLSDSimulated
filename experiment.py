@@ -9,106 +9,21 @@ from envSimpleP2P import experimentSimpleP2P
 
 import matplotlib.pyplot as plt
 
-def plotAvgBitRate(results):
+def plotAgentsData(results, attrib, pltTitle, xlabel):
 #     plt.clf()
     plt.figure()
     pltData = []
     for name, res in results.items():
         Xs, Ys = [], []
         for x, ag in enumerate(res):
-            y = ag._vAgent.avgBitrate
+            y = eval("ag._vAgent." + attrib)
             Xs.append(x)
             Ys.append(y)
         pltData += [Xs, Ys]
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
-    plt.title("Average Bitrate played")
-    plt.xlabel("Player Id")
-#     plt.show()
-
-def plotAvgQualityIndex(results):
-#     plt.clf()
-    plt.figure()
-    pltData = []
-    for name, res in results.items():
-        Xs, Ys = [], []
-        for x, ag in enumerate(res):
-            y = ag._vAgent.avgQualityIndex
-            Xs.append(x)
-            Ys.append(y)
-        pltData += [Xs, Ys]
-        plt.plot(Xs, Ys, label=name)
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title("Average Quality Index played")
-    plt.xlabel("Player Id")
-#     plt.show()
-
-def plotAvgQualityIndexVariation(results):
-#     plt.clf()
-    plt.figure()
-    pltData = []
-    for name, res in results.items():
-        Xs, Ys = [], []
-        for x, ag in enumerate(res):
-            y = ag._vAgent.avgQualityIndexVariation
-            Xs.append(x)
-            Ys.append(y)
-        pltData += [Xs, Ys]
-        plt.plot(Xs, Ys, label=name)
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title("Average Quality Index variation")
-    plt.xlabel("Player Id")
-#     plt.show()
-
-def plotQoE(results):
-#     plt.clf()
-    plt.figure()
-    pltData = []
-    for name, res in results.items():
-        Xs, Ys = [], []
-        for x, ag in enumerate(res):
-            y = ag._vAgent.QoE
-            Xs.append(x)
-            Ys.append(y)
-        pltData += [Xs, Ys]
-        plt.plot(Xs, Ys, label=name)
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title("QoE")
-    plt.xlabel("Player Id")
-#     plt.show()
-
-def plotStallTime(results):
-#     plt.clf()
-    plt.figure()
-    pltData = []
-    for name, res in results.items():
-        Xs, Ys = [], []
-        for x, ag in enumerate(res):
-            y = ag._vAgent.totalStallTime
-            Xs.append(x)
-            Ys.append(y)
-        pltData += [Xs, Ys]
-        plt.plot(Xs, Ys, label=name)
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title("Total stall time")
-    plt.xlabel("Player Id")
-#     plt.show()
-
-def plotStartupDelay(results):
-#     plt.clf()
-    plt.figure()
-    pltData = []
-    for name, res in results.items():
-        Xs, Ys = [], []
-        for x, ag in enumerate(res):
-            y = ag._vAgent.startUpDelay
-            Xs.append(x)
-            Ys.append(y)
-        pltData += [Xs, Ys]
-        plt.plot(Xs, Ys, label=name)
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title("start up delay")
-    plt.xlabel("Player Id")
+    plt.title(pltTitle)
+    plt.xlabel(xlabel)
 #     plt.show()
 
 def runExperiments(cb, traces, vi, network):
@@ -135,12 +50,19 @@ def main():
         ags = runExperiments(cb, traces, vi, network)
         results[name] = ags
 
-    plotQoE(results) 
-    plotAvgBitRate(results)
-    plotAvgQualityIndex(results)
-    plotAvgQualityIndexVariation(results)
-    plotStallTime(results)
-    plotStartupDelay(results)
+    plotAgentsData(results, "QoE", "QoE", "Player Id")
+    plotAgentsData(results, "avgBitrate", "Average bitrate played`", "Player Id")
+    plotAgentsData(results, "avgQualityIndex", "Average quality index played`", "Player Id")
+    plotAgentsData(results, "avgQualityIndexVariation", "Average quality index variation", "Player Id")
+    plotAgentsData(results, "totalStallTime", "Stall Time", "Player Id")
+    plotAgentsData(results, "startUpDelay", "Start up delay", "Player Id")
+
+#     plotQoE(results) 
+#     plotAvgBitRate(results)
+#     plotAvgQualityIndex(results)
+#     plotAvgQualityIndexVariation(results)
+#     plotStallTime(results)
+#     plotStartupDelay(results)
 
     plt.show()
 
