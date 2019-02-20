@@ -126,7 +126,7 @@ class Agent():
             if self._vGlobalStartedAt != self._vStartedAt:
                 expectedPlaybackTime = now - self._vGlobalStartedAt
 
-            if  self._vCanSkip and expectedPlaybackTime + PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
+            if  self._vCanSkip and expectedPlaybackTime - PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
                 #need to skip this segment
                 self._vNextSegmentIndex += 1
                 if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
@@ -138,11 +138,18 @@ class Agent():
 
             if expectedPlaybackTime < segPlaybackStartTime:
                 after = segPlaybackStartTime - expectedPlaybackTime
+#                 print("after:", after)
                 self._vEnv.runAfter(after, self._rAddToBufferInternal, ql, timetaken, segDur, segIndex, clen, simIds, external)
                 return
 
-            if segPlaybackStartTime <= expectedPlaybackTime <= segPlaybackEndTime:
-                playbackTime = expectedPlaybackTime
+            found = False
+            for x in range(PLAYBACK_DELAY_THRESHOLD + 1):
+                if segPlaybackStartTime <= expectedPlaybackTime - x <= segPlaybackEndTime:
+                    playbackTime = expectedPlaybackTime - x
+                    found = True
+                    break
+            
+            assert found
 
             self._vIsStarted = True
             self._vStartingPlaybackTime = playbackTime
@@ -266,12 +273,6 @@ class Agent():
 
 #=============================================
     @property
-    def totalStallTime(Self):
-        if len(self._vQualitiesPlayed) == 0: return 0
-
-        return self._vTotalUploaded*1./len(self._vStallsAt)
-        
-    @property
     def QoE(self):
         return self._rCalculateQoE()
 #=============================================
@@ -313,7 +314,7 @@ class Agent():
         if startedAt >= 0:
             playbackTime = now - startedAt
             self._vNextSegmentIndex = int(playbackTime*1./self._vVideoInfo.segmentDuration)
-            while (self._vNextSegmentIndex + 1) * self._vVideoInfo.segmentDuration < playbackTime + PLAYBACK_DELAY_THRESHOLD:
+            while (self._vNextSegmentIndex + 1) * self._vVideoInfo.segmentDuration < playbackTime - PLAYBACK_DELAY_THRESHOLD:
                 self._vNextSegmentIndex += 1
             self._vNextSegmentIndex += 1
             self._vCanSkip = True

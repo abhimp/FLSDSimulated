@@ -23,7 +23,7 @@ def plotAvgBitRate(results):
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("Average Bitrate played")
-    plt.ylabel("Player Id")
+    plt.xlabel("Player Id")
 #     plt.show()
 
 def plotAvgQualityIndex(results):
@@ -40,7 +40,7 @@ def plotAvgQualityIndex(results):
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("Average Quality Index played")
-    plt.ylabel("Player Id")
+    plt.xlabel("Player Id")
 #     plt.show()
 
 def plotAvgQualityIndexVariation(results):
@@ -57,7 +57,7 @@ def plotAvgQualityIndexVariation(results):
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("Average Quality Index variation")
-    plt.ylabel("Player Id")
+    plt.xlabel("Player Id")
 #     plt.show()
 
 def plotQoE(results):
@@ -74,7 +74,41 @@ def plotQoE(results):
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title("QoE")
-    plt.ylabel("Player Id")
+    plt.xlabel("Player Id")
+#     plt.show()
+
+def plotStallTime(results):
+#     plt.clf()
+    plt.figure()
+    pltData = []
+    for name, res in results.items():
+        Xs, Ys = [], []
+        for x, ag in enumerate(res):
+            y = ag._vAgent.totalStallTime
+            Xs.append(x)
+            Ys.append(y)
+        pltData += [Xs, Ys]
+        plt.plot(Xs, Ys, label=name)
+    plt.legend(ncol = 2, loc = "upper center")
+    plt.title("Total stall time")
+    plt.xlabel("Player Id")
+#     plt.show()
+
+def plotStartupDelay(results):
+#     plt.clf()
+    plt.figure()
+    pltData = []
+    for name, res in results.items():
+        Xs, Ys = [], []
+        for x, ag in enumerate(res):
+            y = ag._vAgent.startUpDelay
+            Xs.append(x)
+            Ys.append(y)
+        pltData += [Xs, Ys]
+        plt.plot(Xs, Ys, label=name)
+    plt.legend(ncol = 2, loc = "upper center")
+    plt.title("start up delay")
+    plt.xlabel("Player Id")
 #     plt.show()
 
 def runExperiments(cb, traces, vi, network):
@@ -90,8 +124,8 @@ def main():
     network = P2PNetwork()
     
     testCB = {}
-    testCB["GroupP2P"] = experimentGroupP2P
     testCB["SimpleEnv"] = experimentSimpleEnv
+    testCB["GroupP2P"] = experimentGroupP2P
 #     testCB["SimpleP2P"] = experimentSimpleP2P
 
     results = {}
@@ -105,6 +139,8 @@ def main():
     plotAvgBitRate(results)
     plotAvgQualityIndex(results)
     plotAvgQualityIndexVariation(results)
+    plotStallTime(results)
+    plotStartupDelay(results)
 
     plt.show()
 
