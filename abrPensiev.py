@@ -38,7 +38,7 @@ SUMMARY_DIR = './results'
 LOG_FILE = './results/log'
 # in format of time_stamp bit_rate buffer_size rebuffer_time video_chunk_size download_time reward
 NN_MODEL = None
-NN_MODEL = 'results/pretrain_linear_reward.ckpt'
+NN_MODEL = './model/pretrain_linear_reward.ckpt'
 
 # CHUNK_COMBO_OPTIONS = []
 def setup_mpc(video, log_file_path=LOG_FILE):
