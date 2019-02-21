@@ -7,6 +7,11 @@ from envGroupP2P import experimentGroupP2P
 from envSimple import experimentSimpleEnv
 from envSimpleP2P import experimentSimpleP2P
 
+from abrFastMPC import AbrFastMPC
+from abrRobustMPC import AbrRobustMPC
+from abrBOLA import BOLA
+from abrPensiev import AbrPensieve
+
 import matplotlib.pyplot as plt
 
 def plotAgentsData(results, attrib, pltTitle, xlabel):
@@ -26,8 +31,8 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
     plt.xlabel(xlabel)
 #     plt.show()
 
-def runExperiments(cb, traces, vi, network):
-    return cb(traces, vi, network)
+def runExperiments(cb, *kw, **kws):
+    return cb(*kw, **kws)
 
 def main():
 #     randstate.storeCurrentState() #comment this line to use same state as before
@@ -39,15 +44,18 @@ def main():
     network = P2PNetwork()
     
     testCB = {}
-    testCB["SimpleEnv"] = experimentSimpleEnv
-    testCB["GroupP2P"] = experimentGroupP2P
+    testCB["SimpleEnv"] = (experimentSimpleEnv, traces, vi, network, BOLA)
+    testCB["SimpleEnv"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
+    testCB["SimpleEnv"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
+#     testCB["SimpleEnv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
+    testCB["GroupP2P"] = (experimentGroupP2P, traces, vi, network)
 #     testCB["SimpleP2P"] = experimentSimpleP2P
 
     results = {}
 
     for name, cb in testCB.items():
         randstate.loadCurrentState()
-        ags = runExperiments(cb, traces, vi, network)
+        ags = runExperiments(*cb)
         results[name] = ags
 
     plotAgentsData(results, "QoE", "QoE", "Player Id")
@@ -57,19 +65,8 @@ def main():
     plotAgentsData(results, "totalStallTime", "Stall Time", "Player Id")
     plotAgentsData(results, "startUpDelay", "Start up delay", "Player Id")
 
-#     plotQoE(results) 
-#     plotAvgBitRate(results)
-#     plotAvgQualityIndex(results)
-#     plotAvgQualityIndexVariation(results)
-#     plotStallTime(results)
-#     plotStartupDelay(results)
 
     plt.show()
-
-
-#         experimentGroupP2P(traces, vi, network)
-#         experimentSimpleEnv(traces, vi, network)
-#         experimentSimpleP2P(traces, vi, network)
 
 
 if __name__ == "__main__":

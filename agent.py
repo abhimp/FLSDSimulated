@@ -18,6 +18,7 @@ class Agent():
         self.__count += 1
         self._vEnv = env
         self._vVideoInfo = videoInfo
+        self._vLastBitrateIndex = 0
         self._vCurrentBitrateIndex = 0
         self._vNextSegmentIndex = 0
         self._vPlaybacktime = 0.0
@@ -80,6 +81,13 @@ class Agent():
         self._vRequests.append((throughput, timetaken, clen, \
                 startingTime, segIndex, segDur, ql))
 
+
+#=============================================
+    def _rWhenToDownload(self, *kw):
+        if self._vDead: return
+
+        if len(self._vRequests) == 0:
+            return 0, 0
         _, times, clens = list(zip(*self._vRequests))[:3]
         avg = sum(clens)*8/sum(times)
         level = 0
@@ -87,17 +95,12 @@ class Agent():
             if q > avg:
                 break
             level = ql
-        self._vCurrentBitrateIndex = level
-
-#=============================================
-    def _rWhenToDownload(self, *kw):
-        if self._vDead: return
-
+#         self._vCurrentBitrateIndex = level
         buflen = self._vBufferUpto - self._vPlaybacktime
         if (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) > buflen:
-            return 0, self._vCurrentBitrateIndex
+            return 0, level
         sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
-        return sleepTime, self._vCurrentBitrateIndex
+        return sleepTime, level
 
 #=============================================
     def _rAddToBufferInternal(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
@@ -173,6 +176,7 @@ class Agent():
         if self._vNextSegmentIndex == len(self._vVideoInfo.fileSizes[0]):
             self._vEnv.finishedAfter(buflen)
             return
+        self._vLastBitrateIndex = self._vCurrentBitrateIndex
         self._rDownloadNextData(buflen)
 
 #=============================================

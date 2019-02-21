@@ -121,13 +121,13 @@ class SimpleEnviornment():
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, nextQuality, time, nextDur, nextSegId, chsize, simIds)
 
 
-def experimentSimpleEnv(traces, vi, network):
+def experimentSimpleEnv(traces, vi, network, abr = None):
     simulator = Simulator()
     ags = []
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = SimpleEnviornment(vi, trace, simulator, BOLA)
+        env = SimpleEnviornment(vi, trace, simulator, abr)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)
     simulator.run()

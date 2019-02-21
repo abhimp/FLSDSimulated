@@ -4,15 +4,23 @@ import os
 GLOBAL_DELAY_PLAYBACK = 50 #Total arbit
 
 
+# VIDEO_BIT_RATE = [300,750,1200,1850,2850,4300]  # Kbps
+BITRATE_REWARD = [1, 2, 3, 4, 7, 12, 15, 20]
+# BITRATE_REWARD_MAP = {0: 0, 300: 1, 750: 2, 1200: 3, 1850: 12, 2850: 15, 4300: 20}
+
+
 class VideoInfo():
     def __init__(s, vi):
         s.fileSizes = vi.sizes
         s.segmentDuration = vi.segmentDuration
         s.bitrates = vi.bitrates
+        s.bitratesKbps = [x/1000 for x in vi.bitrates]
         s.duration = vi.duration
         s.minimumBufferTime = vi.minimumBufferTime
         s.segmentDurations = []
         s.segmentCount = len(s.fileSizes[0])
+        s.bitrateReward = BITRATE_REWARD[:s.segmentCount]
+        s.birateRewardMap = {x:y for x, y in zip(s.bitrates, s.bitrateReward)}
         s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
 #         dur = 0
 #         for x in s.fileSizes[0]:
