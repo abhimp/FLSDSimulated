@@ -105,21 +105,22 @@ class GroupP2PEnv(SimpleEnviornment):
 
 #=============================================
 # return point after download completed i.e. on simulation event, Only for self dl
-    def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
+    def _rAddToBuffer(self, req, simIds = None):
         if self._vDead: return
-        seg = self._vSegmentStatus[segIndex]
+        segId, clen = req.segId, req.clen
+        seg = self._vSegmentStatus[segId]
         self._vTotalDownloaded += clen
         self._vDownloadPending = False
         if seg.status == SEGMENT_CACHED:
             return
         seg.status = SEGMENT_CACHED
-        self._vCatched[segIndex] = (ql, timetaken, segDur, segIndex, clen, simIds, False)
-        if segIndex == self._vAgent.nextSegmentIndex:
-            self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, False)
+        self._vCatched[segId] = req
+        if segId == self._vAgent.nextSegmentIndex:
+            self._vAgent._rAddToBufferInternal(req)
         if self._vStarted:
-           self._rSendRequestedData(ql, timetaken, segDur, segIndex, clen)
-        elif segIndex in self._vPendingRequestedSegments:
-            self.denyPendingRequests(segIndex)
+           self._rSendRequestedData(req)
+        elif segId in self._vPendingRequestedSegments:
+            self.denyPendingRequests(segId)
 
 
 
@@ -146,17 +147,18 @@ class GroupP2PEnv(SimpleEnviornment):
         self._rDownloadNextData(nextSegId, nextQuality, 0)
 
 #=============================================
-    def _rAddToPeerBuffer(self, sender, ql, timetaken, segDur, segIndex, clen):
+    def _rAddToPeerBuffer(self, sender, req):
         if self._vDead: return
         assert sender != self
-        seg = self._vSegmentStatus[segIndex]
-        if self._vAgent.nextSegmentIndex == segIndex:
-            self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, None, True)
+        segId, clen = req.segId, req.clen
+        seg = self._vSegmentStatus[segId]
+        if self._vAgent.nextSegmentIndex == segId:
+            self._vAgent._rAddToBufferInternal(req)
         if seg.status == SEGMENT_CACHED:
             return
         sender._vTotalUploaded += clen
         seg.status = SEGMENT_CACHED
-        self._vCatched[segIndex] = (ql, timetaken, segDur, segIndex, clen, None, True)
+        self._vCatched[segId] = req
 
 #=============================================
     def _rDownloadNextDataBeforeGroupStart(self, nextSegId, nextQuality, sleepTime):
@@ -222,8 +224,8 @@ class GroupP2PEnv(SimpleEnviornment):
         seg = self._vSegmentStatus[nextSegId]
 
         if seg.status == SEGMENT_CACHED:
-            ql, timetaken, segDur, segIndex, clen, _, ext = self._vCatched[nextSegId]
-            self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, None, ext)
+            req= self._vCatched[nextSegId]
+            self._vAgent._rAddToBufferInternal(req)
             return
             
 
@@ -252,10 +254,10 @@ class GroupP2PEnv(SimpleEnviornment):
         return (-1, 0)
 
 #=============================================
-    def _rSendToOtherPeer(self, node, ql, timetaken, segDur, segIndex, clen):
+    def _rSendToOtherPeer(self, node, req):
         if self._vDead: return
 #         self._vTotalUploaded += clen
-        node._rAddToPeerBuffer(self, ql, timetaken, segDur, segIndex, clen)
+        node._rAddToPeerBuffer(self, req)
 
 #=============================================
     def _rPeerRequestFailed(self, segId, ql):
@@ -278,34 +280,34 @@ class GroupP2PEnv(SimpleEnviornment):
             self._vPendingRequestedSegments.setdefault(segId, {})[node] = ql
             return #don't need to bother
         if seg.status == SEGMENT_CACHED:
-            ql, timetaken, segDur, segIndex, clen, _, __ = self._vCatched[segId]
-            time = self._rTransmissionTime(node, clen)
-            self.runAfter(time, self._rSendToOtherPeer, node, ql, timetaken, segDur, segIndex, clen)
+            req = self._vCatched[segId]
+            time = self._rTransmissionTime(node, req.clen)
+            self.runAfter(time, self._rSendToOtherPeer, node, req)
             return
         rtt = self._rGetRtt(node)
         self.runAfter(rtt, node._rPeerRequestFailed, segId, ql)
 
 #=============================================
 # server pending request to other peers
-    def _rSendRequestedData(self, *kw):
-        ql, timetaken, segDur, segIndex, clen = kw
-        rnodes = self._vPendingRequestedSegments.get(segIndex, {})
+    def _rSendRequestedData(self, req):
+        segId, clen = req.segId, req.clen
+        rnodes = self._vPendingRequestedSegments.get(segId, {})
 
         for node in self._vGroup.getAllNode(self, self):
             assert node != self
-            remSeg = node._vSegmentStatus[segIndex]
+            remSeg = node._vSegmentStatus[segId]
             if remSeg.status != SEGMENT_WORKING and remSeg.status != SEGMENT_CACHED:
                 remSeg.status = SEGMENT_PEER_WAITING
 #                 self._rSendToOtherPeer(node, *kw)
                 time = self._rTransmissionTime(node, clen)
-                self.runAfter(time, self._rSendToOtherPeer, node, ql, timetaken, segDur, segIndex, clen)
+                self.runAfter(time, self._rSendToOtherPeer, node, req)
             if node in rnodes:
                 del rnodes[node]
         for node in rnodes:
             rtt = self._rGetRtt(node)
-            self.runAfter(rtt, node._rPeerRequestFailed, segIndex, rnodes[node])
+            self.runAfter(rtt, node._rPeerRequestFailed, segId, rnodes[node])
         if len(rnodes):
-            del self._vPendingRequestedSegments[segIndex]
+            del self._vPendingRequestedSegments[segId]
 
 #=============================================
     def start(self, startedAt = -1):
@@ -339,7 +341,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
 
 def experimentGroupP2P(traces, vi, network):
     simulator = Simulator()
-    grp = GroupManager(4, 7, vi, network)#np.random.randint(len(vi.bitrates)))
+    grp = GroupManager(4, 3, vi, network)#np.random.randint(len(vi.bitrates)))
 
     deadAgents = []
     ags = []

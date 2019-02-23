@@ -94,17 +94,17 @@ class AbrFastMPC:
     def getNextDownloadTime(self, *kw, **kws):
         if len(self.agent._vRequests) == 0:
             return 0, 0
-        throughput, timetaken, clen, \
-                startingTime, segIndex, segDur, ql = self.agent._vRequests[-1]
+        req = self.agent._vRequests[-1]
+        
         bufferLeft = self.agent._vBufferUpto - self.agent._vPlaybacktime
         if bufferLeft < 0:
             bufferLeft = 0
         post_data = {
                 'lastquality': self.agent._vLastBitrateIndex,
                 'RebufferTime': self.agent._vTotalStallTime,
-                'lastChunkFinishTime': startingTime + timetaken,
-                'lastChunkStartTime': startingTime,
-                'lastChunkSize': clen,
+                'lastChunkFinishTime': req.downloadFinished,
+                'lastChunkStartTime': req.downloadStarted,
+                'lastChunkSize': req.clen,
                 'buffer': bufferLeft,
                 'lastRequest': self.agent.nextSegmentIndex,
                 }

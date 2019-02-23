@@ -26,7 +26,7 @@ class BOLA():
 
         p = self._videoInfo.segmentDuration
         SM = float(self._videoInfo.bitrates[-1])
-        lastM = agent._vRequests[-1][6] #last bitrateindex
+        lastM = agent._vRequests[-1].qualityIndex #last bitrateindex
         Q = buflen
         Qmax = self._agent._vMaxPlayerBufferLen
         ts = agent._vPlaybacktime - agent._vStartingPlaybackTime
@@ -40,7 +40,7 @@ class BOLA():
         M = np.argmax([((VD * self._vms[m] + VD*lambdaP - Q)/sm) \
                 for m,sm in enumerate(self._videoInfo.bitrates)])
         if M < lastM:
-            r = agent._vRequests[-1][0] #throughput
+            r = agent._vRequests[-1].throughput #throughput
             mp = min([m for m,sm in enumerate(self._videoInfo.bitrates) if sm/p < max(r, SM)] + [len(self._videoInfo.bitrates)])
             mp = 0 if mp >= len(self._videoInfo.bitrates) else mp
             if mp <= M:

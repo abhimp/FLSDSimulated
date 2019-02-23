@@ -62,22 +62,21 @@ class SimpleP2PEnv(SimpleEnviornment):
             #TODO need to add a timeout
 
         if data:
-            ql, timetaken, segDur, segIndex, clen, simIds, external = data
-            timeneeded += timetaken * np.random.uniform(0.5, 1.1)
+            timeneeded += data.timetaken * np.random.uniform(0.5, 1.1)
             timeneeded = timeneeded if timeneeded > sleepTime else sleepTime
-            self._vSimulator.runAfter(timeneeded, self._rAddToBuffer, ql, timetaken, segDur, segIndex, clen, simIds, external)
+            self._vSimulator.runAfter(timeneeded, self._rAddToBuffer, data)
             return
 
         self._rFetchSegment(nextSegId, nextQuality, timeneeded)
 
 #=============================================
-    def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
+    def _rAddToBuffer(self, req, simId = None):
         if self._vDead: return
 
         self._vDownloadPending = False
-        self._vCatched[(segIndex, ql)] = (ql, timetaken, segDur, segIndex, clen, simIds, external)
+        self._vCatched[(req.segId, req.qualityIndex)] = req
 
-        self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, external)
+        self._vAgent._rAddToBufferInternal(req)
 
 def experimentSimpleP2P(traces, vi, network):
     simulator = Simulator()

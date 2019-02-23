@@ -1,4 +1,4 @@
-from agent import Agent
+from agent import Agent, SegmentRequest
 from simulator import Simulator
 import load_trace
 import videoInfo as video
@@ -75,10 +75,10 @@ class SimpleEnviornment():
         self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality)
 
 #=============================================
-    def _rAddToBuffer(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
+    def _rAddToBuffer(self, req, simIds = None):
         if self._vDead: return
 
-        self._vAgent._rAddToBufferInternal(ql, timetaken, segDur, segIndex, clen, simIds, external)
+        self._vAgent._rAddToBufferInternal(req, simIds)
 
 #=============================================
     def _rFetchNextSeg(self, nextSegId, nextQuality):
@@ -118,7 +118,8 @@ class SimpleEnviornment():
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
         self._vLastDownloadedAt = now + time
-        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, nextQuality, time, nextDur, nextSegId, chsize, simIds)
+        req = SegmentRequest(nextQuality, now, now+time, nextDur, nextSegId, chsize, self)
+        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, req, simIds)
 
 
 def experimentSimpleEnv(traces, vi, network, abr = None):

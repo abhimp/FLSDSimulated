@@ -11,6 +11,52 @@ class SimpAbr():
     def getNextDownloadTime(self, *kw, **kws):
         return 3, 2
 
+class SegmentRequest():
+    def __init__(self, qualityIndex, downloadStarted, downloadFinished, segmentDuration, segId, clen, downloader):
+        self._qualityIndex = qualityIndex
+        self._downloadStarted = downloadStarted
+        self._downloadFinished = downloadFinished
+        self._segmentDuration = segmentDuration
+        self._segId = segId
+        self._clen = clen
+        self._downloader = downloader
+
+    @property
+    def qualityIndex(self):
+        return self._qualityIndex
+
+    @property
+    def downloadStarted(self):
+        return self._downloadStarted
+
+    @property
+    def downloadFinished(self):
+        return self._downloadFinished
+
+    @property
+    def segmentDuration(self):
+        return self._segmentDuration
+
+    @property
+    def segId(self):
+        return self._segId
+
+    @property
+    def clen(self):
+        return self._clen
+
+    @property
+    def downloader(self):
+        return self._downloader
+    
+    @property
+    def timetaken(self):
+        return self.downloadFinished - self.downloadStarted
+
+    @property
+    def throughput(self):
+        return self.clen*8.0/self.timetaken
+
 class Agent():
     __count = 0
     def __init__(self, videoInfo, env, abrClass = None):
@@ -34,7 +80,7 @@ class Agent():
         self._vIsStarted = 0
         self._vMaxPlayerBufferLen = 50
         self._vTimeouts = []
-        self._vRequests = [] #7-tuple throughput, timetaken, bytes/clen, startingTime, segIndex, segDur, bitrate
+        self._vRequests = [] # the rquest object
         abr = None if not abrClass else abrClass(videoInfo, self)
         self._vSetQuality = abr.getNextDownloadTime if abr else self._rWhenToDownload
         self._vStartingPlaybackTime = 0
@@ -71,15 +117,11 @@ class Agent():
         self._vStartUpCallback.append(func)
 
 #=============================================
-    def _rNextQuality(self, ql, timetaken, segDur, segIndex, clen):
+    def _rNextQuality(self, req):
         if self._vDead: return
 
-        assert segIndex == self._vNextSegmentIndex
-        totaldata = clen
-        throughput = float(totaldata)/timetaken*8
-        startingTime = self._vEnv.getNow() - timetaken
-        self._vRequests.append((throughput, timetaken, clen, \
-                startingTime, segIndex, segDur, ql))
+        assert req.segId == self._vNextSegmentIndex
+        self._vRequests.append(req)
 
 
 #=============================================
@@ -88,7 +130,7 @@ class Agent():
 
         if len(self._vRequests) == 0:
             return 0, 0
-        _, times, clens = list(zip(*self._vRequests))[:3]
+        times, clens = list(zip(*[[req.timetaken, req.clen] for req in self._vRequests[:3]]))
         avg = sum(clens)*8/sum(times)
         level = 0
         for ql, q in enumerate(self._vVideoInfo.bitrates):
@@ -103,13 +145,14 @@ class Agent():
         return sleepTime, level
 
 #=============================================
-    def _rAddToBufferInternal(self, ql, timetaken, segDur, segIndex, clen, simIds = None, external = False):
+    def _rAddToBufferInternal(self, req, simIds = None):
         if self._vDead: return
 
-        self._rNextQuality(ql, timetaken, segDur, segIndex, clen)
+        self._rNextQuality(req)
+        ql, timetaken, segDur, segId, clen = req.qualityIndex, req.timetaken, req.segmentDuration, req.segId, req.clen
 
         now = self._vEnv.getNow()
-        segPlaybackStartTime = segIndex * self._vVideoInfo.segmentDuration
+        segPlaybackStartTime = segId * self._vVideoInfo.segmentDuration
         segPlaybackEndTime = segPlaybackStartTime + segDur
 
         timeSpent = now - self._vLastEventTime
@@ -142,7 +185,7 @@ class Agent():
             if expectedPlaybackTime < segPlaybackStartTime:
                 after = segPlaybackStartTime - expectedPlaybackTime
 #                 print("after:", after)
-                self._vEnv.runAfter(after, self._rAddToBufferInternal, ql, timetaken, segDur, segIndex, clen, simIds, external)
+                self._vEnv.runAfter(after, self._rAddToBufferInternal, req, simIds)
                 return
 
             found = False
@@ -156,7 +199,7 @@ class Agent():
 
             self._vIsStarted = True
             self._vStartingPlaybackTime = playbackTime
-            self._vStartingSegId = segIndex
+            self._vStartingSegId = segId
             self._vFirstSegmentDlTime = timetaken
             self._vStartUpDelay = startUpDelay
             for cb in self._vStartUpCallback:
@@ -192,16 +235,16 @@ class Agent():
         self._vEnv._rDownloadNextData(nextSegId, nextQuality, sleepTime)
 
 #=============================================
-    def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
-        if self._vDead: return
-
-        if simIds != None and REQUESTION_SIMID_KEY in simIds:
-            self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
-
-        self._vLastBandwidthPtr = lastBandwidthPtr
-        self._vTimeouts.append((self._vNextSegmentIndex, self._vCurrentBitrateIndex))
-        self._vCurrentBitrateIndex = 0
-        self._rFetchSegment(self._vNextSegmentIndex, self._vCurrentBitrateIndex, sleepTime)
+#     def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
+#         if self._vDead: return
+# 
+#         if simIds != None and REQUESTION_SIMID_KEY in simIds:
+#             self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
+# 
+#         self._vLastBandwidthPtr = lastBandwidthPtr
+#         self._vTimeouts.append((self._vNextSegmentIndex, self._vCurrentBitrateIndex))
+#         self._vCurrentBitrateIndex = 0
+#         self._rFetchSegment(self._vNextSegmentIndex, self._vCurrentBitrateIndex, sleepTime)
 
         
 

@@ -11,15 +11,15 @@ BITRATE_REWARD = [1, 2, 3, 4, 7, 12, 15, 20]
 
 class VideoInfo():
     def __init__(s, vi):
-        s.fileSizes = vi.sizes
+        s.fileSizes = vi.sizes[:6]
         s.segmentDuration = vi.segmentDuration
-        s.bitrates = vi.bitrates
-        s.bitratesKbps = [x/1000 for x in vi.bitrates]
+        s.bitrates = vi.bitrates[:6]
+        s.bitratesKbps = [x/1000 for x in s.bitrates]
         s.duration = vi.duration
         s.minimumBufferTime = vi.minimumBufferTime
         s.segmentDurations = []
         s.segmentCount = len(s.fileSizes[0])
-        s.bitrateReward = BITRATE_REWARD[:s.segmentCount]
+        s.bitrateReward = BITRATE_REWARD[:len(s.bitrates)]
         s.birateRewardMap = {x:y for x, y in zip(s.bitrates, s.bitrateReward)}
         s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
 #         dur = 0
