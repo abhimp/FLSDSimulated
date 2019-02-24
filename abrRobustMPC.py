@@ -11,6 +11,8 @@ import numpy as np
 import time
 import itertools
 
+from calculateMetric import measureQoE 
+
 ######################## FAST MPC #######################
 
 S_INFO = 5  # bit_rate, buffer_size, rebuffering_time, bandwidth_measurement, chunk_til_video_end
@@ -140,10 +142,12 @@ class AbrRobustMPC:
         rebuffer_time = float(post_data['RebufferTime'] -self.input_dict['last_total_rebuf'])
 
         # --linear reward--
-        reward = VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
-                - REBUF_PENALTY * rebuffer_time / M_IN_K \
-                - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
-                                          self.input_dict['last_bit_rate']) / M_IN_K
+#         reward = VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
+#                 - REBUF_PENALTY * rebuffer_time / M_IN_K \
+#                 - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
+#                                           self.input_dict['last_bit_rate']) / M_IN_K
+
+        reward = measureQoE(VIDEO_BIT_RATE, [self.input_dict['last_bit_rate'], post_data['lastquality']], rebuffer_time, 0)
 
         # --log reward--
         # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))   
@@ -157,7 +161,7 @@ class AbrRobustMPC:
         # reward = BITRATE_REWARD[post_data['lastquality']] \
         #         - 8 * rebuffer_time / M_IN_K - np.abs(BITRATE_REWARD[post_data['lastquality']] - BITRATE_REWARD_MAP[self.input_dict['last_bit_rate']])
 
-        self.input_dict['last_bit_rate'] = VIDEO_BIT_RATE[post_data['lastquality']]
+        self.input_dict['last_bit_rate'] = post_data['lastquality']
         self.input_dict['last_total_rebuf'] = post_data['RebufferTime']
 
         # retrieve previous state

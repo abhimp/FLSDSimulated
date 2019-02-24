@@ -82,9 +82,9 @@ def main():
 #     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
 #     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
-# #     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
-#     testCB["GroupP2P"] = (experimentGroupP2P, traces, vi, network)
-    testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
+#     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
+    testCB["GroupP2P"] = (experimentGroupP2P, traces, vi, network)
+#     testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
 
     results = {}
 
@@ -129,3 +129,4 @@ def main2():
 
 if __name__ == "__main__":
     main()
+#     main2()

@@ -1,4 +1,6 @@
 
+SPEED_TOLARANCE_PERCENT = 50
+
 class Group():
     def __init__(s, ql, network):
         s.nodes = []
@@ -15,6 +17,7 @@ class Group():
             x = i % len(nodeslist)
             s._schedules[seg] = nodeslist[x]
 
+    def notifyNodes(s, segId):
         for n in s.nodes:
             n.schedulesChanged(segId, s.nodes, s._schedules)
 
@@ -63,8 +66,6 @@ class Group():
                 return False
         return True
 
-SPEED_TOLARANCE_PERCENT = 50
-
 class GroupManager():
     def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
         self.groups = {}
@@ -105,9 +106,9 @@ class GroupManager():
 
         s.peers[node] = group
         group.add(node, segId)
-#         s.adjustBuckets(group)
+        s.adjustBuckets(group, segId)
 
-    def adjustBuckets(s, grp):
+    def adjustBuckets(s, grp, segId):
         ql = grp.qualityLevel
         bucket = s.groupBuckets.setdefault(ql, {})
         lastCount = 0
@@ -117,11 +118,12 @@ class GroupManager():
                 bucket[c].remove(grp)
                 break
         
-        cnt = len(grp.getAllNode())
+        cnt = grp.numNodes()
 
         grpSet = bucket.setdefault(cnt, set())
         grpSet.add(grp)
 
+        grp.notifyNodes(segId)
 
 
     def remove(s, node, segId = 0):
@@ -133,7 +135,7 @@ class GroupManager():
             grps = s.groups.setdefault(grp.qualityLevel, [])
             grps.remove(grp)
         del s.peers[node]
-        s.adjustBuckets(grp)
+        s.adjustBuckets(grp, segId)
 
     def currentSchedule(s, node, segId):
         if node not in s.peers:
@@ -164,3 +166,5 @@ class GroupManager():
     def getSchedule(self, node): # set substraction probably good but it will be random
         return self.peers[node].schedule
 
+    def printGroupBucket(self):
+        print(self.groupBuckets)

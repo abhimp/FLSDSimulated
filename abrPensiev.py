@@ -13,6 +13,8 @@ import itertools
 import tensorflow as tf
 import a3c
 
+from calculateMetric import measureQoE 
+
 ######################## FAST MPC #######################
 
 S_INFO = 5  # bit_rate, buffer_size, rebuffering_time, bandwidth_measurement, chunk_til_video_end
@@ -174,6 +176,7 @@ class AbrPensieve:
                 - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
                                           self.input_dict['last_bit_rate']) / M_IN_K
 
+        reward = measureQoE(VIDEO_BIT_RATE, [self.input_dict['last_bit_rate'], post_data['lastquality']], rebuffer_time, 0)
         # --log reward--
         # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))   
         # log_last_bit_rate = np.log(self.input_dict['last_bit_rate'] / float(VIDEO_BIT_RATE[0]))

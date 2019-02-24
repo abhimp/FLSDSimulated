@@ -341,7 +341,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
 
 def experimentGroupP2P(traces, vi, network):
     simulator = Simulator()
-    grp = GroupManager(4, 3, vi, network)#np.random.randint(len(vi.bitrates)))
+    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
     deadAgents = []
     ags = []
@@ -356,6 +356,7 @@ def experimentGroupP2P(traces, vi, network):
         ags.append(env)
 #     simulator.runAt(maxTime + 50, randomDead, vi, traces, grp, simulator, ags, deadAgents)
     simulator.run()
+    grp.printGroupBucket()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
     return ags
@@ -372,6 +373,6 @@ def main():
     experimentGroupP2P(traces, vi, network)
 
 if __name__ == "__main__":
-    for x in range(1000):
+    for x in range(1):
         main()
         print("=========================\n")

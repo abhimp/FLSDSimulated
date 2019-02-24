@@ -2,8 +2,10 @@ import random
 import math
 import numpy as np
 from group import Group, GroupManager
+from calculateMetric import measureQoE 
 
 PLAYBACK_DELAY_THRESHOLD = 4
+M_IN_K = 1000
 
 class SimpAbr():
     def __init__(self, *kw, **kws):
@@ -208,7 +210,7 @@ class Agent():
 
         if stallTime > 0:
             assert playbackTime > 0
-            self._vStallsAt.append((playbackTime, stallTime, ql))
+            self._vStallsAt.append((playbackTime, stallTime, ql, req.downloader==self._vEnv))
             self._vTotalStallTime += stallTime
         self._vBufferUpto = segPlaybackEndTime
         self._vPlaybacktime = playbackTime
@@ -327,18 +329,26 @@ class Agent():
         if self._vDead: return
         if self._vPlaybacktime == 0:
             return
+
+        return measureQoE(self._vVideoInfo.bitrates, self._vQualitiesPlayed, self._vTotalStallTime, self._vStartUpDelay, False)
+
         lmbda = 1
         mu = 4.3
         mu_s = 1 
         rmin = self._vVideoInfo.bitrates[0]
         bitratePlayed = [self._vVideoInfo.bitrates[x] for x in self._vQualitiesPlayed]
-        bitratePlayed = [math.log(self._vVideoInfo.bitrates[x]/rmin) for x in self._vQualitiesPlayed]
-        bitratePlayed = self._vQualitiesPlayed
+#         bitratePlayed = [math.log(self._vVideoInfo.bitrates[x]/rmin) for x in self._vQualitiesPlayed]
+#         bitratePlayed = self._vQualitiesPlayed
         avgQuality = float(sum(bitratePlayed))/len(bitratePlayed)
         avgQualityVariation = [abs(bt - bitratePlayed[x - 1]) for x,bt in enumerate(bitratePlayed) if x > 0]
         avgQualityVariation = 0 if len(avgQualityVariation) == 0 else sum(avgQualityVariation)/float(len(avgQualityVariation))
 
         QoE = avgQuality - lmbda * avgQualityVariation - mu * self._vTotalStallTime - mu_s * self._vStartUpDelay
+
+        QoE = avgQuality / M_IN_K \
+                - mu * self.totalStallTime \
+                - lmbda * avgQualityVariation / M_IN_K
+
         return QoE
 
 #=============================================
@@ -348,7 +358,7 @@ class Agent():
         self._vFinished = True
         print("Simulation finished at:", self._vEnv.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay, "firstSegDlTime:", self._vFirstSegmentDlTime, "segSkipped:", self._vSegmentSkiped)
         print("QoE:", self._rCalculateQoE())
-#         print("stallTime:", self._vStallsAt)
+        print("stallTime:", self._vStallsAt)
 #         print("Quality played:", self._vQualitiesPlayed)
 #         print("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
 #                 "ration U/D:", self._vTotalUploaded/self._vTotalDownloaded)
