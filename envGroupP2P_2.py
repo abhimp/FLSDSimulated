@@ -1,4 +1,4 @@
-from envSimple import SimpleEnviornment, np, Simulator, load_trace, video, P2PNetwork
+from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
 from group import GroupManager
 import math
 import randStateInit as randstate
@@ -27,7 +27,7 @@ class SegmentDlStat:
             assert st == SEGMENT_CACHED
         s._status = st
 
-class GroupP2PEnv(SimpleEnviornment):
+class GroupP2PEnv(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None):
         super().__init__(vi, traces, simulator, abr, peerId)
 #         self._vAgent = Agent(vi, self, abr)
@@ -350,7 +350,7 @@ def experimentGroupP2P(traces, vi, network):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
-#         env = SimpleEnviornment(vi, trace, simulator, BOLA)
+#         env = SimpleEnvironment(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
         maxTime = 101.0 + x
         ags.append(env)

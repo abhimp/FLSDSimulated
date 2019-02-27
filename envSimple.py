@@ -10,7 +10,10 @@ from p2pnetwork import P2PNetwork
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
-class SimpleEnviornment():
+'''
+Environment for a single agent
+'''
+class SimpleEnvironment():
     def __init__(self, vi, traces, simulator, abr = None, peerId = None):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
@@ -128,7 +131,7 @@ def experimentSimpleEnv(traces, vi, network, abr = None):
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = SimpleEnviornment(vi, trace, simulator, abr)
+        env = SimpleEnvironment(vi, trace, simulator, abr)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)
     simulator.run()
