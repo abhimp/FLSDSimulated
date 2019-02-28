@@ -1,10 +1,13 @@
 import networkx as nx
 import numpy as np
 
+NUM_NEIGHBOURS = 3
+
 class P2PNetwork():
     def  __init__(self, fpath = "./graph/as19990829.txt"):
         self.grp = nx.Graph()
-        self.__readPfile(fpath)
+        if fpath is not None:
+            self.__readPfile(fpath)
     
     def __readPfile(self, fpath):
         with open(fpath) as fp:
@@ -41,11 +44,23 @@ class P2PNetwork():
         return time
 
 
+'''Creates a topology where each node gets 1<=n<=3 neighbours
+The topology is randomly created
+'''
+class P2PRandomNetwork(P2PNetwork):
+    def __init__(self, num_nodes):
+        super().__init__(None)
+        # for now, create a  random 3-regular graph wherein all nodes have exactly 3 neighbours
+        self.grp = nx.random_regular_graph(3, num_nodes)
+
 
 def main():
-    grp = Network()
+    grp = P2PRandomNetwork(6)
     for node in grp.nodes():
         print(node)
+        for neighbor in grp.grp.neighbors(node):
+            print(neighbor," "),
+        print("\n")
 
 if __name__ == "__main__":
     main()
