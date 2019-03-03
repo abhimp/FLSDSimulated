@@ -288,8 +288,9 @@ class Agent():
         assert segId < self._vVideoInfo.segmentCount
         now = self._vEnv.getNow()
         ePlaybackTime = now - self._vGlobalStartedAt
+        avlUpTo = self._vVideoInfo.globalDelayPlayback + ePlaybackTime
         segStartTime = (segId+1)*self._vVideoInfo.segmentDuration
-        return segStartTime - ePlaybackTime + self._vVideoInfo.globalDelayPlayback
+        return segStartTime - avlUpTo
 
 #=============================================
     @property

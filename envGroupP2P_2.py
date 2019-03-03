@@ -9,6 +9,7 @@ SEGMENT_CACHED = 2
 SEGMENT_PEER_WAITING = 3
 SEGMENT_IN_QUEUE = 4
 SEGMENT_SLEEPING = 5
+SEGMENT_PEER_WORKING = 6
 
 SEGMENT_STATUS_STRING = [
 "SEGMENT_NOT_WORKING", 
@@ -17,6 +18,7 @@ SEGMENT_STATUS_STRING = [
 "SEGMENT_PEER_WAITING", 
 "SEGMENT_IN_QUEUE", 
 "SEGMENT_SLEEPING", 
+"SEGMENT_PEER_WORKING",
 ]
 
 class SegmentDlStat:
@@ -113,12 +115,13 @@ class GroupP2PEnv(SimpleEnvironment):
         if self._vDead: return
         segId, clen = req.segId, req.clen
         seg = self._vSegmentStatus[segId]
+        self._rDistributeToOther(req) #sending to others
         if seg.status == SEGMENT_CACHED:
             return
         assert seg.status != SEGMENT_CACHED
         self._vTotalDownloaded += clen
         self._vDownloadPending = False
-        self._rCachReq(req)
+        seg.status = SEGMENT_CACHED
         self._vCatched[segId] = req
         
         seg = self._vSegmentStatus[segId]
@@ -137,7 +140,11 @@ class GroupP2PEnv(SimpleEnvironment):
 
 #=============================================
     def _rDistributeToOther(self, req):
-        for node in self._vPendingRequestedSegments.get(req.segId, set()):
+        if self._vGroup.currentSchedule(self, req.segId) != self:
+            return
+        for node in self._vGroupNodes:
+            if node == self:
+                continue
             rtt = self._rGetRtt(node)
             self.runAfter(rtt, self._rSendToOtherPeer, node, req)
 
@@ -171,7 +178,6 @@ class GroupP2PEnv(SimpleEnvironment):
     def _rAddToDownloadQueue(self, nextSegId, nextQuality):
         seg = self._vSegmentStatus[nextSegId]
         assert seg.status == SEGMENT_NOT_WORKING
-        seg.status == SEGMENT_WORKING
         self._vDownloadQueue.append((nextSegId, nextQuality))
         self._rDownloadFromDownloadQueue()
 
@@ -180,7 +186,7 @@ class GroupP2PEnv(SimpleEnvironment):
         while len(self._vDownloadQueue):
             segId, ql = self._vDownloadQueue.pop(0)
             seg = self._vSegmentStatus[segId]
-            if seg.status == SEGMENT_CACHED or seg.status == SEGMENT_WORKING:
+            if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
                 continue
             seg.status = SEGMENT_WORKING
             self._rFetchSegment(segId, ql)
@@ -227,7 +233,7 @@ class GroupP2PEnv(SimpleEnvironment):
 #=============================================
     def _rPeerDownloadTimeout(self, downloader, segId, ql):
         seg = self._vSegmentStatus[segId]
-        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING]:
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
             return
         if not downloader._vDead:
             self._rCancelPeerDownloading(downloader, segId)
@@ -283,16 +289,16 @@ class GroupP2PEnv(SimpleEnvironment):
             timeout, ql = self._rTimeoutForPeer(nextSegId)
             seg.status = SEGMENT_PEER_WAITING
             if timeout <= 0:
-                self._rPeerDownloadTimeout(self, downloader, segId, ql)
+                self._rPeerDownloadTimeout(downloader, nextSegId, ql)
             else:
-                self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, self, ql)
+                self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
         
         nextSegId, waitTime = self._rFindNextDownloadableSegment(nextSegId)
         if nextSegId < 0 or waitTime > 0:
             return
 
         seg = self._vSegmentStatus[nextSegId]
-        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING]:
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
             return
 
         self._rAddToDownloadQueue(nextSegId, self._vGroup.getQualityLevel(self))
@@ -312,26 +318,19 @@ class GroupP2PEnv(SimpleEnvironment):
         return (-1, 0)
 
 #=============================================
-    def _rCachReq(self, req):
-        self._rDistributeToOther(req)
-        segId = req.segId
-        seg = self._vSegmentStatus[segId]
-        if seg.status != SEGMENT_CACHED:
-            self._vCatched[segId] = req
-            seg.status = SEGMENT_CACHED
-
-#=============================================
     def _rReceiveReq(self, node, req):
         if self._vDead: return
 
         segId = req.segId
         seg = self._vSegmentStatus[segId]
+        assert seg.status != SEGMENT_WORKING
         if seg.status != SEGMENT_CACHED:
-            self._rCachReq(req)
+            seg.status = SEGMENT_CACHED
+            self._vCatched[segId] = req
             if segId == self._vAgent.nextSegmentIndex:
                 self._vAgent._rAddToBufferInternal(req)
-        else:
-            node._vTotalUploaded += req.clen
+            node._vTotalUploaded += req.clen #this is not exactly the way it will happen in the real world scenerio.
+                                             #However, in real world, 
 
 #=============================================
     def _rCancelPeerDownloading(self, node, segId):
@@ -349,6 +348,10 @@ class GroupP2PEnv(SimpleEnvironment):
     def _rSendToOtherPeer(self, node, req):
         if self._vDead: return
 #         self._vTotalUploaded += clen
+        seg = node._vSegmentStatus[req.segId]
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
+            return
+        seg.status = SEGMENT_PEER_WORKING
         node._rReceiveReq(self, req)
 
 #=============================================
@@ -358,6 +361,7 @@ class GroupP2PEnv(SimpleEnvironment):
 
 #=============================================
     def _rSegmentRequestRecved(self, node, segId):
+        assert False
         seg = self._vSegmentStatus[segId]
         if seg.status == SEGMENT_CACHED:
             rtt = self._rGetRtt(node)

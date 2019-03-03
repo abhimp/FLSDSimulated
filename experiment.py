@@ -4,7 +4,7 @@ import videoInfo as video
 from p2pnetwork import P2PNetwork
 import randStateInit as randstate
 
-from envGroupP2P import experimentGroupP2P
+from envGroupP2P_2 import experimentGroupP2P
 from envSimple import experimentSimpleEnv
 from envSimpleP2P import experimentSimpleP2P
 
