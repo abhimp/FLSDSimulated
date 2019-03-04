@@ -5,4 +5,8 @@
 
 2. Each node has NUM_NEIGHBOURS neighbours where NUM_NEIGHBOURS <=3
  
+# Doubts:
+
+agent.py -> SegmentRequest -> clen? Also why throughput() defined so?
+
 

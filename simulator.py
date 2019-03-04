@@ -1,6 +1,8 @@
 from priorityQueue import PriorityQueue
 import random
 
+'''Simulator for running and synchronizing tasks 
+'''
 class Simulator():
     def __init__(self):
         self.queue = PriorityQueue()
