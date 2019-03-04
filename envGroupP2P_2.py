@@ -9,6 +9,17 @@ SEGMENT_CACHED = 2
 SEGMENT_PEER_WAITING = 3
 SEGMENT_IN_QUEUE = 4
 SEGMENT_SLEEPING = 5
+SEGMENT_PEER_WORKING = 6
+
+SEGMENT_STATUS_STRING = [
+"SEGMENT_NOT_WORKING", 
+"SEGMENT_WORKING", 
+"SEGMENT_CACHED", 
+"SEGMENT_PEER_WAITING", 
+"SEGMENT_IN_QUEUE", 
+"SEGMENT_SLEEPING", 
+"SEGMENT_PEER_WORKING",
+]
 
 class SegmentDlStat:
     def __init__(self):
@@ -16,6 +27,12 @@ class SegmentDlStat:
         self.requestedTo = None
         self.requestedAt = -1
         self.peerDlAttemp = 0
+        self.peerStatus = {}
+        self.peerTimeoutHappened = False
+
+    @property
+    def statusString(self):
+        return SEGMENT_STATUS_STRING[self._status]
 
     @property
     def status(self):
@@ -25,6 +42,8 @@ class SegmentDlStat:
     def status(s, st):
         if s._status == SEGMENT_CACHED:
             assert st == SEGMENT_CACHED
+        if s._status == SEGMENT_WORKING:
+            assert st == SEGMENT_WORKING or st == SEGMENT_CACHED
         s._status = st
 
 class GroupP2PEnv(SimpleEnvironment):
@@ -48,6 +67,9 @@ class GroupP2PEnv(SimpleEnvironment):
 
         self._vEarlyDownloaded = 0
         self._vNormalDownloaded = 0
+        self._vThroughPutData = {}
+
+        self._vDownloadQueue = []
 
     def playerStartedCB(self, *kw, **kwa):
         if self._vGroup:
@@ -60,24 +82,6 @@ class GroupP2PEnv(SimpleEnvironment):
 
     def schedulesChanged(self, changedFrom, nodes, sched):
         self._vGroupNodes = nodes
-        pendingSegIds = list(self._vPendingRequestedSegments.keys())
-        for segId in pendingSegIds:
-            downloader = sched.get(segId, None)
-            if downloader and downloader != self:
-                self.denyPendingRequests(segId)
-
-    def denyPendingRequests(self, segId):
-        return
-        if segId not in self._vPendingRequestedSegments:
-            return
-        waiter = self._vPendingRequestedSegments[segId]
-        for node in waiter:
-            rtt = self._rGetRtt(node)
-            ql = waiter[node]
-            self.runAfter(rtt, node._rPeerRequestFailed, segId, ql)
-        del self._vPendingRequestedSegments[segId]
-
-        pass
 
     def _rGetRtt(self, node):
         return self._vGroup.getRtt(self, node)
@@ -85,7 +89,9 @@ class GroupP2PEnv(SimpleEnvironment):
     def _rTransmissionTime(self, *kw):
         return self._vGroup.transmissionTime(self, *kw)
 
-
+    @property
+    def now(self):
+        return self.getNow()
 
 #=============================================
     def _rFinish(self):
@@ -109,56 +115,88 @@ class GroupP2PEnv(SimpleEnvironment):
         if self._vDead: return
         segId, clen = req.segId, req.clen
         seg = self._vSegmentStatus[segId]
-        self._vTotalDownloaded += clen
-        self._vDownloadPending = False
+        self._rDistributeToOther(req) #sending to others
         if seg.status == SEGMENT_CACHED:
             return
+        assert seg.status != SEGMENT_CACHED
+        self._vTotalDownloaded += clen
+        self._vDownloadPending = False
         seg.status = SEGMENT_CACHED
         self._vCatched[segId] = req
+        
+        seg = self._vSegmentStatus[segId]
+        self._rDownloadFromDownloadQueue()
+
         if segId == self._vAgent.nextSegmentIndex:
             self._vAgent._rAddToBufferInternal(req)
-        if self._vStarted:
-           self._rSendRequestedData(req)
-        elif segId in self._vPendingRequestedSegments:
-            self.denyPendingRequests(segId)
 
+        self._vThroughPutData[self.now] = req.throughput
 
+        if self._vGroup.currentSchedule(self, segId) == self:
+           for node in self._vGroupNodes:
+               if node == self:
+                   continue
+               self._rPeerSegmentStatus(self, segId, SEGMENT_CACHED)
+
+#=============================================
+    def _rDistributeToOther(self, req):
+        if self._vGroup.currentSchedule(self, req.segId) != self:
+            return
+        for node in self._vGroupNodes:
+            if node == self:
+                continue
+            rtt = self._rGetRtt(node)
+            self.runAfter(rtt, self._rSendToOtherPeer, node, req)
+
+        if req.segId in self._vPendingRequestedSegments:
+            del self._vPendingRequestedSegments[req.segId]
+
+#=============================================
+    def _rPredictedThroughput(self):
+        maxTime = max(self._vThroughPutData.keys())
+        return self._vThroughPutData[maxTime]
 
 #=============================================
 # exit point from this class to envSimple
     def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
         if self._vDead: return
-        assert sleepTime >= 0
+        assert sleepTime == 0
         if nextSegId > self._vAgent.nextSegmentIndex:
             self._vEarlyDownloaded += 1
         else:
             self._vNormalDownloaded += 1
         self._vDownloadPending = True
         self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality)
+        if self._vGroup.currentSchedule(self, nextSegId) == self:
+           for node in self._vGroupNodes:
+               if node == self:
+                   continue
+               node._rPeerSegmentStatus(self, nextSegId, SEGMENT_WORKING)
+
 
 #=============================================
-    def _rDownloadNextDataWake(self, nextSegId, nextQuality):
-        if self._vDead: return
+    def _rAddToDownloadQueue(self, nextSegId, nextQuality):
         seg = self._vSegmentStatus[nextSegId]
-        if seg.status != SEGMENT_SLEEPING:
-            return
-        assert seg.status == SEGMENT_SLEEPING
-        seg.status = SEGMENT_NOT_WORKING
-        self._rDownloadNextData(nextSegId, nextQuality, 0)
+        assert seg.status == SEGMENT_NOT_WORKING
+        self._vDownloadQueue.append((nextSegId, nextQuality))
+        self._rDownloadFromDownloadQueue()
 
 #=============================================
-    def _rAddToPeerBuffer(self, sender, req):
-        if self._vDead: return
-        assert sender != self
-        segId, clen = req.segId, req.clen
+    def _rDownloadFromDownloadQueue(self):
+        while len(self._vDownloadQueue):
+            segId, ql = self._vDownloadQueue.pop(0)
+            seg = self._vSegmentStatus[segId]
+            if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
+                continue
+            seg.status = SEGMENT_WORKING
+            self._rFetchSegment(segId, ql)
+            break
+
+#=============================================
+    def _rPeerSegmentStatus(self, node, segId, status):
         seg = self._vSegmentStatus[segId]
-        if self._vAgent.nextSegmentIndex == segId:
-            self._vAgent._rAddToBufferInternal(req)
-        if seg.status == SEGMENT_CACHED:
-            return
-        sender._vTotalUploaded += clen
-        seg.status = SEGMENT_CACHED
-        self._vCatched[segId] = req
+        seg.peerStatus[node] = status
+
 
 #=============================================
     def _rDownloadNextDataBeforeGroupStart(self, nextSegId, nextQuality, sleepTime):
@@ -169,56 +207,46 @@ class GroupP2PEnv(SimpleEnvironment):
             self.runAfter(sleepTime, self._rDownloadNextDataBeforeGroupStart, nextSegId, nextQuality, 0)
             return
         if seg.status == SEGMENT_SLEEPING or seg.status == SEGMENT_NOT_WORKING:
-            seg.status == SEGMENT_WORKING
-            self._rFetchSegment(nextSegId, nextQuality, 0)
-
+            self._rAddToDownloadQueue(nextSegId, nextQuality)
             return
 
         assert False
 
+
 #=============================================
-    def _rDownloadNextDataForMe(self):
-        now = self.getNow()
-        nextSegId = self._vAgent.nextSegmentIndex
-        ql = self._vGroup.getQualityLevel(self)
-        while nextSegId < self._vVideoInfo.segmentCount:
-            seg = self._vSegmentStatus[nextSegId]
-            downloader = self._vGroup.currentSchedule(self, nextSegId)
-            if downloader and downloader != self:
-                if seg.status != SEGMENT_PEER_WAITING \
-                    and seg.status != SEGMENT_CACHED \
-                    and seg.status != SEGMENT_WORKING:
-#                     assert seg.peerDlAttemp < 3
-                    if seg.peerDlAttemp >= 3:
-                        wait = self._vAgent._rIsAvailable(nextSegId)
-                        if wait <= 0:
-                            if not self._vDownloadPending:
-                                seg.status = SEGMENT_WORKING
-                                self._rFetchSegment(nextSegId, ql, 0)
-                                break
-                        else:
-                            self.runAfter(wait, self._rDownloadNextDataForMe)
-                    else:
-                        self.denyPendingRequests(nextSegId)
-                        seg.status = SEGMENT_PEER_WAITING
-                        seg.requestedTo = downloader
-                        self.runAfter(self._rGetRtt(downloader), downloader._rRequestSegment, self, nextSegId, ql)
-            elif seg.status == SEGMENT_NOT_WORKING \
-                    and not self._vDownloadPending:
-                seg.status = SEGMENT_WORKING
-                self._rFetchSegment(nextSegId, ql, 0)
-                break
-            else:
-                break
-            nextSegId += 1
+    def _rTimeoutForPeer(self, segId, ql = -1):
+        if ql == -1:
+            ql = self._vGroup.getQualityLevel(self)
+
+        if ql > 0:
+            ql = ql - 1
+
+        downloadTIme = self._vVideoInfo.bitrates[ql] * self._vVideoInfo.segmentDuration / self._rPredictedThroughput()
+
+        bufferLeft = self._vAgent.bufferLeft
+        
+        timeout = bufferLeft - downloadTIme
+
+        return round(timeout, 3), ql
 
 
+#=============================================
+    def _rPeerDownloadTimeout(self, downloader, segId, ql):
+        seg = self._vSegmentStatus[segId]
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
+            return
+        if not downloader._vDead:
+            self._rCancelPeerDownloading(downloader, segId)
+        if seg.status == SEGMENT_PEER_WAITING:
+            seg.status = SEGMENT_NOT_WORKING
+        seg.peerTimeoutHappened = True
+        self._rAddToDownloadQueue(segId, ql)
 
 #=============================================
 # entry point from agent
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if self._vDead: return
-        if not self._vStarted: 
+        if not self._vStarted:
             return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
         now = self.getNow()
         seg = self._vSegmentStatus[nextSegId]
@@ -227,87 +255,121 @@ class GroupP2PEnv(SimpleEnvironment):
             req= self._vCatched[nextSegId]
             self._vAgent._rAddToBufferInternal(req)
             return
-            
+        
+        if seg.status == SEGMENT_WORKING \
+                or seg.status == SEGMENT_SLEEPING \
+                or seg.status == SEGMENT_PEER_WAITING \
+                or seg.status == SEGMENT_IN_QUEUE:
+            return
 
         if sleepTime > 0:
             seg.status = SEGMENT_SLEEPING
-            self.runAfter(sleepTime, self._rDownloadNextDataWake, nextSegId, nextQuality)
-        else:
-            self._rDownloadNextDataForMe()
+            self.runAfter(sleepTime, self._rDownloadNextDataWake, nextSegId, nextQuality, 0)
+            return
+
+        seg.status = SEGMENT_NOT_WORKING
+
+        self._rDownloadNextDataGroup(nextSegId, nextQuality, 0)
+    
+#=============================================
+    def _rDownloadNextDataWake(self, nextSegId, nextQuality, sleepTime):
+        seg = self._vSegmentStatus[nextSegId]
+        if seg.status != SEGMENT_SLEEPING:
+            return
+        seg.status = SEGMENT_NOT_WORKING
+        self._rDownloadNextDataGroup(nextSegId, nextQuality, 0)
 
 #=============================================
-    def getDownloaderFor(self, segId):
-        downloader = self._vGroup.currentSchedule(self, segId)
-        if downloader not in self._vGroupNodes:
-            return None
+    def _rDownloadNextDataGroup(self, nextSegId, nextQuality, sleepTime):
+        now = self.getNow()
+        seg = self._vSegmentStatus[nextSegId]
+        downloader = self._vGroup.currentSchedule(self, nextSegId)
+
+        if downloader and downloader != self:
+            timeout, ql = self._rTimeoutForPeer(nextSegId)
+            seg.status = SEGMENT_PEER_WAITING
+            if timeout <= 0:
+                self._rPeerDownloadTimeout(downloader, nextSegId, ql)
+            else:
+                self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+        
+        nextSegId, waitTime = self._rFindNextDownloadableSegment(nextSegId)
+        if nextSegId < 0 or waitTime > 0:
+            return
+
+        seg = self._vSegmentStatus[nextSegId]
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
+            return
+
+        self._rAddToDownloadQueue(nextSegId, self._vGroup.getQualityLevel(self))
     
+
+
 #=============================================
 # findout next segId to be downloaded
     def _rFindNextDownloadableSegment(self, nextSegId):
         now = self.getNow()
         while nextSegId < self._vVideoInfo.segmentCount:
             waitTime = self._vAgent._rIsAvailable(nextSegId)
-            downloader = self.getDownloaderFor(nextSegId) #self._vGroup.currentSchedule(self, nextSegId)
+            downloader = self._vGroup.currentSchedule(self, nextSegId) #self._vGroup.currentSchedule(self, nextSegId)
             if not downloader or downloader == self:
-                return (nextSegId, waitTime)
+                return (nextSegId, round(waitTime, 3))
             nextSegId += 1
         return (-1, 0)
 
 #=============================================
+    def _rReceiveReq(self, node, req):
+        if self._vDead: return
+
+        segId = req.segId
+        seg = self._vSegmentStatus[segId]
+        assert seg.status != SEGMENT_WORKING
+        if seg.status != SEGMENT_CACHED:
+            seg.status = SEGMENT_CACHED
+            self._vCatched[segId] = req
+            if segId == self._vAgent.nextSegmentIndex:
+                self._vAgent._rAddToBufferInternal(req)
+            node._vTotalUploaded += req.clen #this is not exactly the way it will happen in the real world scenerio.
+                                             #However, in real world, 
+
+#=============================================
+    def _rCancelPeerDownloading(self, node, segId):
+        rtt = self._rGetRtt(node)
+        self.runAfter(rtt, node._rCancelRequestReceived, self, segId)
+
+#=============================================
+    def _rCancelRequestReceived(self, node, segId):
+        nodes = self._vPendingRequestedSegments.get(segId, set())
+        if node in nodes:
+            nodes.remove(node)
+
+#=============================================
+#Calling other peer function
     def _rSendToOtherPeer(self, node, req):
         if self._vDead: return
 #         self._vTotalUploaded += clen
-        node._rAddToPeerBuffer(self, req)
-
-#=============================================
-    def _rPeerRequestFailed(self, segId, ql):
-        if self._vDead: return
-        now = self.getNow()
-        seg = self._vSegmentStatus[segId]
-        if seg.status != SEGMENT_PEER_WAITING:
+        seg = node._vSegmentStatus[req.segId]
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
             return
-        seg.status = SEGMENT_NOT_WORKING
-        seg.peerDlAttemp += 1
-        self._rDownloadNextData(segId, ql, 0)
+        seg.status = SEGMENT_PEER_WORKING
+        node._rReceiveReq(self, req)
 
 #=============================================
-# receive segment request from other peer
-    def _rRequestSegment(self, node, segId, ql):
-        if self._vDead: return
+    def _rRequestSegment(self, downloader, nextSegId):
+        rtt = self._rGetRtt(downloader)
+        self.runAfter(rtt, downloader._rSegmentRequestRecved, self, nextSegId)
+
+#=============================================
+    def _rSegmentRequestRecved(self, node, segId):
+        assert False
         seg = self._vSegmentStatus[segId]
-#         if seg.status != SEGMENT_CACHED:
-        if seg.status == SEGMENT_WORKING:
-            self._vPendingRequestedSegments.setdefault(segId, {})[node] = ql
-            return #don't need to bother
         if seg.status == SEGMENT_CACHED:
-            req = self._vCatched[segId]
-            time = self._rTransmissionTime(node, req.clen)
-            self.runAfter(time, self._rSendToOtherPeer, node, req)
-            return
-        rtt = self._rGetRtt(node)
-        self.runAfter(rtt, node._rPeerRequestFailed, segId, ql)
-
-#=============================================
-# server pending request to other peers
-    def _rSendRequestedData(self, req):
-        segId, clen = req.segId, req.clen
-        rnodes = self._vPendingRequestedSegments.get(segId, {})
-
-        for node in self._vGroup.getAllNode(self, self):
-            assert node != self
-            remSeg = node._vSegmentStatus[segId]
-            if remSeg.status != SEGMENT_WORKING and remSeg.status != SEGMENT_CACHED:
-                remSeg.status = SEGMENT_PEER_WAITING
-#                 self._rSendToOtherPeer(node, *kw)
-                time = self._rTransmissionTime(node, clen)
-                self.runAfter(time, self._rSendToOtherPeer, node, req)
-            if node in rnodes:
-                del rnodes[node]
-        for node in rnodes:
             rtt = self._rGetRtt(node)
-            self.runAfter(rtt, node._rPeerRequestFailed, segId, rnodes[node])
-        if len(rnodes):
-            del self._vPendingRequestedSegments[segId]
+            self.runAfter(rtt, self._rSendToOtherPeer, node, self._vCatched[segId])
+        elif seg.status == SEGMENT_WORKING:
+            self._vPendingRequestedSegments.setdefault(segId, set()).add(node)
+        else:
+            assert False
 
 #=============================================
     def start(self, startedAt = -1):
@@ -339,6 +401,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             simulator.runAfter(ranwait, randomDead, vi, traces, grp, simulator, agents, deadAgents)
             break
 
+#=============================================
 def experimentGroupP2P(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
@@ -373,6 +436,6 @@ def main():
     experimentGroupP2P(traces, vi, network)
 
 if __name__ == "__main__":
-    for x in range(1):
+    for x in range(2000):
         main()
         print("=========================\n")

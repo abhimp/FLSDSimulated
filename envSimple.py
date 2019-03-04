@@ -10,9 +10,6 @@ from p2pnetwork import P2PNetwork
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
-'''
-Environment for a single agent
-'''
 class SimpleEnvironment():
     def __init__(self, vi, traces, simulator, abr = None, peerId = None):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
@@ -55,7 +52,7 @@ class SimpleEnvironment():
         print(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
-    
+
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
