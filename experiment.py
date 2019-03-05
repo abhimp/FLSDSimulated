@@ -16,6 +16,7 @@ from abrPensiev import AbrPensieve
 import matplotlib.pyplot as plt
 
 RESULT_DIR = "./results/"
+BUFFER_LEN_PLOTS = "bufferlens"
 
 def savePlotData(Xs, Ys, legend, pltTitle):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
@@ -66,6 +67,31 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
     plt.xlabel(xlabel)
 #     plt.show()
 
+def plotBufferLens(results):
+    dpath = os.path.join(RESULT_DIR, BUFFER_LEN_PLOTS)
+    if not os.path.isdir(dpath):
+        os.makedirs(dpath)
+    models = list(results.keys())
+    res = [results[r] for r in models]
+    res = list(zip(*res))
+
+    for it,exp in enumerate(res):
+        plt.clf()
+        plt.figure(figsize=(15, 5), dpi=150)
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        for i, ag in enumerate(exp):
+            pltData = ag._vAgent._vBufferLenOverTime
+            Xs, Ys = list(zip(*pltData))
+            ax1.plot(Xs, Ys, label=models[i] + "-buffLen")
+            
+            pltData = ag._vAgent._vQualitiesPlayedOverTime
+            Xs, Ys = list(zip(*pltData))
+            ax2.step(Xs, Ys, label=models[i]+"-quality", where="post")
+        fig.legend(ncol = 2, loc = "upper center")
+        pltPath = os.path.join(dpath,"%04d.png"%(it))
+        fig.savefig(pltPath, bbox_inches="tight")
+
 def runExperiments(cb, *kw, **kws):
     return cb(*kw, **kws)
 
@@ -82,7 +108,7 @@ def main():
 #     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
 #     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
-    testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
+#     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
     testCB["GroupP2P"] = (experimentGroupP2P, traces, vi, network)
 #     testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
 
@@ -95,6 +121,7 @@ def main():
 
     print("ploting figures")
     print("="*30)
+
     plotAgentsData(results, "_vAgent.QoE", "QoE", "Player Id")
     plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id")
     plotAgentsData(results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id")
@@ -106,6 +133,8 @@ def main():
 
 
     plt.show()
+
+    plotBufferLens(results)
 
 
 def main2():

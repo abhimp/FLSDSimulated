@@ -31,6 +31,7 @@ class SegmentDlStat:
         self.peerTimeoutHappened = False
         self.peerTimeoutRef = -1
         self.servingTo = []
+        self.autoEntryOver = False
 
     @property
     def statusString(self):
@@ -129,7 +130,7 @@ class GroupP2PEnv(SimpleEnvironment):
         seg = self._vSegmentStatus[segId]
         self._rDownloadFromDownloadQueue()
 
-        if segId == self._vAgent.nextSegmentIndex:
+        if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
             self._vAgent._rAddToBufferInternal(req)
 
         self._vThroughPutData[self.now] = req.throughput
@@ -267,16 +268,25 @@ class GroupP2PEnv(SimpleEnvironment):
 # entry point from agent
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if self._vDead: return
-        if not self._vStarted:
-            return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
         now = self.getNow()
         seg = self._vSegmentStatus[nextSegId]
+        if not self._vStarted:
+            seg.autoEntryOver = True
+            return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
+
+        if sleepTime > 0:
+            self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
+            return
 
         if seg.status == SEGMENT_CACHED:
-            req= self._vCatched[nextSegId]
-            self._vAgent._rAddToBufferInternal(req)
+            assert self._vAgent.nextSegmentIndex >= nextSegId
+            if self._vAgent.nextSegmentIndex == nextSegId:
+                req= self._vCatched[nextSegId]
+                self._vAgent._rAddToBufferInternal(req)
             return
         
+        seg.autoEntryOver = True
+
         if seg.status == SEGMENT_WORKING \
                 or seg.status == SEGMENT_SLEEPING \
                 or seg.status == SEGMENT_PEER_WAITING \
@@ -352,7 +362,7 @@ class GroupP2PEnv(SimpleEnvironment):
         if seg.status != SEGMENT_CACHED:
             seg.status = SEGMENT_CACHED
             self._vCatched[segId] = req
-            if segId == self._vAgent.nextSegmentIndex:
+            if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
                 self._vAgent._rAddToBufferInternal(req)
             node._vTotalUploaded += req.clen #this is not exactly the way it will happen in the real world scenerio.
                                              #However, in real world, 
