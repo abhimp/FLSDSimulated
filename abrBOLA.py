@@ -28,7 +28,7 @@ class BOLA():
         SM = float(self._videoInfo.bitrates[-1])
         lastM = agent._vRequests[-1].qualityIndex #last bitrateindex
         Q = buflen
-        Qmax = self._agent._vMaxPlayerBufferLen
+        Qmax = self._agent._vMaxPlayerBufferLen/p
         ts = agent._vPlaybacktime - agent._vStartingPlaybackTime
         te = self._videoInfo.duration - agent._vPlaybacktime
         t = min(ts, te)
