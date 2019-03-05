@@ -78,7 +78,7 @@ def plotBufferLens(results):
     for it,exp in enumerate(res):
         plt.clf()
         plt.figure(figsize=(15, 5), dpi=150)
-        fig, ax1 = plt.subplots()
+        fig, ax1 = plt.subplots(figsize=(15, 5), dpi=150)
         ax2 = ax1.twinx()
         for i, ag in enumerate(exp):
             pltData = ag._vAgent._vBufferLenOverTime
@@ -105,7 +105,7 @@ def main():
     network = P2PNetwork()
     
     testCB = {}
-#     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
+    testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
 #     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
 #     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
