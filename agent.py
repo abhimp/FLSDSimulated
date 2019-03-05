@@ -83,7 +83,7 @@ class Agent():
         self._vMaxPlayerBufferLen = 50
         self._vTimeouts = []
         self._vRequests = [] # the rquest object
-        abr = None if not abrClass else abrClass(videoInfo, self)
+        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self)
         self._vSetQuality = abr.getNextDownloadTime if abr else self._rWhenToDownload
         self._vStartingPlaybackTime = 0
         self._vStartingSegId = 0
@@ -358,7 +358,8 @@ class Agent():
 #=============================================
     def _rFinish(self):
         if self._vDead: return
-
+        if self._vAbr and "stopAbr" in dir(self._vAbr) and callable(self._vAbr.stopAbr):
+            self._vAbr.stopAbr()
         self._vFinished = True
         print("Simulation finished at:", self._vEnv.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay, "firstSegDlTime:", self._vFirstSegmentDlTime, "segSkipped:", self._vSegmentSkiped)
         print("QoE:", self._rCalculateQoE())
