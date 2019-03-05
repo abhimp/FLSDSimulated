@@ -7,6 +7,5 @@
  
 # Doubts:
 
-agent.py -> SegmentRequest -> clen? Also why throughput() defined so?
-
+nextDur in SegmentRequest
 
