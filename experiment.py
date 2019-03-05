@@ -55,12 +55,12 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
     for name, res in results.items():
         Xs, Ys = [], []
         for x, ag in enumerate(res):
-            y = eval("ag._vAgent." + attrib)
+            y = eval("ag." + attrib)
             Xs.append(x)
             Ys.append(y)
         savePlotData(Xs, Ys, name, pltTitle)
         pltData += [Xs, Ys]
-        plt.plot(Xs, Ys, label=name)
+        plt.scatter(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
     plt.xlabel(xlabel)
@@ -82,7 +82,7 @@ def main():
 #     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
 #     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
-#     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
+    testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
     testCB["GroupP2P"] = (experimentGroupP2P, traces, vi, network)
 #     testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
 
@@ -95,12 +95,14 @@ def main():
 
     print("ploting figures")
     print("="*30)
-    plotAgentsData(results, "QoE", "QoE", "Player Id")
-    plotAgentsData(results, "avgBitrate", "Average bitrate played", "Player Id")
-    plotAgentsData(results, "avgQualityIndex", "Average quality index played", "Player Id")
-    plotAgentsData(results, "avgQualityIndexVariation", "Average quality index variation", "Player Id")
-    plotAgentsData(results, "totalStallTime", "Stall Time", "Player Id")
-    plotAgentsData(results, "startUpDelay", "Start up delay", "Player Id")
+    plotAgentsData(results, "_vAgent.QoE", "QoE", "Player Id")
+    plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id")
+    plotAgentsData(results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id")
+    plotAgentsData(results, "_vAgent.avgQualityIndexVariation", "Average quality index variation", "Player Id")
+    plotAgentsData(results, "_vAgent.totalStallTime", "Stall Time", "Player Id")
+    plotAgentsData(results, "_vAgent.startUpDelay", "Start up delay", "Player Id")
+    plotAgentsData(results, "idleTime", "IdleTime", "Player Id")
+    plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id")
 
 
     plt.show()
@@ -117,12 +119,14 @@ def main2():
 
     results = [x for x in testCB]
 
-    plotStoredData(results, "QoE", "QoE", "Player Id")
-    plotStoredData(results, "avgBitrate", "Average bitrate played", "Player Id")
-    plotStoredData(results, "avgQualityIndex", "Average quality index played", "Player Id")
-    plotStoredData(results, "avgQualityIndexVariation", "Average quality index variation", "Player Id")
-    plotStoredData(results, "totalStallTime", "Stall Time", "Player Id")
-    plotStoredData(results, "startUpDelay", "Start up delay", "Player Id")
+    plotAgentsData(results, "_vAgent.QoE", "QoE", "Player Id")
+    plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id")
+    plotAgentsData(results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id")
+    plotAgentsData(results, "_vAgent.avgQualityIndexVariation", "Average quality index variation", "Player Id")
+    plotAgentsData(results, "_vAgent.totalStallTime", "Stall Time", "Player Id")
+    plotAgentsData(results, "_vAgent.startUpDelay", "Start up delay", "Player Id")
+    plotAgentsData(results, "idleTime", "IdleTime", "Player Id")
+    plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id")
 
 
     plt.show()

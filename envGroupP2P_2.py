@@ -29,7 +29,8 @@ class SegmentDlStat:
         self.peerDlAttemp = 0
         self.peerStatus = {}
         self.peerTimeoutHappened = False
-        self.alreadyPromised = []
+        self.peerTimeoutRef = -1
+        self.servingTo = []
 
     @property
     def statusString(self):
@@ -70,6 +71,7 @@ class GroupP2PEnv(SimpleEnvironment):
         self._vNormalDownloaded = 0
         self._vThroughPutData = {}
         self._vDownloadQueue = []
+        self._vServingPeers = {}
 
     def playerStartedCB(self, *kw, **kwa):
         if self._vGroup:
@@ -136,7 +138,7 @@ class GroupP2PEnv(SimpleEnvironment):
            for node in self._vGroupNodes:
                if node == self:
                    continue
-               self._rPeerSegmentStatus(self, segId, SEGMENT_CACHED)
+               node._rPeerSegmentStatus(self, segId, SEGMENT_CACHED)
 
 #=============================================
     def _rDistributeToOther(self, req):
@@ -155,6 +157,9 @@ class GroupP2PEnv(SimpleEnvironment):
             elif seg.peerStatus.get(self, SEGMENT_NOT_WORKING) != SEGMENT_WORKING:
                 # segment is peer waiting but for some other peer
                 continue
+            servingTos = self._vServingPeers.setdefault(req.segId, [])
+            if node not in servingTos:
+                servingTos.append(node)
             self.runAfter(rtt, self._rSendToOtherPeer, node, req)
 
         if req.segId in self._vPendingRequestedSegments:
@@ -209,7 +214,8 @@ class GroupP2PEnv(SimpleEnvironment):
             if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
                 return
             seg.status = SEGMENT_PEER_WORKING
-            node._vSegmentStatus[segId].alreadyPromised += [self]
+            node._vSegmentStatus[segId].servingTo += [self]
+            node._vServingPeers.setdefault(segId, []).append(self)
         seg.peerStatus[node] = status
 
 #=============================================
@@ -254,6 +260,7 @@ class GroupP2PEnv(SimpleEnvironment):
         if seg.status == SEGMENT_PEER_WAITING:
             seg.status = SEGMENT_NOT_WORKING
         seg.peerTimeoutHappened = True
+        seg.peerTimeoutRef = -1
         self._rAddToDownloadQueue(segId, ql)
 
 #=============================================
@@ -274,6 +281,9 @@ class GroupP2PEnv(SimpleEnvironment):
                 or seg.status == SEGMENT_SLEEPING \
                 or seg.status == SEGMENT_PEER_WAITING \
                 or seg.status == SEGMENT_IN_QUEUE:
+            return
+
+        if seg.status == SEGMENT_PEER_WORKING:
             return
 
         if sleepTime > 0:
@@ -305,7 +315,8 @@ class GroupP2PEnv(SimpleEnvironment):
             if timeout <= 0:
                 self._rPeerDownloadTimeout(downloader, nextSegId, ql)
             else:
-                self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+                ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+                seg.peerTimeoutRef = ref
         
         nextSegId, waitTime = self._rFindNextDownloadableSegment(nextSegId)
         if nextSegId < 0 or waitTime > 0:
@@ -367,6 +378,12 @@ class GroupP2PEnv(SimpleEnvironment):
             return
         seg.status = SEGMENT_PEER_WORKING
         node._rReceiveReq(self, req)
+        if req.segId in self._vServingPeers:
+            servingTos = self._vServingPeers[req.segId]
+            if node in servingTos:
+                servingTos.remove(node)
+            if len(servingTos) == 0:
+                del self._vServingPeers[req.segId]
 
 #=============================================
     def _rRequestSegment(self, downloader, nextSegId):
