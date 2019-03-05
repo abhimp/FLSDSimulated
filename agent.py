@@ -2,7 +2,7 @@ import random
 import math
 import numpy as np
 from group import Group, GroupManager
-from calculateMetric import measureQoE 
+from calculateMetric import measureQoE
 
 PLAYBACK_DELAY_THRESHOLD = 4
 M_IN_K = 1000
@@ -50,7 +50,7 @@ class SegmentRequest():
     @property
     def downloader(self):
         return self._downloader
-    
+
     @property
     def timetaken(self):
         return self.downloadFinished - self.downloadStarted
@@ -83,7 +83,7 @@ class Agent():
         self._vMaxPlayerBufferLen = 50
         self._vTimeouts = []
         self._vRequests = [] # the rquest object
-        abr = None if not abrClass else abrClass(videoInfo, self)
+        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self)
         self._vSetQuality = abr.getNextDownloadTime if abr else self._rWhenToDownload
         self._vStartingPlaybackTime = 0
         self._vStartingSegId = 0
@@ -146,6 +146,27 @@ class Agent():
         sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
         return sleepTime, level
 
+    @property
+    def playbackTime(self):
+        now = self._vEnv.getNow()
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        if playbackTime > self._vBufferUpto:
+            return self._vBufferUpto
+        return playbackTime
+
+    @property
+    def bufferLeft(self):
+        now = self._vEnv.getNow()
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        if playbackTime > self._vBufferUpto:
+            return 0.0
+        return self._vBufferUpto - playbackTime
+        
+            
 #=============================================
     def _rAddToBufferInternal(self, req, simIds = None):
         if self._vDead: return
@@ -196,7 +217,7 @@ class Agent():
                     playbackTime = expectedPlaybackTime - x
                     found = True
                     break
-            
+
             assert found
 
             self._vIsStarted = True
@@ -239,16 +260,16 @@ class Agent():
 #=============================================
 #     def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
 #         if self._vDead: return
-# 
+#
 #         if simIds != None and REQUESTION_SIMID_KEY in simIds:
 #             self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
-# 
+#
 #         self._vLastBandwidthPtr = lastBandwidthPtr
 #         self._vTimeouts.append((self._vNextSegmentIndex, self._vCurrentBitrateIndex))
 #         self._vCurrentBitrateIndex = 0
 #         self._rFetchSegment(self._vNextSegmentIndex, self._vCurrentBitrateIndex, sleepTime)
 
-        
+
 
 #=============================================
     def _rGetTimeOutTime(self):
@@ -267,8 +288,9 @@ class Agent():
         assert segId < self._vVideoInfo.segmentCount
         now = self._vEnv.getNow()
         ePlaybackTime = now - self._vGlobalStartedAt
+        avlUpTo = self._vVideoInfo.globalDelayPlayback + ePlaybackTime
         segStartTime = (segId+1)*self._vVideoInfo.segmentDuration
-        return segStartTime - ePlaybackTime + self._vVideoInfo.globalDelayPlayback
+        return segStartTime - avlUpTo
 
 #=============================================
     @property
@@ -331,30 +353,13 @@ class Agent():
             return
 
         return measureQoE(self._vVideoInfo.bitrates, self._vQualitiesPlayed, self._vTotalStallTime, self._vStartUpDelay, False)
-
-        lmbda = 1
-        mu = 4.3
-        mu_s = 1 
-        rmin = self._vVideoInfo.bitrates[0]
-        bitratePlayed = [self._vVideoInfo.bitrates[x] for x in self._vQualitiesPlayed]
-#         bitratePlayed = [math.log(self._vVideoInfo.bitrates[x]/rmin) for x in self._vQualitiesPlayed]
-#         bitratePlayed = self._vQualitiesPlayed
-        avgQuality = float(sum(bitratePlayed))/len(bitratePlayed)
-        avgQualityVariation = [abs(bt - bitratePlayed[x - 1]) for x,bt in enumerate(bitratePlayed) if x > 0]
-        avgQualityVariation = 0 if len(avgQualityVariation) == 0 else sum(avgQualityVariation)/float(len(avgQualityVariation))
-
-        QoE = avgQuality - lmbda * avgQualityVariation - mu * self._vTotalStallTime - mu_s * self._vStartUpDelay
-
-        QoE = avgQuality / M_IN_K \
-                - mu * self.totalStallTime \
-                - lmbda * avgQualityVariation / M_IN_K
-
         return QoE
 
 #=============================================
     def _rFinish(self):
         if self._vDead: return
-
+        if self._vAbr and "stopAbr" in dir(self._vAbr) and callable(self._vAbr.stopAbr):
+            self._vAbr.stopAbr()
         self._vFinished = True
         print("Simulation finished at:", self._vEnv.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay, "firstSegDlTime:", self._vFirstSegmentDlTime, "segSkipped:", self._vSegmentSkiped)
         print("QoE:", self._rCalculateQoE())

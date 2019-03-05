@@ -67,7 +67,7 @@ class GroupP2PEnv(SimpleEnvironment):
                 self.denyPendingRequests(segId)
 
     def denyPendingRequests(self, segId):
-        return
+#         return
         if segId not in self._vPendingRequestedSegments:
             return
         waiter = self._vPendingRequestedSegments[segId]
@@ -76,8 +76,6 @@ class GroupP2PEnv(SimpleEnvironment):
             ql = waiter[node]
             self.runAfter(rtt, node._rPeerRequestFailed, segId, ql)
         del self._vPendingRequestedSegments[segId]
-
-        pass
 
     def _rGetRtt(self, node):
         return self._vGroup.getRtt(self, node)
@@ -128,7 +126,7 @@ class GroupP2PEnv(SimpleEnvironment):
 # exit point from this class to envSimple
     def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
         if self._vDead: return
-        assert sleepTime >= 0
+        assert sleepTime == 0
         if nextSegId > self._vAgent.nextSegmentIndex:
             self._vEarlyDownloaded += 1
         else:

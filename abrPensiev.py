@@ -14,10 +14,11 @@ import tensorflow as tf
 import a3c
 
 from calculateMetric import measureQoE 
+from multiprocessing import Process, Pipe
 
 ######################## FAST MPC #######################
 
-S_INFO = 5  # bit_rate, buffer_size, rebuffering_time, bandwidth_measurement, chunk_til_video_end
+S_INFO = 6  # bit_rate, buffer_size, rebuffering_time, bandwidth_measurement, chunk_til_video_end
 S_LEN = 8  # take how many frames in the past
 MPC_FUTURE_CHUNK_COUNT = 5
 # VIDEO_BIT_RATE = [300,750,1200,1850,2850,4300]  # Kbps
@@ -43,7 +44,9 @@ NN_MODEL = None
 NN_MODEL = './model/pretrain_linear_reward.ckpt'
 
 # CHUNK_COMBO_OPTIONS = []
-def setup_mpc(video, log_file_path=LOG_FILE):
+SETUP_ABR_CALL_COUNTER = 0
+def setup_abr(video, log_file_path=LOG_FILE):
+    print("setup_abr called:", SETUP_ABR_CALL_COUNTER, "\n", "="*20)
 
     A_DIM = len(video.bitratesKbps)
     if not os.path.exists(SUMMARY_DIR):
@@ -84,37 +87,65 @@ def setup_mpc(video, log_file_path=LOG_FILE):
 
     video_chunk_count = 0
 
-    input_dict = {'sess': sess, 'log_file': log_file,
-                  'actor': actor, 'critic': critic,
-                  'saver': saver, 'train_counter': train_counter,
-                  'last_bit_rate': last_bit_rate,
-                  'last_total_rebuf': last_total_rebuf,
-                  'video_chunk_coount': video_chunk_count,
-                  's_batch': s_batch, 'a_batch': a_batch, 'r_batch': r_batch}
+    input_dict = {
+                    'sess': sess, 
+                    'log_file': log_file,
+                    'actor': actor, 
+                    'critic': critic,
+                    'saver': saver, 
+                    'train_counter': train_counter,
+                    'last_bit_rate': last_bit_rate,
+                    'last_total_rebuf': last_total_rebuf,
+                    'video_chunk_coount': video_chunk_count,
+                    's_batch': s_batch, 
+                    'a_batch': a_batch, 
+                    'r_batch': r_batch,
+                    'chunkComboOptions': [],
+                }
 
     # interface to abr_rl server
     return input_dict
 
+FINISHED_PROC = "FINISHED_PROC"
+
+def incId():
+    global SETUP_ABR_CALL_COUNTER
+    SETUP_ABR_CALL_COUNTER += 1
+
 class AbrPensieve:
     def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
-        self.video = videoInfo
         self.agent = agent
-        input_dict = setup_mpc(videoInfo, log_file_path)
-        self.input_dict = input_dict
-        self.sess = input_dict['sess']
-        self.log_file = input_dict['log_file']
-        self.actor = input_dict['actor']
-        self.critic = input_dict['critic']
-        self.saver = input_dict['saver']
-        self.s_batch = input_dict['s_batch']
-        self.a_batch = input_dict['a_batch']
-        self.r_batch = input_dict['r_batch']
-        self.pastBandwidthEsts = []
-        self.pastErrors = []
+        self.video = videoInfo
+        self.parent_conn, child_conn = Pipe()
+        self.proc = Process(target=self.otherProcConnection, args=(child_conn, videoInfo, log_file_path))
+        incId()
+        self.proc.start()
+        ready = self.parent_conn.recv()
+        if ready != "ready":
+            print("="*50 + "\n" + "FATAL ERROR")
+            print("="*50 + "\n")
 
-    def get_chunk_size(self, quality, index):
-        if index >= self.video.segmentCount: return 0
-        return self.video.fileSizes[quality][index]
+    def stopAbr(self):
+        if not self.proc:
+            return
+        rcv = {FINISHED_PROC : True}
+        self.parent_conn.send(rcv)
+        self.proc.join()
+        self.proc = None
+
+    def otherProcConnection(self, conn, videoInfo, log_file_path=LOG_FILE):
+#         conn = conn
+        abr = AbrPensieveProc(videoInfo, None, log_file_path)
+        conn.send("ready")
+        while True:
+            rcv = conn.recv()
+            if FINISHED_PROC in rcv:
+                break
+            info = abr.nextQuality(rcv)
+            conn.send(info)
+
+        print("="*50 + "\n" + "FINISHED:", SETUP_ABR_CALL_COUNTER)
+        print("="*50 + "\n")
 
     def getSleepTime(self, buflen):
         if (self.agent._vMaxPlayerBufferLen - self.video.segmentDuration) > buflen:
@@ -136,11 +167,35 @@ class AbrPensieve:
                 'RebufferTime': self.agent._vTotalStallTime,
                 'lastChunkFinishTime': req.downloadFinished,
                 'lastChunkStartTime': req.downloadStarted,
-                'lastChunkSize': self.clen,
+                'lastChunkSize': req.clen,
                 'buffer': bufferLeft,
                 'lastRequest': self.agent.nextSegmentIndex,
                 }
-        return self.getSleepTime(bufferLeft), self.nextQuality(post_data)
+        self.parent_conn.send(post_data)
+        ql = self.parent_conn.recv()
+        return self.getSleepTime(bufferLeft), ql
+
+class AbrPensieveProc:
+    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
+        self.video = videoInfo
+#         self.agent = agent
+        input_dict = setup_abr(videoInfo, log_file_path)
+        self.input_dict = input_dict
+        self.sess = input_dict['sess']
+        self.log_file = input_dict['log_file']
+        self.actor = input_dict['actor']
+        self.critic = input_dict['critic']
+        self.saver = input_dict['saver']
+        self.s_batch = input_dict['s_batch']
+        self.a_batch = input_dict['a_batch']
+        self.r_batch = input_dict['r_batch']
+        self.pastBandwidthEsts = []
+        self.pastErrors = []
+
+    def get_chunk_size(self, quality, index):
+        if index >= self.video.segmentCount: return 0
+        return self.video.fileSizes[quality][index]
+
     
     def nextQuality(self, post_data):
         if ( 'pastThroughput' in post_data ):
@@ -189,7 +244,7 @@ class AbrPensieve:
         # reward = BITRATE_REWARD[post_data['lastquality']] \
         #         - 8 * rebuffer_time / M_IN_K - np.abs(BITRATE_REWARD[post_data['lastquality']] - BITRATE_REWARD_MAP[self.input_dict['last_bit_rate']])
 
-        self.input_dict['last_bit_rate'] = VIDEO_BIT_RATE[post_data['lastquality']]
+        self.input_dict['last_bit_rate'] = post_data['lastquality']
         self.input_dict['last_total_rebuf'] = post_data['RebufferTime']
 
         # retrieve previous state

@@ -10,9 +10,6 @@ from p2pnetwork import P2PNetwork
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
-'''
-Environment for a single agent
-'''
 class SimpleEnvironment():
     def __init__(self, vi, traces, simulator, abr = None, peerId = None):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
@@ -25,6 +22,9 @@ class SimpleEnvironment():
         self._vConnectionSpeed = np.mean(self._vCookedBW)
         self._vLastDownloadedAt = 0
         self._vPeerId = peerId if peerId else np.random.randint(1000000)
+        self._vIdleTimes = []
+        self._vTotalIdleTime = 0
+        self._vTotalWorkingTime = 0
 
     @property
     def networkId(self):
@@ -38,6 +38,14 @@ class SimpleEnvironment():
     def connectionSpeedBPS(self):
         return self._vConnectionSpeed * 1000000
 
+    @property
+    def idleTime(self):
+        return self._vTotalIdleTime
+
+    @property
+    def totalWorkingTime(self):
+        return self._vTotalWorkingTime
+
     def addAgent(self, ag):
         self._vAgent = ag
 
@@ -48,14 +56,14 @@ class SimpleEnvironment():
         self._vSimulator.runAfter(after, self._rFinish)
 
     def runAfter(self, after, *kw, **kws):
-        self._vSimulator.runAfter(after, *kw, **kws)
+        return self._vSimulator.runAfter(after, *kw, **kws)
 
 #=============================================
     def _rFinish(self):
         print(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
-    
+
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
@@ -91,6 +99,11 @@ class SimpleEnvironment():
         sleepTime = now - self._vLastDownloadedAt
         simIds = {}
 
+        idleTime = round(sleepTime, 3)
+        if idleTime > 0:
+            self._vIdleTimes += [(now, idleTime)]
+            self._vTotalIdleTime += idleTime
+
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
         if nextDur >= self._vVideoInfo.segmentDuration:
             nextDur = self._vVideoInfo.segmentDuration
@@ -121,10 +134,12 @@ class SimpleEnvironment():
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
         self._vLastDownloadedAt = now + time
+        self._vTotalWorkingTime += time
         req = SegmentRequest(nextQuality, now, now+time, nextDur, nextSegId, chsize, self)
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, req, simIds)
 
 
+#=============================================
 def experimentSimpleEnv(traces, vi, network, abr = None):
     simulator = Simulator()
     ags = []
