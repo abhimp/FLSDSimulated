@@ -49,7 +49,7 @@ class SegmentDlStat:
             assert st == SEGMENT_WORKING or st == SEGMENT_CACHED
         s._status = st
 
-class GroupP2PEnv(SimpleEnvironment):
+class GroupP2PEnvBasic(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None):
         super().__init__(vi, traces, simulator, abr, peerId)
 #         self._vAgent = Agent(vi, self, abr)
@@ -443,7 +443,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             break
 
 #=============================================
-def experimentGroupP2P(traces, vi, network):
+def experimentGroupP2PBasic(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -453,7 +453,7 @@ def experimentGroupP2P(traces, vi, network):
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
 #         env = SimpleEnvironment(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
         maxTime = 101.0 + x

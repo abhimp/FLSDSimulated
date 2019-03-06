@@ -4,7 +4,7 @@ import videoInfo as video
 from p2pnetwork import P2PNetwork
 import randStateInit as randstate
 
-from envGroupP2P_2 import experimentGroupP2P
+from envGroupP2PBasic import experimentGroupP2PBasic
 from envSimple import experimentSimpleEnv
 from envSimpleP2P import experimentSimpleP2P
 
@@ -134,7 +134,7 @@ def plotIdleStallTIme(results):
 
         fig.legend(ncol = 2, loc = "upper center")
         pltPath = os.path.join(dpath,"%04d.png"%(it))
-        ag = exp[models.index("GroupP2P")]
+        ag = exp[models.index("GroupP2PBasic")]
         label = "PeerId" + str(ag._vPeerId) 
         label += " NumNode:" + str(len(ag._vGroup.getAllNode(ag))) 
         label += " Quality Index: " + str(ag._vGroup.getQualityLevel(ag))
@@ -159,7 +159,7 @@ def main():
 #     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
 #     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
-    testCB["GroupP2P"] = (experimentGroupP2P, traces, vi, network)
+    testCB["GroupP2PBasic"] = (experimentGroupP2PBasic, traces, vi, network)
 #     testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
 
     results = {}
