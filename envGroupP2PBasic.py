@@ -198,6 +198,8 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
 #=============================================
     def _rDownloadFromDownloadQueue(self):
+        if self._vDownloadPending:
+            return
         while len(self._vDownloadQueue):
             segId, ql = self._vDownloadQueue.pop(0)
             seg = self._vSegmentStatus[segId]

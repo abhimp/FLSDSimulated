@@ -26,6 +26,8 @@ class SimpleEnvironment():
         self._vIdleTimes = []
         self._vTotalIdleTime = 0
         self._vTotalWorkingTime = 0
+        
+        self._vWorking = False
 
     @property
     def networkId(self):
@@ -96,15 +98,17 @@ class SimpleEnvironment():
     def _rFetchNextSeg(self, nextSegId, nextQuality):
         if self._vDead: return
 
+        assert not self._vWorking
+        self._vWorking = True
+
         now = self._vSimulator.getNow()
         sleepTime = now - self._vLastDownloadedAt
         simIds = {}
 
         idleTime = round(sleepTime, 3)
         if idleTime > 0:
-            self._vIdleTimes += [(now - idleTime, 25)]
-            self._vIdleTimes += [(now, 0)]
             self._vTotalIdleTime += idleTime
+        self._vIdleTimes += [(now, 0)]
 
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
         if nextDur >= self._vVideoInfo.segmentDuration:
@@ -135,11 +139,19 @@ class SimpleEnvironment():
 
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
-        self._vLastDownloadedAt = now + time
-        self._vTotalWorkingTime += time
-        req = SegmentRequest(nextQuality, now, now+time, nextDur, nextSegId, chsize, self)
-        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, req, simIds)
+        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, chsize, simIds)
 
+    def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, chsize, simIds):
+        assert self._vWorking
+        self._vWorking = False
+
+        now = self._vSimulator.getNow()
+        self._vIdleTimes += [(now, 25)]
+        time = now - startedAt
+        self._vLastDownloadedAt = now
+        self._vTotalWorkingTime += time
+        req = SegmentRequest(ql, startedAt, now, dur, segId, chsize, self)
+        self._rAddToBuffer(req, simIds) 
 
 #=============================================
 def experimentSimpleEnv(traces, vi, network, abr = None):
