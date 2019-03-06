@@ -14,9 +14,11 @@ from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
 
 import matplotlib.pyplot as plt
+import mpld3
 
-RESULT_DIR = "./results/"
-BUFFER_LEN_PLOTS = "bufferlens"
+RESULT_DIR = "./results/GenPlots"
+BUFFER_LEN_PLOTS = "results/bufferlens"
+STALLTIME_IDLETIME_PLOTS = "results/stall-idle"
 
 def savePlotData(Xs, Ys, legend, pltTitle):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
@@ -51,7 +53,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 
 def plotAgentsData(results, attrib, pltTitle, xlabel):
 #     plt.clf()
-    plt.figure()
+    plt.figure(figsize=(15, 5), dpi=150)
     pltData = []
     for name, res in results.items():
         Xs, Ys = [], []
@@ -65,10 +67,13 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
     plt.xlabel(xlabel)
+    dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
+    plt.savefig(dpath + ".png", bbox_inches="tight")
 #     plt.show()
 
+
 def plotBufferLens(results):
-    dpath = os.path.join(RESULT_DIR, BUFFER_LEN_PLOTS)
+    dpath = os.path.join(BUFFER_LEN_PLOTS)
     if not os.path.isdir(dpath):
         os.makedirs(dpath)
     models = list(results.keys())
@@ -83,14 +88,59 @@ def plotBufferLens(results):
         for i, ag in enumerate(exp):
             pltData = ag._vAgent._vBufferLenOverTime
             Xs, Ys = list(zip(*pltData))
-            ax1.plot(Xs, Ys, label=models[i] + "-buffLen")
-            
+            ax1.plot(Xs, Ys, marker="x", label=models[i] + "-buffLen")
+
             pltData = ag._vAgent._vQualitiesPlayedOverTime
             Xs, Ys = list(zip(*pltData))
-            ax2.step(Xs, Ys, label=models[i]+"-quality", where="post")
+            ax2.step(Xs, Ys, marker="o", label=models[i]+"-quality", where="post")
         fig.legend(ncol = 2, loc = "upper center")
         pltPath = os.path.join(dpath,"%04d.png"%(it))
         fig.savefig(pltPath, bbox_inches="tight")
+
+
+
+def storeAsPlotViewer(path, fig, ag):
+    with open(path, "a") as fp:
+        print("<br><br>", file=fp)
+        print("<div><b>", ag, "</b></div>", file=fp)
+        print('<div style="float:left; display:inline-block; width:95%">', file=fp)
+        mpld3.save_html(fig, fp)
+        print('</div><div style="clear:both"></div><br>', file=fp)
+        
+def plotIdleStallTIme(results):
+    dpath = os.path.join(STALLTIME_IDLETIME_PLOTS)
+    if not os.path.isdir(dpath):
+        os.makedirs(dpath)
+    models = list(results.keys())
+    res = [results[r] for r in models]
+    res = list(zip(*res))
+
+    colors = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
+    
+    pltHtmlPath = os.path.join(dpath,"plot.html")
+    open(pltHtmlPath, "w").close()
+    for it,exp in enumerate(res):
+        plt.clf()
+        plt.figure(figsize=(15, 7), dpi=100)
+        fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+        for i, ag in enumerate(exp):
+            pltData = ag._vAgent._vBufferLenOverTime
+            Xs, Ys = list(zip(*pltData))
+            ax1.plot(Xs, Ys, marker="x", label=models[i] + "-buffLen", c=colors[i%len(colors)])
+
+            pltData = ag._vIdleTimes
+            Xs, Ys = list(zip(*pltData))
+            ax1.step(Xs, Ys, marker="o", label=models[i]+"-quality", where="post", c=colors[(2*i+1)%len(colors)])
+
+        fig.legend(ncol = 2, loc = "upper center")
+        pltPath = os.path.join(dpath,"%04d.png"%(it))
+        ag = exp[models.index("GroupP2P")]
+        label = "PeerId" + str(ag._vPeerId) 
+        label += " NumNode:" + str(len(ag._vGroup.getAllNode(ag))) 
+        label += " Quality Index: " + str(ag._vGroup.getQualityLevel(ag))
+#         fig.savefig(pltPath, bbox_inches="tight")
+
+        storeAsPlotViewer(pltHtmlPath, fig, label)
 
 def runExperiments(cb, *kw, **kws):
     return cb(*kw, **kws)
@@ -103,9 +153,9 @@ def main():
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     network = P2PNetwork()
-    
+
     testCB = {}
-    testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
+#     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
 #     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
 #     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
@@ -132,9 +182,10 @@ def main():
     plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id")
 
 
-    plt.show()
+#     plt.show()
 
     plotBufferLens(results)
+    plotIdleStallTIme(results)
 
 
 def main2():

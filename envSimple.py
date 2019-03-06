@@ -1,4 +1,4 @@
-from agent import Agent, SegmentRequest
+from agent import Agent
 from simulator import Simulator
 import load_trace
 import videoInfo as video
@@ -6,6 +6,7 @@ import numpy as np
 from abrBOLA import BOLA
 
 from p2pnetwork import P2PNetwork
+from segmentRequest import SegmentRequest
 
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
@@ -101,7 +102,8 @@ class SimpleEnvironment():
 
         idleTime = round(sleepTime, 3)
         if idleTime > 0:
-            self._vIdleTimes += [(now, idleTime)]
+            self._vIdleTimes += [(now - idleTime, 25)]
+            self._vIdleTimes += [(now, 0)]
             self._vTotalIdleTime += idleTime
 
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
