@@ -5,6 +5,7 @@ from p2pnetwork import P2PNetwork
 import randStateInit as randstate
 
 from envGroupP2PBasic import experimentGroupP2PBasic
+from envGroupP2PTimeout import experimentGroupP2PTimeout
 from envSimple import experimentSimpleEnv
 from envSimpleP2P import experimentSimpleP2P
 
@@ -16,9 +17,31 @@ from abrPensiev import AbrPensieve
 import matplotlib.pyplot as plt
 import mpld3
 
+import collections as cl
+
 RESULT_DIR = "./results/GenPlots"
 BUFFER_LEN_PLOTS = "results/bufferlens"
 STALLTIME_IDLETIME_PLOTS = "results/stall-idle"
+
+def getPMF(x):
+    x = [y for y in x]
+    freq = list(cl.Counter(x).items())
+    elements = zip(*freq)
+    s = sum(elements[1])
+    pdf = [(k[0],float(k[1])/s) for k in freq]
+    # pdf.sort
+    return pdf
+
+
+def getCMF(elements):
+    x = [y for y in elements]
+    freq = list(cl.Counter(x).items())
+    freq.sort(key = lambda x:x[0])
+    x,y = zip(*freq)
+    s = sum(y)
+    cmf = [(p, float(sum(y[:i+1]))/s) for i, p in enumerate(x)]
+    return cmf
+
 
 def savePlotData(Xs, Ys, legend, pltTitle):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
@@ -61,9 +84,10 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
             y = eval("ag." + attrib)
             Xs.append(x)
             Ys.append(y)
+#         Xs, Ys = list(zip(*getCMF(Ys)))
         savePlotData(Xs, Ys, name, pltTitle)
         pltData += [Xs, Ys]
-        plt.scatter(Xs, Ys, label=name)
+        plt.hist(Ys, label=name, rwidth=0.05, histtype="bar")
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
     plt.xlabel(xlabel)
@@ -126,7 +150,7 @@ def plotIdleStallTIme(results):
         for i, ag in enumerate(exp):
             pltData = ag._vAgent._vBufferLenOverTime
             Xs, Ys = list(zip(*pltData))
-            ax1.plot(Xs, Ys, marker="x", label=models[i] + "-buffLen", c=colors[i%len(colors)])
+            ax1.plot(Xs, Ys, marker="x", label=models[i] + "-buffLen", c=colors[(2*i)%len(colors)])
 
             pltData = ag._vIdleTimes
             Xs, Ys = list(zip(*pltData))
@@ -160,6 +184,7 @@ def main():
 #     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
 #     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
     testCB["GroupP2PBasic"] = (experimentGroupP2PBasic, traces, vi, network)
+    testCB["GroupP2PTimeout"] = (experimentGroupP2PTimeout, traces, vi, network)
 #     testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
 
     results = {}
@@ -184,8 +209,8 @@ def main():
 
 #     plt.show()
 
-    plotBufferLens(results)
-    plotIdleStallTIme(results)
+#     plotBufferLens(results)
+#     plotIdleStallTIme(results)
 
 
 def main2():
