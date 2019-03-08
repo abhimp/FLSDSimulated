@@ -53,6 +53,7 @@ class Agent():
         self._vFirstSegmentDlTime = 0
         self._vSegmentSkiped = 0
         self._vStartUpCallback = []
+        self._vTimeSlipage = []
 
 
     @property
@@ -192,7 +193,9 @@ class Agent():
         if stallTime > 0:
             assert playbackTime > 0
             self._vStallsAt.append((playbackTime, stallTime, ql, req.downloader==self._vEnv))
+            self._vTimeSlipage.append((now - stallTime, self._vTotalStallTime, self._vNextSegmentIndex-1))
             self._vTotalStallTime += stallTime
+            self._vTimeSlipage.append((now, self._vTotalStallTime, self._vNextSegmentIndex))
             self._vBufferLenOverTime.append((now - stallTime, 0))
             self._vBufferLenOverTime.append((now - 0.001, 0))
         else:

@@ -111,7 +111,7 @@ class SimpleEnvironment():
         self._vIdleTimes += [(now, 0)]
         if idleTime > 0:
             self._vTotalIdleTime += idleTime
-            self._vWorkingTimes += [(now, 0)]
+            self._vWorkingTimes += [(now, 0, nextSegId)]
 
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
         if nextDur >= self._vVideoInfo.segmentDuration:
@@ -166,7 +166,7 @@ class SimpleEnvironment():
         self._vLastDownloadedAt = now
         self._vTotalWorkingTime += time
         req = SegmentRequest(ql, startedAt, now, dur, segId, chsize, self)
-        self._vWorkingTimes += [(now, req.throughput)]
+        self._vWorkingTimes += [(now, req.throughput, segId)]
         self._rAddToBuffer(req, simIds)
 
 #=============================================

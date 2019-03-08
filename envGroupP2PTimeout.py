@@ -566,8 +566,18 @@ def plotIdleStallTIme(dpath, group):
             eplt.addFig()
             for i, ag in enumerate(grp.getAllNode()):
                 pltData = ag._vWorkingTimes
-                Xs, Ys = list(zip(*pltData))
-                eplt.step(Xs, Ys, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+#             storeAsPlotViewer(pltHtmlPath, fig, label)
+            eplt.setFigHeader(label)
+            label = "<h2>StallTime</h2>"
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vTimeSlipage
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.plot(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
 #             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
     with open(pltHtmlPath, "w") as fp:
@@ -643,7 +653,7 @@ def main():
     traces = list(zip(*traces))
     network = P2PNetwork()
 
-    experimentGroupP2PTimeout(traces, vi, network)
+    experimentGroupP2PSmall(traces, vi, network)
 
 if __name__ == "__main__":
     for x in range(1):

@@ -4,6 +4,7 @@ import json
 class EasyPlot():
     def __init__(self):
         self.figs = [{"data" : [], "head" : ""}]
+        self.seriesId = 0
 
     def printBegining(self, scripts, fp=sys.stdout):
         st = ""
@@ -60,7 +61,7 @@ class EasyPlot():
         self.figs[-1]["head"] = header
 
 
-    def plot(self, Xs, Ys, xaxis=1, yaxis=1, label="", color=None, *kw, **kws):
+    def plot(self, Xs, Ys, xaxis=1, yaxis=1, label="", color=None, toolTipData=None, *kw, **kws):
         rawData = list(zip(Xs, Ys))
         data = {
                 "data" : rawData, \
@@ -68,7 +69,9 @@ class EasyPlot():
                 "lines" : {"lineWidth": 2}, \
                 "xaxis" : xaxis, \
                 "yaxis" : yaxis, \
-                "color" : color
+                "color" : color, \
+                "clickable" : False, \
+                "hoverable" : False,
                }
         self.figs[-1]["data"].append(data)
         data = {
@@ -80,30 +83,46 @@ class EasyPlot():
                 "yaxis" : yaxis, \
                 "color" : color, \
                 "fillColor" : color,
+                "pythondataseriesId": self.seriesId,
                }
         self.figs[-1]["data"].append(data)
+        assert toolTipData == None or len(rawData) == len(toolTipData)
+        if toolTipData != None:
+            ttd = {"{:.6f}-{:.6f}".format(x,y):z for x,y,z in zip(Xs, Ys, toolTipData)}
+            dt = self.figs[-1].setdefault("toolTipData", {}) 
+            dt[self.seriesId] = ttd
+        self.seriesId += 1
 
-    def step(self, Xs, Ys, xaxis=1, yaxis=1, label=" ", color=None, where="pre", *kw, **kws):
+    def step(self, Xs, Ys, xaxis=1, yaxis=1, label=" ", color=None, toolTipData=None, where="pre", *kw, **kws):
         rawData = list(zip(Xs, Ys))
         preXs = Xs[:-1]
         preYs = Ys[:-1]
         postXs = Xs[1:]
         postYs = Ys[1:]
 
-        preData = list(zip(Xs, Ys)) + list(zip(Xs, postYs))
-        postData = list(zip(Xs, Ys)) + list(zip(postXs, Ys))
-        preData.sort(key=lambda x:x[0])
-        postData.sort(key=lambda x:x[0])
+        preData = []
+        postData = []
+        for i, dt in enumerate(rawData):
+            x, y = dt
+            if i > 0:
+                preData += [(Xs[i-1], y)]
+            preData += [(x, y)]
+            postData += [(x, y)]
+            if i < len(rawData)-1:
+                postData += [(Xs[i+1], y)]
+
         stepData = preData
         if where == "post":
             stepData = postData
         data = {
                 "data" : stepData, \
                 "label" : label, \
-                "lines" : {"lineWidth": 2}, \
+                "lines" : {"shadowSize" : 0, "lineWidth": 2}, \
                 "xaxis" : xaxis, \
                 "yaxis" : yaxis, \
                 "color" : color, \
+                "clickable" : False, \
+                "hoverable" : False,
                }
         self.figs[-1]["data"].append(data)
         data = {
@@ -115,8 +134,16 @@ class EasyPlot():
                 "yaxis" : yaxis, \
                 "color" : color, \
                 "fillColor" : color,
+                "pythondataseriesId": self.seriesId,
                }
         self.figs[-1]["data"].append(data)
+
+        assert toolTipData == None or len(rawData) == len(toolTipData)
+        if toolTipData != None:
+            ttd = {"{:.6f}-{:.6f}".format(x,y):z for x,y,z in zip(Xs, Ys, toolTipData)}
+            dt = self.figs[-1].setdefault("toolTipData", {}) 
+            dt[self.seriesId] = ttd
+        self.seriesId += 1
 
     def figEnclosure(self, st):
         return st
@@ -126,10 +153,10 @@ class EasyPlot():
         options = { \
 #                 "xaxis" : [{"position" : "top"}], \
 #                 "yaxis" : [{"position" : "left"}, { "position" : "right"}], \
-#                 "grid" : { \
-#                     "hoverable" : True, \
-#                     "clickable" : True, \
-#                     }, \
+                "grid" : { \
+                    "hoverable" : True, \
+                    "clickable" : True, \
+                    }, \
 #                 "zoom" : { \
 #                     "interactive" : True \
 #                         }, \
@@ -142,6 +169,7 @@ class EasyPlot():
 #                     } \
                 }
         datas = "datas = {\n"
+        toolTipData = "toolTipData = {\n"
         script = ""
         script += "    $(function() {" + '\n'
         script += "     function doPlot() {" + '\n'
@@ -152,8 +180,11 @@ class EasyPlot():
             script += ");\n"
 
             datas += '"EasyPlotPlaceHolder_' + str(id(fig)) + '": ' + json.dumps(fig["data"]) + ", \n"
+            if "toolTipData" in fig:
+                toolTipData += '"EasyPlotPlaceHolder_' + str(id(fig)) + '": ' + json.dumps(fig["toolTipData"]) + ", \n"
 
         datas += "}\n"
+        toolTipData += "}\n"
 
         script += "     }" + '\n'
 
@@ -217,9 +248,45 @@ class EasyPlot():
         script += '        pltOptions[id] = $.extend(true, {}, option)' + '\n'
         script += '     })' + '\n'
 
+        script += '     $("<div id=\'tooltip\'></div>").css({' + '\n'
+        script += '            position: "absolute",' + '\n'
+        script += '            display: "none",' + '\n'
+        script += '            border: "1px solid #fdd",' + '\n'
+        script += '            padding: "2px",' + '\n'
+        script += '            "background-color": "#fee",' + '\n'
+        script += '            opacity: 0.80' + '\n'
+        script += '        }).appendTo("body");' + '\n'
+        script += '' + '\n'
+        script += '        $(".demo-placeholder").bind("plothover", function (event, pos, item) {' + '\n'
+        script += '            id = $(this).attr("id")' + '\n'
+        script += '' + '\n'
+        script += '            if (item) {' + '\n'
+        script += '                var x = item.datapoint[0].toFixed(6),' + '\n'
+        script += '                    y = item.datapoint[1].toFixed(6);' + '\n'
+        script += '                tooltipLabel = item.series.label + " of " + x + " = " + y' + '\n'
+        script += '                pythonSeriesId = item.series.pythondataseriesId' + '\n'
+        script += '                if (id in toolTipData && pythonSeriesId in toolTipData[id]){' + '\n'
+        script += '                    if (x + "-" + y in toolTipData[id][pythonSeriesId]){' + '\n'
+        script += '                var xs = item.datapoint[0].toFixed(2),' + '\n'
+        script += '                    ys = item.datapoint[1].toFixed(2);' + '\n'
+        script += '                        tooltipLabel = xs + ":" + ys + ":"  + toolTipData[id][pythonSeriesId][x + "-" + y]' + '\n'
+        script += '                    }' + '\n'
+        script += '                }' + '\n'
+        script += '                $("#tooltip").html(tooltipLabel)' + '\n'
+        script += '                    .css({top: item.pageY+5, left: item.pageX+5})' + '\n'
+        script += '                    .fadeIn(200);' + '\n'
+        script += '            } else {' + '\n'
+        script += '                $("#tooltip").hide();' + '\n'
+        script += '            }' + '\n'
+        script += '' + '\n'
+        script += '        });' + '\n'
+        script += '        $(".demo-placeholder").bind("plothovercleanup", function (event, pos, item) {' + '\n'
+        script += '                $("#tooltip").hide();' + '\n'
+        script += '        });' + '\n'
+
         script += "})" + '\n'
 
-        script = datas + script
+        script = datas + toolTipData + script
         self.printBegining(script, fp)
 
         for fig in self.figs:
