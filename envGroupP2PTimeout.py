@@ -24,13 +24,13 @@ SEGMENT_STATUS_STRING = [
 class SegmentDlStat:
     def __init__(self):
         self._status = SEGMENT_NOT_WORKING
-        self.requestedTo = None
-        self.requestedAt = -1
-        self.peerDlAttemp = 0
+        self.peerStartedAt = -1
+        self.peerResponsible = None
         self.peerStatus = {}
         self.peerTimeoutHappened = False
         self.peerTimeoutRef = -1
         self.servingTo = []
+        self.autoEntryOver = False
 
     @property
     def statusString(self):
@@ -48,7 +48,7 @@ class SegmentDlStat:
             assert st == SEGMENT_WORKING or st == SEGMENT_CACHED
         s._status = st
 
-class GroupP2PEnv(SimpleEnvironment):
+class GroupP2PEnvBasic(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None):
         super().__init__(vi, traces, simulator, abr, peerId)
 #         self._vAgent = Agent(vi, self, abr)
@@ -63,7 +63,6 @@ class GroupP2PEnv(SimpleEnvironment):
         self._vFinished = False
 
         self._vSegmentStatus = [SegmentDlStat() for x in range(self._vVideoInfo.segmentCount)]
-        self._vPendingRequestedSegments = {}
         self._vGroupNodes = None
         self._vQueue = []
 
@@ -129,7 +128,7 @@ class GroupP2PEnv(SimpleEnvironment):
         seg = self._vSegmentStatus[segId]
         self._rDownloadFromDownloadQueue()
 
-        if segId == self._vAgent.nextSegmentIndex:
+        if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
             self._vAgent._rAddToBufferInternal(req)
 
         self._vThroughPutData[self.now] = req.throughput
@@ -154,7 +153,9 @@ class GroupP2PEnv(SimpleEnvironment):
             if seg.status != SEGMENT_PEER_WORKING:
                 rtt = self._rTransmissionTime(node, req.clen)
                 seg.status = SEGMENT_PEER_WORKING
-            elif seg.peerStatus.get(self, SEGMENT_NOT_WORKING) != SEGMENT_WORKING:
+                seg.peerStartedAt = self.now
+                seg.peerResponsible = self
+            elif seg.peerResponsible != self:
                 # segment is peer waiting but for some other peer
                 continue
             servingTos = self._vServingPeers.setdefault(req.segId, [])
@@ -162,8 +163,6 @@ class GroupP2PEnv(SimpleEnvironment):
                 servingTos.append(node)
             self.runAfter(rtt, self._rSendToOtherPeer, node, req)
 
-        if req.segId in self._vPendingRequestedSegments:
-            del self._vPendingRequestedSegments[req.segId]
 
 #=============================================
     def _rPredictedThroughput(self):
@@ -185,7 +184,7 @@ class GroupP2PEnv(SimpleEnvironment):
            for node in self._vGroupNodes:
                if node == self:
                    continue
-               node._rPeerSegmentStatus(self, nextSegId, SEGMENT_WORKING)
+               node._rPeerSegmentStatus(self, nextSegId, SEGMENT_WORKING) #this function suppose to be called after some time i.e. through simulator
 
 
 #=============================================
@@ -197,6 +196,8 @@ class GroupP2PEnv(SimpleEnvironment):
 
 #=============================================
     def _rDownloadFromDownloadQueue(self):
+        if self._vDownloadPending:
+            return
         while len(self._vDownloadQueue):
             segId, ql = self._vDownloadQueue.pop(0)
             seg = self._vSegmentStatus[segId]
@@ -207,6 +208,30 @@ class GroupP2PEnv(SimpleEnvironment):
             break
 
 #=============================================
+    def _rEstimatedTimeToFreeUpDownloader(self):
+        curFinishingTime = 0
+        if self._vDownloadPending:
+            timeElapsed, downLoadedTillNow, chsize = self._rDownloadStatus()
+            assert chsize > 0
+            if timeElapsed <= 0 or downLoadedTillNow <= 0:
+                throughput = self._rPredictedThroughput()
+                curFinishingTime = chsize * 8 / throughput
+            else:
+                curFinishingTime = (chsize - downLoadedTillNow) * timeElapsed/downLoadedTillNow
+
+        queuingTime = 0
+        for segId, ql in self._vDownloadQueue:
+            queuingTime += self._rEstimateDownloadTime(segId, ql)
+
+        return curFinishingTime + queuingTime
+
+#=============================================
+    def _rEstimateDownloadTime(self, segId, ql):
+        estimatedSize = round(self._vVideoInfo.bitrates[ql] * self._vVideoInfo.segmentDuration / 8)
+        estimatedDownloadTime = estimatedSize * 8 / self._rPredictedThroughput()
+        return estimatedDownloadTime
+
+#=============================================
     def _rPeerSegmentStatus(self, node, segId, status):
         seg = self._vSegmentStatus[segId]
         assert status in [SEGMENT_CACHED, SEGMENT_WORKING]
@@ -214,6 +239,9 @@ class GroupP2PEnv(SimpleEnvironment):
             if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
                 return
             seg.status = SEGMENT_PEER_WORKING
+            seg.peerStartedAt = self.now
+            seg.peerResponsible = node
+
             node._vSegmentStatus[segId].servingTo += [self]
             node._vServingPeers.setdefault(segId, []).append(self)
         seg.peerStatus[node] = status
@@ -237,46 +265,68 @@ class GroupP2PEnv(SimpleEnvironment):
     def _rTimeoutForPeer(self, segId, ql = -1):
         if ql == -1:
             ql = self._vGroup.getQualityLevel(self)
-
         if ql > 0:
             ql = ql - 1
-
         downloadTIme = self._vVideoInfo.bitrates[ql] * self._vVideoInfo.segmentDuration / self._rPredictedThroughput()
-
         bufferLeft = self._vAgent.bufferLeft
-        
         timeout = bufferLeft - downloadTIme
-
         return round(timeout, 3), ql
 
 
 #=============================================
     def _rPeerDownloadTimeout(self, downloader, segId, ql):
         seg = self._vSegmentStatus[segId]
-        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
-            return
-        if not downloader._vDead:
-            self._rCancelPeerDownloading(downloader, segId)
-        if seg.status == SEGMENT_PEER_WAITING:
-            seg.status = SEGMENT_NOT_WORKING
         seg.peerTimeoutHappened = True
         seg.peerTimeoutRef = -1
+        if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING]:
+            return
+        if seg.status == SEGMENT_PEER_WORKING: 
+            #it is very complecated. Need to know how much it have downloaded so far.
+            #it will be great if we can measure download speed some how. Important thing
+            #is get some prediction on peer finishing time.
+            elapsed, downloaded, clen = seg.peerResponsible._rGetPeerDownloadStatus(self, segId)
+            timeleft = float("inf")
+            estDlTime = self._rEstimateDownloadTime(segId, ql)
+            if elapsed > 0 and downloaded > 0:
+                timeleft = round((clen - downloaded)*elapsed/downloaded, 3)
+
+            timeToFinishDl = self._rEstimatedTimeToFreeUpDownloader() \
+                                + self._rEstimateDownloadTime(segId, ql)
+
+            if timeToFinishDl > timeleft:
+                return
+            timeBudget = round(segId * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime, 3)
+            if timeleft <= timeBudget:
+                return
+            seg.status = SEGMENT_PEER_WAITING
+
+        if seg.status == SEGMENT_PEER_WAITING:
+            seg.status = SEGMENT_NOT_WORKING
         self._rAddToDownloadQueue(segId, ql)
 
 #=============================================
 # entry point from agent
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if self._vDead: return
-        if not self._vStarted:
-            return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
         now = self.getNow()
         seg = self._vSegmentStatus[nextSegId]
+        if not self._vStarted:
+            seg.autoEntryOver = True
+            return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
+
+        if sleepTime > 0:
+            self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
+            return
 
         if seg.status == SEGMENT_CACHED:
-            req= self._vCatched[nextSegId]
-            self._vAgent._rAddToBufferInternal(req)
+            assert self._vAgent.nextSegmentIndex >= nextSegId
+            if self._vAgent.nextSegmentIndex == nextSegId:
+                req= self._vCatched[nextSegId]
+                self._vAgent._rAddToBufferInternal(req)
             return
         
+        seg.autoEntryOver = True
+
         if seg.status == SEGMENT_WORKING \
                 or seg.status == SEGMENT_SLEEPING \
                 or seg.status == SEGMENT_PEER_WAITING \
@@ -284,25 +334,21 @@ class GroupP2PEnv(SimpleEnvironment):
             return
 
         if seg.status == SEGMENT_PEER_WORKING:
+            if seg.peerTimeoutRef == -1:
+                timeout, ql = self._rTimeoutForPeer(nextSegId)
+                if timeout > 0:
+                    ref = self.runAfter(timeout, self._rPeerDownloadTimeout, seg.peerResponsible, nextSegId, ql)
+                    seg.peerTimeoutRef = ref
+                else:
+                    self._rPeerDownloadTimeout(seg.peerResponsible, nextSegId, ql)
             return
 
-        if sleepTime > 0:
-            seg.status = SEGMENT_SLEEPING
-            self.runAfter(sleepTime, self._rDownloadNextDataWake, nextSegId, nextQuality, 0)
-            return
+        assert sleepTime == 0
 
         seg.status = SEGMENT_NOT_WORKING
 
         self._rDownloadNextDataGroup(nextSegId, nextQuality, 0)
     
-#=============================================
-    def _rDownloadNextDataWake(self, nextSegId, nextQuality, sleepTime):
-        seg = self._vSegmentStatus[nextSegId]
-        if seg.status != SEGMENT_SLEEPING:
-            return
-        seg.status = SEGMENT_NOT_WORKING
-        self._rDownloadNextDataGroup(nextSegId, nextQuality, 0)
-
 #=============================================
     def _rDownloadNextDataGroup(self, nextSegId, nextQuality, sleepTime):
         now = self.getNow()
@@ -343,6 +389,33 @@ class GroupP2PEnv(SimpleEnvironment):
         return (-1, 0)
 
 #=============================================
+    def _rGetPeerDownloadStatus(self, node, segId): #we dont need to call this function through simulator
+        seg = self._vSegmentStatus[segId]
+        assert seg.status in [SEGMENT_WORKING, SEGMENT_CACHED]
+        segNode = node._vSegmentStatus[segId]
+        assert segNode.peerResponsible == self
+        
+        if seg.status == SEGMENT_WORKING:
+            timeElapsed, downLoadedTillNow, chsize = self._rDownloadStatus()
+            return timeElapsed, downLoadedTillNow, chsize
+        else: # seg.status == SEGMENT_CACHED
+            downCompletedAt = self._vCatched[segId].downloadFinished
+            peerStartedAt = seg.peerStartedAt
+            chsize = self._vCatched[segId].clen
+            if peerStartedAt < downCompletedAt: #i.e. peer was waiting
+                totalDur = downCompletedAt-peerStartedAt
+                elapsed = max(totalDur - self._rGetRtt(node), 0)
+                downloaded = chsize*elapsed/totalDur
+
+                return elapsed, downloaded, chsize
+            else:
+                elapsed = max(self.now - downCompletedAt - self._rGetRtt(node), 0) #don't ask why
+                expectedDur = self._rTransmissionTime(node, chsize)
+                expectedDownloaded = chsize*elapsed/expectedDur
+                return elapsed, expectedDownloaded, chsize
+
+
+#=============================================
     def _rReceiveReq(self, node, req):
         if self._vDead: return
 
@@ -352,21 +425,11 @@ class GroupP2PEnv(SimpleEnvironment):
         if seg.status != SEGMENT_CACHED:
             seg.status = SEGMENT_CACHED
             self._vCatched[segId] = req
-            if segId == self._vAgent.nextSegmentIndex:
+            if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
                 self._vAgent._rAddToBufferInternal(req)
-            node._vTotalUploaded += req.clen #this is not exactly the way it will happen in the real world scenerio.
+            node._vTotalUploaded += req.clen #this is not exactly the way it will 
+                                             #happen in the real world scenerio.
                                              #However, in real world, 
-
-#=============================================
-    def _rCancelPeerDownloading(self, node, segId):
-        rtt = self._rGetRtt(node)
-        self.runAfter(rtt, node._rCancelRequestReceived, self, segId)
-
-#=============================================
-    def _rCancelRequestReceived(self, node, segId):
-        nodes = self._vPendingRequestedSegments.get(segId, set())
-        if node in nodes:
-            nodes.remove(node)
 
 #=============================================
 #Calling other peer function
@@ -376,31 +439,19 @@ class GroupP2PEnv(SimpleEnvironment):
         seg = node._vSegmentStatus[req.segId]
         if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING]:
             return
-        seg.status = SEGMENT_PEER_WORKING
+        if seg.status == SEGMENT_NOT_WORKING and seg.peerTimeoutHappened \
+                and seg.peerResponsible == self:
+            seg.status = SEGMENT_PEER_WORKING
+
+        assert seg.status == SEGMENT_PEER_WORKING
         node._rReceiveReq(self, req)
+
         if req.segId in self._vServingPeers:
             servingTos = self._vServingPeers[req.segId]
             if node in servingTos:
                 servingTos.remove(node)
             if len(servingTos) == 0:
                 del self._vServingPeers[req.segId]
-
-#=============================================
-    def _rRequestSegment(self, downloader, nextSegId):
-        rtt = self._rGetRtt(downloader)
-        self.runAfter(rtt, downloader._rSegmentRequestRecved, self, nextSegId)
-
-#=============================================
-    def _rSegmentRequestRecved(self, node, segId):
-        assert False
-        seg = self._vSegmentStatus[segId]
-        if seg.status == SEGMENT_CACHED:
-            rtt = self._rGetRtt
-            self.runAfter(rtt, self._rSendToOtherPeer, node, self._vCatched[segId])
-        elif seg.status == SEGMENT_WORKING:
-            self._vPendingRequestedSegments.setdefault(segId, set()).add(node)
-        else:
-            assert False
 
 #=============================================
     def start(self, startedAt = -1):
@@ -424,7 +475,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
         trace = traces[idx]
         np.random.shuffle(deadAgents)
         nodeId, trace = deadAgents.pop()
-        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
         simulator.runAfter(10, env.start, 5)
     ranwait = np.random.uniform(0, 1000)
     for x in agents:
@@ -433,7 +484,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             break
 
 #=============================================
-def experimentGroupP2P(traces, vi, network):
+def experimentGroupP2PTimeout(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -443,7 +494,7 @@ def experimentGroupP2P(traces, vi, network):
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
 #         env = SimpleEnvironment(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
         maxTime = 101.0 + x
@@ -456,7 +507,7 @@ def experimentGroupP2P(traces, vi, network):
     return ags
 
 def main():
-#     randstate.storeCurrentState() #comment this line to use same state as before
+    randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
@@ -464,9 +515,9 @@ def main():
     traces = list(zip(*traces))
     network = P2PNetwork()
 
-    experimentGroupP2P(traces, vi, network)
+    experimentGroupP2PBasic(traces, vi, network)
 
 if __name__ == "__main__":
-    for x in range(2000):
+    for x in range(200):
         main()
         print("=========================\n")

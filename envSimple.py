@@ -1,4 +1,4 @@
-from agent import Agent, SegmentRequest
+from agent import Agent
 from simulator import Simulator
 import load_trace
 import videoInfo as video
@@ -6,6 +6,7 @@ import numpy as np
 from abrBOLA import BOLA
 
 from p2pnetwork import P2PNetwork
+from segmentRequest import SegmentRequest
 
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
@@ -25,6 +26,9 @@ class SimpleEnvironment():
         self._vIdleTimes = []
         self._vTotalIdleTime = 0
         self._vTotalWorkingTime = 0
+        
+        self._vWorking = False
+        self._vWorkingStatus = None
 
     @property
     def networkId(self):
@@ -95,14 +99,17 @@ class SimpleEnvironment():
     def _rFetchNextSeg(self, nextSegId, nextQuality):
         if self._vDead: return
 
+        assert not self._vWorking
+        self._vWorking = True
+
         now = self._vSimulator.getNow()
         sleepTime = now - self._vLastDownloadedAt
         simIds = {}
 
         idleTime = round(sleepTime, 3)
         if idleTime > 0:
-            self._vIdleTimes += [(now, idleTime)]
             self._vTotalIdleTime += idleTime
+        self._vIdleTimes += [(now, 0)]
 
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
         if nextDur >= self._vVideoInfo.segmentDuration:
@@ -117,6 +124,7 @@ class SimpleEnvironment():
                 self._vLastBandwidthPtr = 1
                 lastTime = 0
 
+        downloadData = [[0, 0]]
         while True:
             self._vLastBandwidthPtr += 1
             if self._vLastBandwidthPtr >= len(self._vCookedTime):
@@ -127,17 +135,58 @@ class SimpleEnvironment():
             if sentSize + pktpyld >= chsize:
                 fracTime = dur * ( chsize - sentSize ) / pktpyld
                 time += fracTime
+                if fracTime > 0:
+                    downloadData += [[time, chsize]]
                 break
             time += dur
             sentSize += pktpyld
+            downloadData += [[time, sentSize]] #I may not use it now
 
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
-        self._vLastDownloadedAt = now + time
-        self._vTotalWorkingTime += time
-        req = SegmentRequest(nextQuality, now, now+time, nextDur, nextSegId, chsize, self)
-        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rAddToBuffer, req, simIds)
+        timeChangeRatio = time/downloadData[-1][0]
 
+        downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
+
+        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, chsize, simIds)
+        self._vWorkingStatus = (now, time, nextSegId, chsize, downloadData)
+                #useful to calculate downloaded data 
+
+#=============================================
+    def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, chsize, simIds):
+        assert self._vWorking
+        self._vWorking = False
+        self._vWorkingStatus = None
+
+        now = self._vSimulator.getNow()
+        self._vIdleTimes += [(now, 25)]
+        time = now - startedAt
+        self._vLastDownloadedAt = now
+        self._vTotalWorkingTime += time
+        req = SegmentRequest(ql, startedAt, now, dur, segId, chsize, self)
+        self._rAddToBuffer(req, simIds)
+
+#=============================================
+    def _rDownloadStatus(self):
+        assert self._vWorking
+        now = self.getNow()
+        startedAt, dur, segId, chsize, downloadData = self._vWorkingStatus 
+        timeElapsed = now - startedAt
+        downLoadedTillNow = 0
+        for i,x in enumerate(downloadData):
+            t,s = x
+            if t == timeElapsed:
+                downLoadedTillNow = s
+                break
+            if t < timeElapsed:
+                assert i < len(downloadData) - 1
+                slt = downloadData[i + 1][0] - t #slot duration
+                amt = downloadData[i + 1][1] - s #downloaded in the slot
+                sltSpent = timeElapsed - t
+
+                downLoadedTillNow = round(s + amt*sltSpent/slt, 3)
+                break
+        return round(timeElapsed, 3), round(downLoadedTillNow), chsize
 
 #=============================================
 def experimentSimpleEnv(traces, vi, network, abr = None):
