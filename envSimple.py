@@ -15,6 +15,7 @@ class SimpleEnvironment():
     def __init__(self, vi, traces, simulator, abr = None, peerId = None):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
+#         self._vLastBandwidthTime = 
         self._vAgent = Agent(vi, self, abr)
         self._vSimulator = simulator
         self._vDead = False
@@ -24,8 +25,10 @@ class SimpleEnvironment():
         self._vLastDownloadedAt = 0
         self._vPeerId = peerId if peerId else np.random.randint(1000000)
         self._vIdleTimes = []
+        self._vWorkingTimes = []
         self._vTotalIdleTime = 0
         self._vTotalWorkingTime = 0
+        self._lastThrougput = 0
         
         self._vWorking = False
         self._vWorkingStatus = None
@@ -68,7 +71,6 @@ class SimpleEnvironment():
         self._vAgent._rFinish()
         self._vFinished = True
 
-
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if self._vDead: return
@@ -92,7 +94,6 @@ class SimpleEnvironment():
 #=============================================
     def _rAddToBuffer(self, req, simIds = None):
         if self._vDead: return
-
         self._vAgent._rAddToBufferInternal(req, simIds)
 
 #=============================================
@@ -107,9 +108,10 @@ class SimpleEnvironment():
         simIds = {}
 
         idleTime = round(sleepTime, 3)
+        self._vIdleTimes += [(now, 0)]
         if idleTime > 0:
             self._vTotalIdleTime += idleTime
-        self._vIdleTimes += [(now, 0)]
+            self._vWorkingTimes += [(now, 0, nextSegId)]
 
         nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
         if nextDur >= self._vVideoInfo.segmentDuration:
@@ -149,7 +151,7 @@ class SimpleEnvironment():
         downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
 
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, chsize, simIds)
-        self._vWorkingStatus = (now, time, nextSegId, chsize, downloadData)
+        self._vWorkingStatus = (now, time, nextSegId, chsize, downloadData, simIds)
                 #useful to calculate downloaded data 
 
 #=============================================
@@ -164,13 +166,14 @@ class SimpleEnvironment():
         self._vLastDownloadedAt = now
         self._vTotalWorkingTime += time
         req = SegmentRequest(ql, startedAt, now, dur, segId, chsize, self)
+        self._vWorkingTimes += [(now, req.throughput, segId)]
         self._rAddToBuffer(req, simIds)
 
 #=============================================
     def _rDownloadStatus(self):
         assert self._vWorking
         now = self.getNow()
-        startedAt, dur, segId, chsize, downloadData = self._vWorkingStatus 
+        startedAt, dur, segId, chsize, downloadData, simIds = self._vWorkingStatus 
         timeElapsed = now - startedAt
         downLoadedTillNow = 0
         for i,x in enumerate(downloadData):
