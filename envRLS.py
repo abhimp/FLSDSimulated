@@ -5,7 +5,8 @@ from p2pnetwork import P2PRandomNetwork
 from envSimpleP2P import P2PGroup
 from envSimple import SimpleEnvironment
 from simulator import Simulator
-from agent import Agent, SegmentRequest
+from agent import Agent
+from segmentRequest import SegmentRequest
 from bisect import bisect_left
 
 import numpy as np
@@ -169,27 +170,42 @@ class SingleAgentEnv():
             # fetch from superpeer
             print(SUPERPEER_ID, "Bandwidth: %s" % str(self.getBandwidth(SUPERPEER_ID)))
             return SUPERPEER_ID
-        
-        # CONTINUE HERE NEXT
-        # TODO: get the best candidate   
+       
         # the bandwidth changes cannot be predicted by the node throughout time, so it takes into consideration the present bandwidth of the link and calculates throughput accordingly
-        
+
+        # TODO: POSSIBLE HEURISTICS:
+        # 1. Best bandwidth [x]
+        # 2, Best available quality of segment [ ]
+        # 3. Greedy QoE optimization [ ]
         return candidates[np.argmax([self.getBandwidth(n) for n in candidates])]
+
+
+
+    '''
+    Fetches the segment nextSegId from neighbor
+    Right now,the quality param as the neighbor would have only one quality of the segment
+    '''
+    def fetchSegment(self, neighbor, nextSegId, sleepTime):
+        if neighbor == SUPERPEER_ID:
+            # the super peer is used
 
 
     '''
     This is the entry point which the agent calls for downloading the data
     '''
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
-        print("here")
         if self.isDead:
            return
-        # TODO: The ABR policy is delegated to the agent at present. We must add logic to handle P2P fetching
+        assert sleepTime >= 0
+        assert nextSegId < self.videoInfo.segmentCount
+
+       # TODO: The ABR policy is delegated to the agent at present. We must add logic to handle P2P fetching
         neighborToFetchFrom = self.getPeerToFetchFrom(nextSegId)
         print(neighborToFetchFrom)
 
-        #self._rFetchSegment(nextSegId, nextQuality, sleepTime)
+           
 
+        #self._rFetchSegment(nextSegId, nextQuality, sleepTime)
 
 def setupEnv(traces, vi, network, abr=None):
     simulator = Simulator()
