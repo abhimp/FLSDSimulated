@@ -1,7 +1,15 @@
+import os
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
 from group import GroupManager
 import math
 import randStateInit as randstate
+import matplotlib.pyplot as plt
+import mpld3
+from easyPlotViewer import EasyPlot
+
+
+
+LOG_LOCATION = "./results/log/"
 
 SEGMENT_NOT_WORKING = 0
 SEGMENT_WORKING = 1
@@ -68,7 +76,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
         self._vEarlyDownloaded = 0
         self._vNormalDownloaded = 0
-        self._vThroughPutData = {}
+        self._vThroughPutData = []
         self._vDownloadQueue = []
         self._vServingPeers = {}
 
@@ -131,7 +139,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
             self._vAgent._rAddToBufferInternal(req)
 
-        self._vThroughPutData[self.now] = req.throughput
+        self._vThroughPutData += [(self.now, req.throughput)]
 
         if self._vGroup.currentSchedule(self, segId) == self:
            for node in self._vGroupNodes:
@@ -166,8 +174,9 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
 #=============================================
     def _rPredictedThroughput(self):
-        maxTime = max(self._vThroughPutData.keys())
-        return self._vThroughPutData[maxTime]
+        #as per rate based algo
+        thrpt = [1/x for t, x in self._vThroughPutData[-5:]]
+        return len(thrpt)/sum(thrpt)
 
 #=============================================
 # exit point from this class to envSimple
@@ -188,10 +197,11 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
 
 #=============================================
-    def _rAddToDownloadQueue(self, nextSegId, nextQuality):
+    def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf")):
         seg = self._vSegmentStatus[nextSegId]
         assert seg.status == SEGMENT_NOT_WORKING
-        self._vDownloadQueue.append((nextSegId, nextQuality))
+        position = min(position, len(self._vDownloadQueue))
+        self._vDownloadQueue.insert(position, (nextSegId, nextQuality))
         self._rDownloadFromDownloadQueue()
 
 #=============================================
@@ -203,6 +213,10 @@ class GroupP2PEnvBasic(SimpleEnvironment):
             seg = self._vSegmentStatus[segId]
             if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING, SEGMENT_PEER_WORKING]:
                 continue
+            if self._vStarted:
+                node = self._vGroup.currentSchedule(self, segId)
+                if node == self:
+                    ql = self._rReAdjustQl(ql)
             seg.status = SEGMENT_WORKING
             self._rFetchSegment(segId, ql)
             break
@@ -265,13 +279,22 @@ class GroupP2PEnvBasic(SimpleEnvironment):
     def _rTimeoutForPeer(self, segId, ql = -1):
         if ql == -1:
             ql = self._vGroup.getQualityLevel(self)
-        if ql > 0:
-            ql = ql - 1
+#         if ql > 0:
+#             ql = ql - 1
         downloadTIme = self._vVideoInfo.bitrates[ql] * self._vVideoInfo.segmentDuration / self._rPredictedThroughput()
+        downloadTIme = max(self._vVideoInfo.segmentDuration, downloadTIme)
         bufferLeft = self._vAgent.bufferLeft
         timeout = bufferLeft - downloadTIme
         return round(timeout, 3), ql
 
+#=============================================
+    def _rReAdjustQl(self, ql):
+        thrpt = self._rPredictedThroughput()
+        while ql:
+            if self._vVideoInfo.bitrates[ql] < thrpt:
+                return ql
+            ql -= 1
+        return ql
 
 #=============================================
     def _rPeerDownloadTimeout(self, downloader, segId, ql):
@@ -280,18 +303,24 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         seg.peerTimeoutRef = -1
         if seg.status in [SEGMENT_CACHED, SEGMENT_WORKING]:
             return
-        if seg.status == SEGMENT_PEER_WORKING: 
+        if seg.status == SEGMENT_PEER_WORKING and self._vAgent.nextSegmentIndex == segId:
             #it is very complecated. Need to know how much it have downloaded so far.
             #it will be great if we can measure download speed some how. Important thing
             #is get some prediction on peer finishing time.
             elapsed, downloaded, clen = seg.peerResponsible._rGetPeerDownloadStatus(self, segId)
             timeleft = float("inf")
+            ql = self._rReAdjustQl(ql)
             estDlTime = self._rEstimateDownloadTime(segId, ql)
             if elapsed > 0 and downloaded > 0:
                 timeleft = round((clen - downloaded)*elapsed/downloaded, 3)
 
-            timeToFinishDl = self._rEstimatedTimeToFreeUpDownloader() \
-                                + self._rEstimateDownloadTime(segId, ql)
+            timeToFinishDl = self._rEstimateDownloadTime(segId, ql)
+            if self._vDownloadPending:
+                elapsed, downloaded, clen = self._rDownloadStatus()
+                if downloaded > 0:
+                    timeToFinishDl += (clen - downloaded)*elapsed/downloaded
+                else:
+                    timeToFinishDl += clen * 8 / self._rPredictedThroughput()
 
             if timeToFinishDl > timeleft:
                 return
@@ -302,7 +331,10 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
         if seg.status == SEGMENT_PEER_WAITING:
             seg.status = SEGMENT_NOT_WORKING
-        self._rAddToDownloadQueue(segId, ql)
+        if self._vAgent.nextSegmentIndex == segId:
+            self._rAddToDownloadQueue(segId, ql, 0)
+        else:
+            self._rAddToDownloadQueue(segId, ql)
 
 #=============================================
 # entry point from agent
@@ -484,6 +516,76 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             break
 
 #=============================================
+def storeAsPlotViewer(path, fig, label):
+    with open(path, "a") as fp:
+        print("<br><br>", file=fp)
+        print("<div><b>", label, "</b></div>", file=fp)
+        print('<div style="float:left; display:inline-block; width:95%">', file=fp)
+        mpld3.save_html(fig, fp)
+        print('</div><div style="clear:both"></div><br>', file=fp)
+
+def encloser(st, label):
+        p = "<br><br>"
+        p += "<div><b>" + label + "</b></div>"
+        return p + st
+
+def plotIdleStallTIme(dpath, group):
+    if not os.path.isdir(dpath):
+        os.makedirs(dpath)
+
+    colors = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
+    
+    pltHtmlPath = os.path.join(dpath,"groupP2PTimeout.html")
+    open(pltHtmlPath, "w").close()
+    eplt = EasyPlot()
+    for ql,grpSet in group.groups.items():
+        for grp in grpSet:
+            grpLabel = str([x._vPeerId for x in grp.getAllNode()])
+            label = "<h2>BufferLen</h2>"
+            label += " NumNode:" + str(len(grp.getAllNode())) 
+            label += " Quality Index: " + str(grp.qualityLevel)
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vBufferLenOverTime
+                Xs, Ys = list(zip(*pltData))
+                eplt.plot(Xs, Ys, marker="x", label=str(ag._vPeerId), color=colors[i%len(colors)])
+
+                label += "\n<br><span style=\"color: " + colors[i%len(colors)] + "\" >PeerId: " + str(ag._vPeerId)
+                label += " avgQualityIndex: " + str(ag._vAgent.avgQualityIndex)
+                label += " avgStallTime: " + str(ag._vAgent.totalStallTime)
+                label += " startedAt: " + str(ag._vAgent._vStartedAt)
+                label += " traceIdx: " + str(AGENT_TRACE_MAP.get(ag._vPeerId, 0))
+                label += "</span>"
+#             storeAsPlotViewer(pltHtmlPath, fig, label)
+            eplt.setFigHeader(label)
+            label = "<h2>workingTime</h2>"
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vWorkingTimes
+                Xs, Ys = list(zip(*pltData))
+                eplt.step(Xs, Ys, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+#             storeAsPlotViewer(pltHtmlPath, fig, label)
+            eplt.setFigHeader(label)
+    with open(pltHtmlPath, "w") as fp:
+        eplt.printFigs(fp, width=1000, height=400)
+
+#=============================================
+def logThroughput(ag):
+    if not os.path.isdir(LOG_LOCATION):
+        os.makedirs(LOG_LOCATION)
+    path = os.path.join(LOG_LOCATION, "%s.csv"%(ag._vPeerId))
+    with open(path, "w") as fp:
+        print("#time\tBandwidth", file=fp)
+        for t, x in ag._vThroughPutData:
+            print("{t}\t{x}".format(t=t, x=x), file=fp)
+
+AGENT_TRACE_MAP = {}
+
+#=============================================
 def experimentGroupP2PTimeout(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
@@ -495,19 +597,45 @@ def experimentGroupP2PTimeout(traces, vi, network):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
-#         env = SimpleEnvironment(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
         maxTime = 101.0 + x
+        AGENT_TRACE_MAP[nodeId] = idx
         ags.append(env)
-#     simulator.runAt(maxTime + 50, randomDead, vi, traces, grp, simulator, ags, deadAgents)
     simulator.run()
     grp.printGroupBucket()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
+        logThroughput(a)
+    if __name__ == "__main__":
+        plotIdleStallTIme("results/stall-idle/", grp)
+    return ags
+
+#=============================================
+def experimentGroupP2PSmall(traces, vi, network):
+    simulator = Simulator()
+    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+
+    deadAgents = []
+    ags = []
+
+    for trx, nodeId, startedAt in [( 5, 267, 107), (36, 701, 111), (35, 1800, 124), (5, 2033, 127)]:
+        trace = traces[trx]
+        env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
+        simulator.runAt(startedAt, env.start, 5)
+        AGENT_TRACE_MAP[nodeId] = trx
+        ags.append(env)
+
+    simulator.run()
+    grp.printGroupBucket()
+    for i,a in enumerate(ags):
+        assert a._vFinished # or a._vDead
+        logThroughput(a)
+    if __name__ == "__main__":
+        plotIdleStallTIme("results/stall-idle/", grp)
     return ags
 
 def main():
-    randstate.storeCurrentState() #comment this line to use same state as before
+#     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
@@ -515,9 +643,9 @@ def main():
     traces = list(zip(*traces))
     network = P2PNetwork()
 
-    experimentGroupP2PBasic(traces, vi, network)
+    experimentGroupP2PTimeout(traces, vi, network)
 
 if __name__ == "__main__":
-    for x in range(200):
+    for x in range(1):
         main()
         print("=========================\n")

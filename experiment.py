@@ -42,6 +42,13 @@ def getCMF(elements):
     cmf = [(p, float(sum(y[:i+1]))/s) for i, p in enumerate(x)]
     return cmf
 
+def getCount(elements):
+    x = [y for y in elements]
+    freq = list(cl.Counter(x).items())
+    freq.sort(key = lambda x:x[0])
+    return freq
+    x,y = zip(*freq)
+    return x,y
 
 def savePlotData(Xs, Ys, legend, pltTitle):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
@@ -78,19 +85,20 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
 #     plt.clf()
     plt.figure(figsize=(15, 5), dpi=150)
     pltData = []
+    assert min([len(res) for name, res in results.items()]) == max([len(res) for name, res in results.items()])
     for name, res in results.items():
         Xs, Ys = [], []
         for x, ag in enumerate(res):
             y = eval("ag." + attrib)
             Xs.append(x)
             Ys.append(y)
-#         Xs, Ys = list(zip(*getCMF(Ys)))
+        Xs, Ys = list(zip(*getCMF(Ys)))
         savePlotData(Xs, Ys, name, pltTitle)
         pltData += [Xs, Ys]
-        plt.hist(Ys, label=name, rwidth=0.05, histtype="bar")
+        plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
-    plt.xlabel(xlabel)
+#     plt.xlabel(xlabel)
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
     plt.savefig(dpath + ".png", bbox_inches="tight")
 #     plt.show()
