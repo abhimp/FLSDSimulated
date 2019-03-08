@@ -5,7 +5,8 @@ from p2pnetwork import P2PRandomNetwork
 from envSimpleP2P import P2PGroup
 from envSimple import SimpleEnvironment
 from simulator import Simulator
-from agent import Agent, SegmentRequest
+from agent import Agent
+from segmentRequest import SegmentRequest
 from bisect import bisect_left
 
 import numpy as np
