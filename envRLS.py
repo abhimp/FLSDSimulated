@@ -6,6 +6,7 @@ from envSimpleP2P import P2PGroup
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from agent import Agent, SegmentRequest
+from bisect import bisect_left
 
 import numpy as np
 import load_trace
@@ -29,11 +30,14 @@ class SingleAgentEnv():
         self.cookedTime, self.cookedBW, self.traceFile = {}, {}, {}
         
         # this is the bandwidth pointer which points to a random timestep in the trace which is assumed to be the starting point for our node's bandwidth 
-        self.lastBandwidthPtr = {}
+        self.startBandwidthPtr = {}
 
+        # the time when the agent started
+        self.start_time = None
+        
         for node in traces:
-            self.cookedTime[node], self.cookedBW, self.traceFile = traces[node]
-            self.lastBandwidthPtr[node] =  int(np.random.uniform(1, len(self.cookedTime[node])))
+            self.cookedTime[node], self.cookedBW[node], self.traceFile[node] = traces[node]
+            self.startBandwidthPtr[node] =  int(np.random.uniform(1, len(self.cookedTime[node])))
 
        # the agent that the environment takes care of
         self.agent = Agent(vi, self, abr)
@@ -101,14 +105,39 @@ class SingleAgentEnv():
     Gets the bandwidth of the link between the node and the given neighbor
     '''
     def getBandwidth(self, neighbor):
-        pass    
+        print("Trace file: %s" % self.traceFile[neighbor])
+
+        now = self.simulator.getNow()
+        assert self.start_time != None
+        time_elapsed = now - self.start_time
+        print("Now: %s Start time: %s Time elapsed: %s" % (str(now), str(self.start_time), str(time_elapsed)))
+
+        cooked_time = self.cookedTime[neighbor]
+        i = self.startBandwidthPtr[neighbor]
+        trace_start_time = cooked_time[i-1]
+
+        total_trace_time = cooked_time[-1]
+        # as we will loop the trace after 'total_trace_time' period, take modulo 
+        time_elapsed = time_elapsed % total_trace_time
+        
+        print("total trace time: %s trace start time: %s Time elapsed: %s" % (str(total_trace_time), str(trace_start_time), str(time_elapsed)))
+        # corresponding time to simulator.getNow() in the trace dataset
+        trace_timestep = (trace_start_time + time_elapsed) % total_trace_time
+        print("Trace timestep: %s" % str(trace_timestep))
+        i = bisect_left(cooked_time, trace_timestep)
+        
+        if cooked_time[i] != trace_timestep:
+            i -= 1
+
+        return self.cookedBW[neighbor][i]
+
 
     def start(self, startedAt=-1):
         if not self.agent:
             raise Exception("Node agent to start")
         self.lastDownloadedAt = self.getNow()
         print("Agent starting: "+ str(self.nodeId))
-        
+        self.start_time = self.simulator.getNow()
         # the super peer doesn't need to download
         if self.nodeId != SUPERPEER_ID: 
             self.agent.start(startedAt)
@@ -135,16 +164,17 @@ class SingleAgentEnv():
             if segId in self.neighbor_envs[neighbor].collectedChunks:
                candidates.append(neighbor)
         
+        print("Log: Sim now: %s" % self.getNow())
         if len(candidates) == 0:
             # fetch from superpeer
+            print(SUPERPEER_ID, "Bandwidth: %s" % str(self.getBandwidth(SUPERPEER_ID)))
             return SUPERPEER_ID
         
         # CONTINUE HERE NEXT
         # TODO: get the best candidate   
         # the bandwidth changes cannot be predicted by the node throughout time, so it takes into consideration the present bandwidth of the link and calculates throughput accordingly
-
-        print("Log: Sim now: %s" % self.getNow())
-        return np.random.choice(candidates) 
+        
+        return candidates[np.argmax([self.getBandwidth(n) for n in candidates])]
 
 
     '''
@@ -178,13 +208,22 @@ def setupEnv(traces, vi, network, abr=None):
                trace_map[edge] = traces[idx]
            else:
                link_traces[neighbor] = trace_map[edge]
-        # TODO: make an environment
+        
+        # allot a trace to the super peer link if not present in immediate neighors
+        if SUPERPEER_ID not in network.grp.neighbors(nodeId):
+            idx = np.random.randint(len(traces))
+            link_traces[SUPERPEER_ID] = traces[idx]
+
         env = SingleAgentEnv(vi, link_traces, simulator, nodeId)
         envs[nodeId] = env
         print("Starting node %d" % nodeId)
 
     for x, nodeId in enumerate(network.nodes()):
-        neighbor_envs = {neighbor: envs[neighbor] for neighbor in network.grp.neighbors(nodeId)}
+        neighbors = network.grp.neighbors(nodeId) 
+
+        neighbor_envs = {neighbor: envs[neighbor] for neighbor in neighbors}
+        if nodeId != SUPERPEER_ID and SUPERPEER_ID not in neighbor_envs:
+            neighbor_envs[SUPERPEER_ID] = envs[SUPERPEER_ID]
         envs[nodeId].setNeighbors(neighbor_envs)
         simulator.runAt(101.0 + x, envs[nodeId].start, 5)
     simulator.run()
