@@ -75,39 +75,53 @@ class SingleAgentEnv():
     def init_superpeer(self):
         print("Init superpeer")
         for quality in range(len(self.videoInfo.fileSizes)):
-            self.collectedChunks[quality] = {}
             for segid in range(len(self.videoInfo.fileSizes[quality])):
                 if segid == len(self.videoInfo.fileSizes[quality])-1:
                     # the last segment might not have duration as vi.segmentDuration
                     duration = self.videoInfo.duration - segid*self.videoInfo.segmentDuration
                 else:
                     duration = self.videoInfo.segmentDuration
-                self.collectedChunks[quality][segid] = SegmentRequest(quality, 0, 0, duration, segid, self.videoInfo.fileSizes[quality][segid], self)
+                
+                if segid not in self.collectedChunks:
+                    self.collectedChunks[segid] = {}
+                self.collectedChunks[segid][quality] = SegmentRequest(quality, 0, 0, duration, segid, self.videoInfo.fileSizes[quality][segid], self)
 
+    
     def setNeighbors(self, neighbor_envs):
         # neighbor_envs is a mapping between the neighbor id to the corresponding env object
         self.neighbor_envs = neighbor_envs
+   
     
+    '''Get the data corresponding to the quality/segId requested
+    '''
+    def getData(self, segid, quality):     
+        assert segid in self.collectedChunks
+        return self.collectedChunks[segid][quality]
+        
+
     def getNow(self):
         return self.simulator.getNow()
 
+    
     def finishedAfter(self, after   ):
         self.simulator.runAfter(after, self.finish)
 
+    
     def runAfter(self, after, *kw, **kws):
         return self.simulator.runAfter(after, *kw, **kws)
 
+    
     def finish(self):
         print("Peer %s has finished playback\n" % self.nodeId)
         self.agent._rFinish()
         self.hasFinished = True
 
-    '''
-    Gets the bandwidth of the link between the node and the given neighbor
-    '''
-    def getBandwidth(self, neighbor):
-        print("Trace file: %s" % self.traceFile[neighbor])
 
+    '''
+    Get the corresponding timestep in the trace data to the current time in the simulator
+    '''
+   
+    def getTraceTimestep(self, neighbor):
         now = self.simulator.getNow()
         assert self.start_time != None
         time_elapsed = now - self.start_time
@@ -124,12 +138,27 @@ class SingleAgentEnv():
         print("total trace time: %s trace start time: %s Time elapsed: %s" % (str(total_trace_time), str(trace_start_time), str(time_elapsed)))
         # corresponding time to simulator.getNow() in the trace dataset
         trace_timestep = (trace_start_time + time_elapsed) % total_trace_time
+        return trace_timestep 
+
+    '''
+    Get the present pointer to the trace dataset according to the current time in the simulator
+    '''
+    def getTracePointer(self, neighbor):
+        trace_timestep = self.getTraceTimestep(neighbor)
         print("Trace timestep: %s" % str(trace_timestep))
         i = bisect_left(cooked_time, trace_timestep)
         
         if cooked_time[i] != trace_timestep:
             i -= 1
+        return i
 
+
+    '''
+    Gets the bandwidth of the link between the node and the given neighbor
+    '''
+    def getBandwidth(self, neighbor):
+        print("Trace file: %s" % self.traceFile[neighbor])
+        i = self.getTracePointer(neighbor)
         return self.cookedBW[neighbor][i]
 
 
@@ -181,14 +210,30 @@ class SingleAgentEnv():
 
 
 
+    def timeTaken(self, neighbor, data):
+        i = getTracePointer(neighbor)
+        duration = data._segmentDuration
+        chunk_len = data._clen
+        # start point in the trace data
+        start_trace_timestep = self.getTraceTimestep(neighbor)
+        i = self.getTracePointer(neighbor)
+
+        while True:
+            throughput = self.cookedBW[i]
+            trace_dur = self.cookedTime[i]-self.cookedTime[i-1]
+
+
     '''
     Fetches the segment nextSegId from neighbor
     Right now,the quality param as the neighbor would have only one quality of the segment
     '''
-    def fetchSegment(self, neighbor, nextSegId, sleepTime):
+    def fetchSegment(self, neighbor, nextSegId, nextQuality, sleepTime):
+        timeneeded = 0.0
         if neighbor == SUPERPEER_ID:
-            # the super peer is used
-
+            # the super peer is used to receive the segment
+            data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
+            # TODO: add RTT to timeneeded
+            timeneeded += self.timeTaken(neighbor, data)    
 
     '''
     This is the entry point which the agent calls for downloading the data
@@ -202,10 +247,9 @@ class SingleAgentEnv():
        # TODO: The ABR policy is delegated to the agent at present. We must add logic to handle P2P fetching
         neighborToFetchFrom = self.getPeerToFetchFrom(nextSegId)
         print(neighborToFetchFrom)
+        
+        self.simulator.runAfter(sleepTime, self.fetchSegment, neighbor, nextSegId, nextQuality)
 
-           
-
-        #self._rFetchSegment(nextSegId, nextQuality, sleepTime)
 
 def setupEnv(traces, vi, network, abr=None):
     simulator = Simulator()
@@ -243,6 +287,7 @@ def setupEnv(traces, vi, network, abr=None):
         envs[nodeId].setNeighbors(neighbor_envs)
         simulator.runAt(101.0 + x, envs[nodeId].start, 5)
     simulator.run()
+
 
 def main():
     network = P2PRandomNetwork(6)
