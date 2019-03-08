@@ -1,5 +1,5 @@
 DEFAULT_QUALITY = 0  # default video quality without agent
-REBUF_PENALTY = 4.3  # 1 sec rebuffering -> this number of Mbps
+REBUF_PENALTY = 1000 #4.3  # 1 sec rebuffering -> this number of Mbps
 SMOOTH_PENALTY = 1
 M_IN_K = 1000.0
 

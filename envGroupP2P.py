@@ -120,8 +120,6 @@ class GroupP2PEnv(SimpleEnvironment):
         elif segId in self._vPendingRequestedSegments:
             self.denyPendingRequests(segId)
 
-
-
 #=============================================
 # exit point from this class to envSimple
     def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
