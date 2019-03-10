@@ -94,7 +94,7 @@ def main(videofile, randstatefp, result_dir):
     results = {}
 
     for name, cb in testCB.items():
-        randstate.loadCurrentState()
+        randstate.loadCurrentState(randstatefp)
         ags = runExperiments(*cb)
         results[name] = ags
 
