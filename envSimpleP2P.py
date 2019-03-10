@@ -23,8 +23,8 @@ class P2PGroup():
         return self._vNetwork.isClose(node1._vPeerId, node2._vPeerId)
 
 class SimpleP2PEnv(SimpleEnvironment):
-    def __init__(self, vi, traces, simulator, abr = None, grp = None, nodeId = -1):
-        super().__init__(vi, traces, simulator, abr)
+    def __init__(self, vi, traces, simulator, abr = None, grp = None, nodeId = -1, *kw, **kws):
+        super().__init__(vi, traces, simulator, abr, *kw, **kws)
         self._vCatched = {}
         self._vGroup = grp
         self._vPeerId = nodeId

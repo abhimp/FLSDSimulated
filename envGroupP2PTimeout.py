@@ -58,7 +58,7 @@ class SegmentDlStat:
 
 class GroupP2PEnvTimeout(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
-        super().__init__(vi, traces, simulator, abr, peerId)
+        super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
 #         self._vAgent = Agent(vi, self, abr)
         self._vDownloadPending = False
         self._vSegmentDownloading = -1
@@ -269,6 +269,7 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
             self.runAfter(sleepTime, self._rDownloadNextDataBeforeGroupStart, nextSegId, nextQuality, 0)
             return
         if seg.status == SEGMENT_SLEEPING or seg.status == SEGMENT_NOT_WORKING:
+            seg.status = SEGMENT_NOT_WORKING
             self._rAddToDownloadQueue(nextSegId, nextQuality)
             return
 

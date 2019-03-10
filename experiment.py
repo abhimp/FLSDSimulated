@@ -214,7 +214,7 @@ def main():
     testCB = {}
     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
-    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
+#     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)

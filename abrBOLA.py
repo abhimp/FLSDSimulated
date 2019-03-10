@@ -2,7 +2,7 @@ import numpy as np
 import math
 
 class BOLA():
-    def __init__(self, videoInfo, agent):
+    def __init__(self, videoInfo, agent, log_file_path = None, *kw, **kws):
         self._videoInfo = videoInfo
         self._vms = None
         self._agent = None
@@ -27,7 +27,7 @@ class BOLA():
         p = self._videoInfo.segmentDuration
         SM = float(self._videoInfo.bitrates[-1])
         lastM = agent._vRequests[-1].qualityIndex #last bitrateindex
-        Q = buflen
+        Q = buflen/p
         Qmax = self._agent._vMaxPlayerBufferLen/p
         ts = agent._vPlaybacktime - agent._vStartingPlaybackTime
         te = self._videoInfo.duration - agent._vPlaybacktime

@@ -28,8 +28,8 @@ class SegmentDlStat:
         s._status = st
 
 class GroupP2PEnv(SimpleEnvironment):
-    def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None):
-        super().__init__(vi, traces, simulator, abr, peerId)
+    def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
+        super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
 #         self._vAgent = Agent(vi, self, abr)
         self._vDownloadPending = False
         self._vSegmentDownloading = -1

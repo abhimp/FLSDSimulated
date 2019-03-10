@@ -12,11 +12,13 @@ TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
 class SimpleEnvironment():
-    def __init__(self, vi, traces, simulator, abr = None, peerId = None, *kw, **kws):
+    def __init__(self, vi, traces, simulator, abr = None, peerId = None, logpath=None, resultpath=None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
 #         self._vLastBandwidthTime = 
-        self._vAgent = Agent(vi, self, abr)
+        self._vAgent = Agent(vi, self, abr, logpath=logpath, resultpath=resultpath)
+        self._vLogPath = logpath
+        self._vResultPath = resultpath
         self._vSimulator = simulator
         self._vDead = False
         self._vVideoInfo = vi

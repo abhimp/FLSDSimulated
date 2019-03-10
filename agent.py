@@ -15,9 +15,11 @@ class SimpAbr():
 
 class Agent():
     __count = 0
-    def __init__(self, videoInfo, env, abrClass = None):
+    def __init__(self, videoInfo, env, abrClass = None, logpath=None, resultpath=None):
         self._id = self.__count
         self.__count += 1
+        self._vLogPath = logpath
+        self._vResultPath = resultpath
         self._vEnv = env
         self._vVideoInfo = videoInfo
         self._vLastBitrateIndex = 0
@@ -37,7 +39,7 @@ class Agent():
         self._vMaxPlayerBufferLen = 50
         self._vTimeouts = []
         self._vRequests = [] # the rquest object
-        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self)
+        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self, log_file_path=logpath)
         self._vSetQuality = abr.getNextDownloadTime if abr else self._rWhenToDownload
         self._vStartingPlaybackTime = 0
         self._vStartingSegId = 0

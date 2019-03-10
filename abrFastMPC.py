@@ -72,7 +72,8 @@ def setup_mpc(log_file_path=LOG_FILE):
     return input_dict
 
 class AbrFastMPC:
-    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
+    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
+        log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrFastMPC.log")
         self.video = videoInfo
         self.agent = agent
         input_dict = setup_mpc(log_file_path)
