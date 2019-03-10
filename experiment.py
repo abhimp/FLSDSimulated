@@ -1,23 +1,24 @@
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+import mpld3
+import collections as cl
+
 import load_trace
 import videoInfo as video
 from p2pnetwork import P2PNetwork
 import randStateInit as randstate
-
-from envGroupP2PBasic import experimentGroupP2PBasic
-from envGroupP2PTimeout import experimentGroupP2PTimeout
-from envSimple import experimentSimpleEnv
-from envSimpleP2P import experimentSimpleP2P
-
+from envGroupP2PBasic import GroupP2PEnvBasic
+from envGroupP2PTimeout import GroupP2PEnvTimeout
+from envSimple import SimpleEnvironment
+from simulator import Simulator
+from group import GroupManager
+# from envSimpleP2P import experimentSimpleP2P
 from abrFastMPC import AbrFastMPC
 from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
 
-import matplotlib.pyplot as plt
-import mpld3
-
-import collections as cl
 
 RESULT_DIR = "./results/GenPlots"
 BUFFER_LEN_PLOTS = "results/bufferlens"
@@ -54,7 +55,7 @@ def savePlotData(Xs, Ys, legend, pltTitle):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
     if not os.path.isdir(dpath):
         os.makedirs(dpath)
-    fpath = os.path.join(dpath, legend + "d.dat")
+    fpath = os.path.join(dpath, legend + ".dat")
     with open(fpath, "w") as fp:
         assert len(Xs) == len(Ys)
         st = "\n".join(str(x) + "\t" + str(y) for x, y in zip(Xs, Ys))
@@ -62,7 +63,7 @@ def savePlotData(Xs, Ys, legend, pltTitle):
 
 def restorePlotData(legend, pltTitle):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
-    fpath = os.path.join(dpath, legend + "d.dat")
+    fpath = os.path.join(dpath, legend + ".dat")
     assert os.path.isfile(fpath)
 
     with open(fpath) as fp:
@@ -82,26 +83,33 @@ def plotStoredData(legends, _, pltTitle, xlabel):
     plt.xlabel(xlabel)
 
 def plotAgentsData(results, attrib, pltTitle, xlabel):
-#     plt.clf()
+    plt.clf()
     plt.figure(figsize=(15, 5), dpi=150)
-    pltData = []
     assert min([len(res) for name, res in results.items()]) == max([len(res) for name, res in results.items()])
+    pltData = {}
     for name, res in results.items():
         Xs, Ys = [], []
         for x, ag in enumerate(res):
             y = eval("ag." + attrib)
             Xs.append(x)
             Ys.append(y)
-        Xs, Ys = list(zip(*getCMF(Ys)))
+
         savePlotData(Xs, Ys, name, pltTitle)
-        pltData += [Xs, Ys]
+        pltData[name] = Ys
+        Xs, Ys = list(zip(*getCMF(Ys)))
+        savePlotData(Xs, Ys, name+"_cmf", pltTitle)
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
 #     plt.xlabel(xlabel)
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
-    plt.savefig(dpath + ".png", bbox_inches="tight")
+    plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
 #     plt.show()
+    plt.clf()
+    names, Yss = list(zip(*pltData.items()))
+    plt.boxplot(Yss, labels=names, notch=True)
+    plt.title(pltTitle)
+    plt.savefig(dpath + "_box.png", bbox_inches="tight")
 
 
 def plotBufferLens(results):
@@ -138,7 +146,7 @@ def storeAsPlotViewer(path, fig, ag):
         print('<div style="float:left; display:inline-block; width:95%">', file=fp)
         mpld3.save_html(fig, fp)
         print('</div><div style="clear:both"></div><br>', file=fp)
-        
+
 def plotIdleStallTIme(results):
     dpath = os.path.join(STALLTIME_IDLETIME_PLOTS)
     if not os.path.isdir(dpath):
@@ -148,7 +156,7 @@ def plotIdleStallTIme(results):
     res = list(zip(*res))
 
     colors = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
-    
+
     pltHtmlPath = os.path.join(dpath,"plot.html")
     open(pltHtmlPath, "w").close()
     for it,exp in enumerate(res):
@@ -167,33 +175,49 @@ def plotIdleStallTIme(results):
         fig.legend(ncol = 2, loc = "upper center")
         pltPath = os.path.join(dpath,"%04d.png"%(it))
         ag = exp[models.index("GroupP2PBasic")]
-        label = "PeerId" + str(ag._vPeerId) 
-        label += " NumNode:" + str(len(ag._vGroup.getAllNode(ag))) 
+        label = "PeerId" + str(ag._vPeerId)
+        label += " NumNode:" + str(len(ag._vGroup.getAllNode(ag)))
         label += " Quality Index: " + str(ag._vGroup.getQualityLevel(ag))
 #         fig.savefig(pltPath, bbox_inches="tight")
 
         storeAsPlotViewer(pltHtmlPath, fig, label)
 
-def runExperiments(cb, *kw, **kws):
-    return cb(*kw, **kws)
+def runExperiments(envCls, traces, vi, network, abr = None):
+    simulator = Simulator()
+    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+
+    deadAgents = []
+    ags = []
+    for x, nodeId in enumerate(network.nodes()):
+        idx = np.random.randint(len(traces))
+        trace = traces[idx]
+        startsAt = np.random.randint(vi.duration/2)
+        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr)
+        simulator.runAt(startsAt, env.start, 5)
+        ags.append(env)
+    simulator.run()
+    for i,a in enumerate(ags):
+        assert a._vFinished # or a._vDead
+    return ags
 
 def main():
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
+#     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     network = P2PNetwork()
 
     testCB = {}
-#     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv, traces, vi, network, BOLA)
-#     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv, traces, vi, network, AbrFastMPC)
-#     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv, traces, vi, network, AbrRobustMPC)
-#     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
-    testCB["GroupP2PBasic"] = (experimentGroupP2PBasic, traces, vi, network)
-    testCB["GroupP2PTimeout"] = (experimentGroupP2PTimeout, traces, vi, network)
-#     testCB["SimpleP2P"] = (experimentSimpleP2P, traces, vi, network)
+    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
+    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
+    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
+    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
 
     results = {}
 
@@ -245,5 +269,6 @@ def main2():
     plt.show()
 
 if __name__ == "__main__":
-    main()
+#     for x in range(20):
+        main()
 #     main2()

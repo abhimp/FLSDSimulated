@@ -12,12 +12,12 @@ SEGMENT_SLEEPING = 5
 SEGMENT_PEER_WORKING = 6
 
 SEGMENT_STATUS_STRING = [
-"SEGMENT_NOT_WORKING", 
-"SEGMENT_WORKING", 
-"SEGMENT_CACHED", 
-"SEGMENT_PEER_WAITING", 
-"SEGMENT_IN_QUEUE", 
-"SEGMENT_SLEEPING", 
+"SEGMENT_NOT_WORKING",
+"SEGMENT_WORKING",
+"SEGMENT_CACHED",
+"SEGMENT_PEER_WAITING",
+"SEGMENT_IN_QUEUE",
+"SEGMENT_SLEEPING",
 "SEGMENT_PEER_WORKING",
 ]
 
@@ -50,7 +50,7 @@ class SegmentDlStat:
         s._status = st
 
 class GroupP2PEnvBasic(SimpleEnvironment):
-    def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None):
+    def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId)
 #         self._vAgent = Agent(vi, self, abr)
         self._vDownloadPending = False
@@ -126,7 +126,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         self._vDownloadPending = False
         seg.status = SEGMENT_CACHED
         self._vCatched[segId] = req
-        
+
         seg = self._vSegmentStatus[segId]
         self._rDownloadFromDownloadQueue()
 
@@ -143,7 +143,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
 #=============================================
     def _rDistributeToOther(self, req):
-        if not self._vGroupNodes: 
+        if not self._vGroupNodes:
             return
         for node in self._vGroupNodes:
             if node == self:
@@ -247,7 +247,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         downloadTIme = self._vVideoInfo.bitrates[ql] * self._vVideoInfo.segmentDuration / self._rPredictedThroughput()
 
         bufferLeft = self._vAgent.bufferLeft
-        
+
         timeout = bufferLeft - downloadTIme
 
         return round(timeout, 3), ql
@@ -272,7 +272,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         if self._vDead: return
         now = self.getNow()
         seg = self._vSegmentStatus[nextSegId]
-        if not self._vStarted:
+        if not self._vStarted or len(self._vGroupNodes) <= 1:
             seg.autoEntryOver = True
             return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
 
@@ -286,7 +286,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
                 req= self._vCatched[nextSegId]
                 self._vAgent._rAddToBufferInternal(req)
             return
-        
+
         seg.autoEntryOver = True
 
         if seg.status == SEGMENT_WORKING \
@@ -306,7 +306,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         seg.status = SEGMENT_NOT_WORKING
 
         self._rDownloadNextDataGroup(nextSegId, nextQuality, 0)
-    
+
 #=============================================
     def _rDownloadNextDataWake(self, nextSegId, nextQuality, sleepTime):
         seg = self._vSegmentStatus[nextSegId]
@@ -329,7 +329,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
             else:
                 ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
                 seg.peerTimeoutRef = ref
-        
+
         nextSegId, waitTime = self._rFindNextDownloadableSegment(nextSegId)
         if nextSegId < 0 or waitTime > 0:
             return
@@ -339,7 +339,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
             return
 
         self._rAddToDownloadQueue(nextSegId, self._vGroup.getQualityLevel(self))
-    
+
 
 
 #=============================================
@@ -367,7 +367,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
             if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
                 self._vAgent._rAddToBufferInternal(req)
             node._vTotalUploaded += req.clen #this is not exactly the way it will happen in the real world scenerio.
-                                             #However, in real world, 
+                                             #However, in real world,
 
 #=============================================
     def _rCancelPeerDownloading(self, node, segId):

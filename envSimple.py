@@ -12,7 +12,7 @@ TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
 class SimpleEnvironment():
-    def __init__(self, vi, traces, simulator, abr = None, peerId = None):
+    def __init__(self, vi, traces, simulator, abr = None, peerId = None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
 #         self._vLastBandwidthTime = 
@@ -89,7 +89,10 @@ class SimpleEnvironment():
         if self._vDead: return
         assert sleepTime >= 0
         assert nextSegId < self._vVideoInfo.segmentCount
-        self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality)
+        if sleepTime > 0:
+            self._vSimulator.runAfter(sleepTime, self._rFetchNextSeg, nextSegId, nextQuality)
+        else:
+            self._rFetchNextSeg(nextSegId, nextQuality)
 
 #=============================================
     def _rAddToBuffer(self, req, simIds = None):

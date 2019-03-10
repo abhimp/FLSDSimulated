@@ -5,21 +5,21 @@ GLOBAL_DELAY_PLAYBACK = 50 #Total arbit
 
 
 # VIDEO_BIT_RATE = [300,750,1200,1850,2850,4300]  # Kbps
-BITRATE_REWARD = [1, 2, 3, 4, 7, 12, 15, 20]
+# BITRATE_REWARD = [1, 2, 3, 4, 7, 12, 15, 20]
 # BITRATE_REWARD_MAP = {0: 0, 300: 1, 750: 2, 1200: 3, 1850: 12, 2850: 15, 4300: 20}
 
 
 class VideoInfo():
     def __init__(s, vi):
-        s.fileSizes = vi.sizes[:6]
+        s.fileSizes = vi.sizes
         s.segmentDuration = vi.segmentDuration
-        s.bitrates = vi.bitrates[:6]
+        s.bitrates = vi.bitrates
         s.bitratesKbps = [x/1000 for x in s.bitrates]
         s.duration = vi.duration
         s.minimumBufferTime = vi.minimumBufferTime
         s.segmentDurations = []
         s.segmentCount = len(s.fileSizes[0])
-        s.bitrateReward = BITRATE_REWARD[:len(s.bitrates)]
+        s.bitrateReward = vi.bitrateReward
         s.birateRewardMap = {x:y for x, y in zip(s.bitrates, s.bitrateReward)}
         s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
 #         dur = 0
@@ -30,6 +30,20 @@ class VideoInfo():
 #                 s.segmentDurations.append(s.duration - dur)
 #             dur += vi.segmentDuration
 #         print dur, s.duration
+
+class PenseivVideoInfo():
+    def __init__(s, vi):
+        s.fileSizes = vi.sizes if len(vi.sizes) != 8 else [x for i, x in enumerate(vi.sizes) if i not in [0,3]]
+        s.segmentDuration = vi.segmentDuration
+        s.bitrates = vi.bitrates if len(vi.bitrates) != 8 else [x for i, x in enumerate(vi.bitrates) if i not in [0,3]]
+        s.bitratesKbps = [x/1000 for x in s.bitrates]
+        s.duration = vi.duration
+        s.minimumBufferTime = vi.minimumBufferTime
+        s.segmentDurations = []
+        s.segmentCount = len(s.fileSizes[0])
+        s.bitrateReward = vi.bitrateReward if len(vi.sizes) != 8 else [1, 2, 3, 12, 15, 20]
+        s.birateRewardMap = {x:y for x, y in zip(s.bitrates, s.bitrateReward)}
+        s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
 
 
 
@@ -45,6 +59,9 @@ def loadVideoTime(fileName):
 
     if len(dirname) != 0:
         importlib.sys.path = path
+    
+    if hasattr(videoInfo, "makePensieveReady") and videoInfo.makePensieveReady:
+        return PenseivVideoInfo(videoInfo)
     return VideoInfo(videoInfo)
 
 def dummyVideoInfo():
