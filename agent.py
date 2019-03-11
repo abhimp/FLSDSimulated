@@ -129,6 +129,13 @@ class Agent():
             return 0.0
         return self.bufferUpto - playbackTime
 
+    @property
+    def stallTime(self):
+        now = self._vEnv.getNow()
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        return max(0, playbackTime - self.bufferUpto)
 
 #=============================================
     def _rAddToBufferInternal(self, req, simIds = None):

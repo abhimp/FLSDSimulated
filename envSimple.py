@@ -30,7 +30,6 @@ class SimpleEnvironment():
         self._vWorkingTimes = []
         self._vTotalIdleTime = 0
         self._vTotalWorkingTime = 0
-        self._lastThrougput = 0
         
         self._vWorking = False
         self._vWorkingStatus = None

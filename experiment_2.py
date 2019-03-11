@@ -55,7 +55,7 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, result_dir):
 
         savePlotData(Xs, Ys, Zs, name, pltTitle, result_dir)
 
-def runExperiments(envCls, traces, vi, network, abr = None):
+def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -65,7 +65,7 @@ def runExperiments(envCls, traces, vi, network, abr = None):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         startsAt = np.random.randint(vi.duration/2)
-        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr)
+        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, resultpath = result_dir)
         simulator.runAt(startsAt, env.start, 5)
         ags.append(env)
     simulator.run()
@@ -86,12 +86,12 @@ def main(videofile, randstatefp, result_dir, subjects = None):
     network = P2PNetwork()
 
     testCB = {}
-    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
-    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
-    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
-    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
-    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
-    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
+    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA, result_dir)
+    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC, result_dir)
+    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC, result_dir)
+    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve, result_dir)
+    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network, None, result_dir)
+    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network, None, result_dir)
 
     results = {}
 

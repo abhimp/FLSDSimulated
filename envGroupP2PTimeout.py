@@ -1,11 +1,14 @@
 import os
-from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
-from group import GroupManager
 import math
-import randStateInit as randstate
+import json
 import matplotlib.pyplot as plt
 import mpld3
+
+from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
+from group import GroupManager
+import randStateInit as randstate
 from easyPlotViewer import EasyPlot
+from calculateMetric import measureQoE
 
 
 
@@ -79,6 +82,8 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
         self._vThroughPutData = []
         self._vDownloadQueue = []
         self._vServingPeers = {}
+        self._vDownloadedReqByItSelf = []
+        self._vTimeoutDataAndDecision = {} # segid -> data
 
     def playerStartedCB(self, *kw, **kwa):
         if self._vGroup:
@@ -104,6 +109,15 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
 
 #=============================================
     def _rFinish(self):
+        if self._vResultPath:
+            dpath = os.path.join(self._vResultPath, "groupP2PTimeout-timeoutdata")
+            if not os.path.isdir(dpath):
+                os.makedirs(dpath)
+            fpath = os.path.join(dpath, "%s.log"%(self._vPeerId))
+            with open(fpath, "w") as fp:
+                points = sorted(list(self._vTimeoutDataAndDecision.items()), key=lambda x:x[0])
+                for seg,pt in points:
+                    print(json.dumps(pt), file=fp)
         print(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
@@ -119,12 +133,25 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
         if self._vDead: return
 
 #=============================================
+    def _rAddToAgentBuffer(self, req):
+        segId = req.segId
+        if segId in self._vTimeoutDataAndDecision:
+            br = self._vVideoInfo.bitrates
+            ql = [self._vAgent._vQualitiesPlayed[-1], req.qualityIndex]
+            stall = self._vAgent.stallTime
+            reward = measureQoE(br, ql, stall, 0)
+            self._vTimeoutDataAndDecision[segId] += [reward]
+
+        self._vAgent._rAddToBufferInternal(req)
+
+#=============================================
 # return point after download completed i.e. on simulation event, Only for self dl
     def _rAddToBuffer(self, req, simIds = None):
         if self._vDead: return
         segId, clen = req.segId, req.clen
         seg = self._vSegmentStatus[segId]
         self._rDistributeToOther(req) #sending to others
+        self._vDownloadedReqByItSelf.append(req)
         if seg.status == SEGMENT_CACHED:
             return
         assert seg.status != SEGMENT_CACHED
@@ -137,7 +164,7 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
         self._rDownloadFromDownloadQueue()
 
         if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
-            self._vAgent._rAddToBufferInternal(req)
+            self._rAddToAgentBuffer(req)
 
         self._vThroughPutData += [(self.now, req.throughput)]
 
@@ -298,6 +325,29 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
         return ql
 
 #=============================================
+    def _rLogTimeoutDecisionData(self, segId, timeBudget, remoteStatus, localStatus, decision):
+        # decision -1 if wait for other peer to finish, >= 0 startdownloading
+        seg = self._vSegmentStatus[segId]
+        lastDownloads = [(0,0,0)]*5 + [(x.throughput, x.downloadStarted, x.downloadFinished) for x in self._vDownloadedReqByItSelf[-5:]]
+        lastLocalDownLoads = lastDownloads[-5:]
+
+        lastDownloads = [(0,0,0)]*5 + [(x.throughput, x.downloadStarted, x.downloadFinished) for x in seg.peerResponsible._vDownloadedReqByItSelf[-5:]]
+        lastRemoteDownLoads = lastDownloads[-5:]
+
+        lastRemoteDownLoads = tuple(zip(*lastRemoteDownLoads))
+        lastLocalDownLoads = tuple(zip(*lastLocalDownLoads))
+
+        localQualities = [0]*5 + self._vAgent._vQualitiesPlayed
+        localQualities = tuple(localQualities[-5:])
+
+        point = (timeBudget, localQualities,) + localStatus + lastLocalDownLoads + remoteStatus + lastRemoteDownLoads
+#         print(point)
+        assert segId not in self._vTimeoutDataAndDecision
+        dataPoint = self._vTimeoutDataAndDecision.setdefault(segId, [])
+        dataPoint += [point, decision]
+
+    
+#=============================================
     def _rPeerDownloadTimeout(self, downloader, segId, ql):
         seg = self._vSegmentStatus[segId]
         seg.peerTimeoutHappened = True
@@ -308,26 +358,33 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
             #it is very complecated. Need to know how much it have downloaded so far.
             #it will be great if we can measure download speed some how. Important thing
             #is get some prediction on peer finishing time.
-            elapsed, downloaded, clen = seg.peerResponsible._rGetPeerDownloadStatus(self, segId)
+            elapsed, downloaded, clen = remoteStatus = seg.peerResponsible._rGetPeerDownloadStatus(self, segId)
             timeleft = float("inf")
             ql = self._rReAdjustQl(ql)
-            estDlTime = self._rEstimateDownloadTime(segId, ql)
+
             if elapsed > 0 and downloaded > 0:
                 timeleft = round((clen - downloaded)*elapsed/downloaded, 3)
 
             timeToFinishDl = self._rEstimateDownloadTime(segId, ql)
+            localStatus = (0, 0, 0)
             if self._vDownloadPending:
-                elapsed, downloaded, clen = self._rDownloadStatus()
+                elapsed, downloaded, clen = localStatus = self._rDownloadStatus()
+
                 if downloaded > 0:
                     timeToFinishDl += (clen - downloaded)*elapsed/downloaded
                 else:
                     timeToFinishDl += clen * 8 / self._rPredictedThroughput()
 
-            if timeToFinishDl > timeleft:
-                return
             timeBudget = round(segId * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime, 3)
-            if timeleft <= timeBudget:
+            
+            if timeToFinishDl > timeleft:
+                self._rLogTimeoutDecisionData(segId, timeBudget, remoteStatus, localStatus, -1)
                 return
+            if timeleft <= timeBudget:
+                self._rLogTimeoutDecisionData(segId, timeBudget, remoteStatus, localStatus, -1)
+                return
+
+            self._rLogTimeoutDecisionData(segId, timeBudget, remoteStatus, localStatus, ql)
             seg.status = SEGMENT_PEER_WAITING
 
         if seg.status == SEGMENT_PEER_WAITING:
@@ -356,7 +413,7 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
             assert self._vAgent.nextSegmentIndex >= nextSegId
             if self._vAgent.nextSegmentIndex == nextSegId:
                 req= self._vCatched[nextSegId]
-                self._vAgent._rAddToBufferInternal(req)
+                self._rAddToAgentBuffer(req)
             return
 
         seg.autoEntryOver = True
@@ -460,7 +517,7 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
             seg.status = SEGMENT_CACHED
             self._vCatched[segId] = req
             if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
-                self._vAgent._rAddToBufferInternal(req)
+                self._rAddToAgentBuffer(req)
             node._vTotalUploaded += req.clen #this is not exactly the way it will
                                              #happen in the real world scenerio.
                                              #However, in real world,

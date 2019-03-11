@@ -112,77 +112,7 @@ def plotAgentsData(results, attrib, pltTitle, xlabel):
     plt.savefig(dpath + "_box.png", bbox_inches="tight")
 
 
-def plotBufferLens(results):
-    dpath = os.path.join(BUFFER_LEN_PLOTS)
-    if not os.path.isdir(dpath):
-        os.makedirs(dpath)
-    models = list(results.keys())
-    res = [results[r] for r in models]
-    res = list(zip(*res))
-
-    for it,exp in enumerate(res):
-        plt.clf()
-        plt.figure(figsize=(15, 5), dpi=150)
-        fig, ax1 = plt.subplots(figsize=(15, 5), dpi=150)
-        ax2 = ax1.twinx()
-        for i, ag in enumerate(exp):
-            pltData = ag._vAgent._vBufferLenOverTime
-            Xs, Ys = list(zip(*pltData))
-            ax1.plot(Xs, Ys, marker="x", label=models[i] + "-buffLen")
-
-            pltData = ag._vAgent._vQualitiesPlayedOverTime
-            Xs, Ys = list(zip(*pltData))
-            ax2.step(Xs, Ys, marker="o", label=models[i]+"-quality", where="post")
-        fig.legend(ncol = 2, loc = "upper center")
-        pltPath = os.path.join(dpath,"%04d.png"%(it))
-        fig.savefig(pltPath, bbox_inches="tight")
-
-
-
-def storeAsPlotViewer(path, fig, ag):
-    with open(path, "a") as fp:
-        print("<br><br>", file=fp)
-        print("<div><b>", ag, "</b></div>", file=fp)
-        print('<div style="float:left; display:inline-block; width:95%">', file=fp)
-        mpld3.save_html(fig, fp)
-        print('</div><div style="clear:both"></div><br>', file=fp)
-
-def plotIdleStallTIme(results):
-    dpath = os.path.join(STALLTIME_IDLETIME_PLOTS)
-    if not os.path.isdir(dpath):
-        os.makedirs(dpath)
-    models = list(results.keys())
-    res = [results[r] for r in models]
-    res = list(zip(*res))
-
-    colors = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
-
-    pltHtmlPath = os.path.join(dpath,"plot.html")
-    open(pltHtmlPath, "w").close()
-    for it,exp in enumerate(res):
-        plt.clf()
-        plt.figure(figsize=(15, 7), dpi=100)
-        fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
-        for i, ag in enumerate(exp):
-            pltData = ag._vAgent._vBufferLenOverTime
-            Xs, Ys = list(zip(*pltData))
-            ax1.plot(Xs, Ys, marker="x", label=models[i] + "-buffLen", c=colors[(2*i)%len(colors)])
-
-            pltData = ag._vIdleTimes
-            Xs, Ys = list(zip(*pltData))
-            ax1.step(Xs, Ys, marker="o", label=models[i]+"-quality", where="post", c=colors[(2*i+1)%len(colors)])
-
-        fig.legend(ncol = 2, loc = "upper center")
-        pltPath = os.path.join(dpath,"%04d.png"%(it))
-        ag = exp[models.index("GroupP2PBasic")]
-        label = "PeerId" + str(ag._vPeerId)
-        label += " NumNode:" + str(len(ag._vGroup.getAllNode(ag)))
-        label += " Quality Index: " + str(ag._vGroup.getQualityLevel(ag))
-#         fig.savefig(pltPath, bbox_inches="tight")
-
-        storeAsPlotViewer(pltHtmlPath, fig, label)
-
-def runExperiments(envCls, traces, vi, network, abr = None):
+def runExperiments(envCls, traces, vi, network, abr = None, result_dir=None):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -192,7 +122,7 @@ def runExperiments(envCls, traces, vi, network, abr = None):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
         startsAt = np.random.randint(vi.duration/2)
-        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr)
+        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir)
         simulator.runAt(startsAt, env.start, 5)
         ags.append(env)
     simulator.run()
