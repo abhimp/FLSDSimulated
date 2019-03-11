@@ -20,14 +20,14 @@ from abrPensiev import AbrPensieve
 
 RESULT_DIR = "results"
 
-def savePlotData(Xs, Ys, legend, pltTitle, result_dir):
+def savePlotData(Xs, Ys, Zs, legend, pltTitle, result_dir):
     dpath = os.path.join(result_dir, pltTitle.replace(" ", "_"))
     if not os.path.isdir(dpath):
         os.makedirs(dpath)
     fpath = os.path.join(dpath, legend + ".dat")
     with open(fpath, "w") as fp:
         assert len(Xs) == len(Ys)
-        st = "\n".join(str(x) + "\t" + str(y) for x, y in zip(Xs, Ys))
+        st = "\n".join(str(x) + "\t" + str(y) + "\t" + str(z) for x, y, z in zip(Xs, Ys, Zs))
         fp.write(st)
 
 def saveRawResults(results, result_dir):
@@ -45,13 +45,15 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, result_dir):
     assert min([len(res) for name, res in results.items()]) == max([len(res) for name, res in results.items()])
     pltData = {}
     for name, res in results.items():
-        Xs, Ys = [], []
+        Xs, Ys, Zs = [], [], []
         for x, ag in enumerate(res):
             y = eval("ag." + attrib)
+            z = ag.networkId
             Xs.append(x)
             Ys.append(y)
+            Zs.append(y)
 
-        savePlotData(Xs, Ys, name, pltTitle, result_dir)
+        savePlotData(Xs, Ys, Zs, name, pltTitle, result_dir)
 
 def runExperiments(envCls, traces, vi, network, abr = None):
     simulator = Simulator()
