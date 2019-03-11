@@ -84,6 +84,12 @@ class AbrFastMPC:
         #self.a_batch = input_dict['a_batch']
         #self.r_batch = input_dict['r_batch']
 
+    def stopAbr(self):
+        self.log_file.close()
+        self.log_file = None
+        del self.input_dict['log_file']
+
+
     def get_chunk_size(self, quality, index):
         if index >= self.video.segmentCount: return 0
         return self.video.fileSizes[quality][index]
