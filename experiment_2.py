@@ -71,7 +71,7 @@ def runExperiments(envCls, traces, vi, network, abr = None):
         assert a._vFinished # or a._vDead
     return ags
 
-def main(videofile, randstatefp, result_dir):
+def main(videofile, randstatefp, result_dir, subjects = None):
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState(randstatefp)
     traces = load_trace.load_trace()
@@ -84,16 +84,18 @@ def main(videofile, randstatefp, result_dir):
     network = P2PNetwork()
 
     testCB = {}
-#     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
-#     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
-#     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
-#     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
-#     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
+    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
+    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
+    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
 
     results = {}
 
     for name, cb in testCB.items():
+        if subjects and name not in subjects:
+            continue
         randstate.loadCurrentState(randstatefp)
         ags = runExperiments(*cb)
         results[name] = ags
@@ -114,6 +116,7 @@ if __name__ == "__main__":
     resNum = "test"
     vidFile = "./videofilesizes/sizes_penseive.py"
     testcase = "tcrand"
+    subjects = "BOLA,FastMPC,RobustMPC,Penseiv,GroupP2PBasic,GroupP2PTimeout"
 
     if len(sys.argv) > 1:
         vidFile = sys.argv[1]
@@ -121,7 +124,10 @@ if __name__ == "__main__":
         resNum = sys.argv[2]
     if len(sys.argv) > 3:
         testcase = sys.argv[3]
+    if len(sys.argv) > 4:
+        subjects = sys.argv[4]
 
+    subjects = subjects.split(",")
 
     tc = testcase
 #     for tc in ["tc1", "tc2", "tc3"]:
