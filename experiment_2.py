@@ -139,4 +139,4 @@ if __name__ == "__main__":
     if not os.path.isfile(randstatefp):
         randstate.storeCurrentState(randstatefp) #comment this line to use same state as before
 
-    main(vidFile, randstatefp, result_dir)
+    main(vidFile, randstatefp, result_dir, subjects)
