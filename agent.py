@@ -79,36 +79,6 @@ class Agent():
     def maxPlayerBufferLen(self):
         return self._vMaxPlayerBufferLen
 
-    def addStartupCB(self, func):
-        self._vStartUpCallback.append(func)
-
-#=============================================
-    def _rNextQuality(self, req):
-        if self._vDead: return
-
-        assert req.segId == self._vNextSegmentIndex
-        self._vRequests.append(req)
-
-#=============================================
-    def _rWhenToDownload(self, *kw):
-        if self._vDead: return
-
-        if len(self._vRequests) == 0:
-            return 0, 0
-        times, clens = list(zip(*[[req.timetaken, req.clen] for req in self._vRequests[:3]]))
-        avg = sum(clens)*8/sum(times)
-        level = 0
-        for ql, q in enumerate(self._vVideoInfo.bitrates):
-            if q > avg:
-                break
-            level = ql
-#         self._vCurrentBitrateIndex = level
-        buflen = self.bufferUpto - self._vPlaybacktime
-        if (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) > buflen:
-            return 0, level
-        sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
-        return sleepTime, level
-
     @property
     def playbackTime(self):
         now = self._vEnv.getNow()
@@ -136,6 +106,39 @@ class Agent():
 
         playbackTime = self._vPlaybacktime + timeSpent
         return max(0, playbackTime - self.bufferUpto)
+
+    def addStartupCB(self, func):
+        self._vStartUpCallback.append(func)
+
+    def bufferAvailableIn(self):
+        return max(0, self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen + round(self.bufferLeft, 3))
+
+#=============================================
+    def _rNextQuality(self, req):
+        if self._vDead: return
+
+        assert req.segId == self._vNextSegmentIndex
+        self._vRequests.append(req)
+
+#=============================================
+    def _rWhenToDownload(self, *kw):
+        if self._vDead: return
+
+        if len(self._vRequests) == 0:
+            return 0, 0
+        times, clens = list(zip(*[[req.timetaken, req.clen] for req in self._vRequests[:3]]))
+        avg = sum(clens)*8/sum(times)
+        level = 0
+        for ql, q in enumerate(self._vVideoInfo.bitrates):
+            if q > avg:
+                break
+            level = ql
+#         self._vCurrentBitrateIndex = level
+        buflen = self.bufferUpto - self._vPlaybacktime
+        if (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) > buflen:
+            return 0, level
+        sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
+        return sleepTime, level
 
 #=============================================
     def _rAddToBufferInternal(self, req, simIds = None):

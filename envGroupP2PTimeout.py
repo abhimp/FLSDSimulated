@@ -134,6 +134,10 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
 
 #=============================================
     def _rAddToAgentBuffer(self, req):
+        waitTime = self._vAgent.bufferAvailableIn()
+        if waitTime > 0:
+            self.runAfter(waitTime, self._rAddToAgentBuffer, req)
+            return
         segId = req.segId
         if segId in self._vTimeoutDataAndDecision:
             br = self._vVideoInfo.bitrates
@@ -300,6 +304,12 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
             self._rAddToDownloadQueue(nextSegId, nextQuality)
             return
 
+        if seg.status == SEGMENT_PEER_WORKING: 
+            if seg.peerTimeoutRef != -1 and not seg.peerTimeoutHappened:
+                timeout, ql = self._rTimeoutForPeer(nextSegId)
+                downloader = seg.peerResponsible
+                ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+            return
         assert False
 
 

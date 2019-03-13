@@ -12,7 +12,7 @@ TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
 class SimpleEnvironment():
-    def __init__(self, vi, traces, simulator, abr = None, peerId = None, logpath=None, resultpath=None, *kw, **kws):
+    def __init__(self, vi, traces, simulator, abr = None, peerId = -1, logpath=None, resultpath=None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
 #         self._vLastBandwidthTime = 
@@ -25,7 +25,7 @@ class SimpleEnvironment():
         self._vFinished = False
         self._vConnectionSpeed = np.mean(self._vCookedBW)
         self._vLastDownloadedAt = 0
-        self._vPeerId = peerId if peerId else np.random.randint(1000000)
+        self._vPeerId = peerId if peerId >= 0 else np.random.randint(1000000)
         self._vIdleTimes = []
         self._vWorkingTimes = []
         self._vTotalIdleTime = 0

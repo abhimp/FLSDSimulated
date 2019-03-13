@@ -131,7 +131,7 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir=None):
     return ags
 
 def main():
-#     randstate.storeCurrentState() #comment this line to use same state as before
+    randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
@@ -139,13 +139,13 @@ def main():
 #     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
-    network = P2PNetwork()
+    network = P2PNetwork("./graph/p2p-Gnutella04.txt")
 
     testCB = {}
     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
-    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+#     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
 #     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
-    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+#     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
 
@@ -180,7 +180,7 @@ def main2():
     testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv)
     testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv)
     testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv)
-#     testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
+    testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
     testCB["GroupP2P"] = (experimentGroupP2P)
 #     testCB["SimpleP2P"] = experimentSimpleP2P
 
