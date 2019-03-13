@@ -145,7 +145,8 @@ class SingleAgentEnv():
     '''
     def getTracePointer(self, neighbor):
         trace_timestep = self.getTraceTimestep(neighbor)
-        print("Trace timestep: %s" % str(trace_timestep))
+        print("Trace timestep: %s" % str(trace_timestep)) 
+        cooked_time = self.cookedTime[neighbor]
         i = bisect_left(cooked_time, trace_timestep)
         
         if cooked_time[i] != trace_timestep:
@@ -192,7 +193,7 @@ class SingleAgentEnv():
         candidates = np.array([])
         for neighbor in self.peers:
             if segId in self.neighbor_envs[neighbor].collectedChunks:
-               candidates.append(neighbor)
+               np.append(candidates, neighbor)
         
         print("Log: Sim now: %s" % self.getNow())
         if len(candidates) == 0:
@@ -211,29 +212,35 @@ class SingleAgentEnv():
 
 
     def timeTaken(self, neighbor, data):
-        i = getTracePointer(neighbor)
         duration = data._segmentDuration
         chunk_len = data._clen
         # start point in the trace data
         start_trace_timestep = self.getTraceTimestep(neighbor)
         i = self.getTracePointer(neighbor)
-
+        '''
         while True:
             throughput = self.cookedBW[i]
+            if i == 0:
+                # start of the trace - make it 
             trace_dur = self.cookedTime[i]-self.cookedTime[i-1]
-
+        '''
+        print("Trace file: %s" % self.traceFile[neighbor])
+        print("Duration: %f\n Start trace timestep: %s\n pointer=%s\n" % (duration, str(start_trace_timestep), str(i)))
+        return 0
 
     '''
     Fetches the segment nextSegId from neighbor
     Right now,the quality param as the neighbor would have only one quality of the segment
     '''
-    def fetchSegment(self, neighbor, nextSegId, nextQuality, sleepTime):
+    def fetchSegment(self, neighbor, nextSegId, nextQuality):
         timeneeded = 0.0
         if neighbor == SUPERPEER_ID:
             # the super peer is used to receive the segment
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
             # TODO: add RTT to timeneeded
             timeneeded += self.timeTaken(neighbor, data)    
+            # CONTINUE HERE
+                
 
     '''
     This is the entry point which the agent calls for downloading the data
@@ -248,7 +255,7 @@ class SingleAgentEnv():
         neighborToFetchFrom = self.getPeerToFetchFrom(nextSegId)
         print(neighborToFetchFrom)
         
-        self.simulator.runAfter(sleepTime, self.fetchSegment, neighbor, nextSegId, nextQuality)
+        self.simulator.runAfter(sleepTime, self.fetchSegment, neighborToFetchFrom, nextSegId, nextQuality)
 
 
 def setupEnv(traces, vi, network, abr=None):
