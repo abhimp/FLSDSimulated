@@ -31,6 +31,7 @@ class P2PNetwork():
         distance = self.getDistance(n1, n2)
         distance = 9 if distance > 9 else distance
         rtt = 2**distance
+        rtt *= np.random(0.95, 1.05)
         return rtt/1000.0
 
     def transmissionTime(self, n1, n2, size, buf=64*1024): #default 5mb data
