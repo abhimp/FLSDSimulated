@@ -148,9 +148,7 @@ class SingleAgentEnv():
         print("Trace timestep: %s" % str(trace_timestep)) 
         cooked_time = self.cookedTime[neighbor]
         i = bisect_left(cooked_time, trace_timestep)
-        
-        if cooked_time[i] != trace_timestep:
-            i -= 1
+        print("Detected bw is %s" % str(self.cookedBW[neighbor][i]))
         return i
 
 
@@ -210,32 +208,47 @@ class SingleAgentEnv():
         return candidates[np.argmax([self.getBandwidth(n) for n in candidates])]
 
 
-
+    '''Compute the time taken to fetch a particular segment from neighbor
+    '''
     def timeTaken(self, neighbor, data):
         duration = data._segmentDuration
         chunk_len = data._clen
         # start point in the trace data
         start_trace_timestep = self.getTraceTimestep(neighbor)
         i = self.getTracePointer(neighbor)
-        '''
+        
+        sent_size = 0.0  # the amount of data sent
+        time = 0.0
         while True:
-            throughput = self.cookedBW[i]
+            throughput = self.cookedBW[neighbor][i]
             if i == 0:
-                # start of the trace - make it 
-            trace_dur = self.cookedTime[i]-self.cookedTime[i-1]
-        '''
-        print("Trace file: %s" % self.traceFile[neighbor])
-        print("Duration: %f\n Start trace timestep: %s\n pointer=%s\n" % (duration, str(start_trace_timestep), str(i)))
-        return 0
+                # increment it as we need to use from 1 to len(trace)-1
+                i += 1
 
-    '''
-    Fetches the segment nextSegId from neighbor
+            trace_dur = self.cookedTime[neighbor][i]-self.cookedTime[neighbor][i-1]
+            # 0.95 accounts for TCP overhead and loss
+            packet_payload = throughput * (1024 * 1024 / 8) * trace_dur * 0.95
+            # if we near the end of the segment/chunk, we need to compute only the fraction of the duration taken
+            if sent_size + packet_payload >= chunk_len:
+                frac_time = trace_dur * (chunk_len-sent_size) / packet_payload
+                time += frac_time
+                break
+            time += trace_dur
+            sent_size += packet_payload
+
+        time += 0.08 #delay
+        time *= np.random.uniform(0.9, 1.1)
+        return time
+
+
+    '''Fetches the segment nextSegId from neighbor
     Right now,the quality param as the neighbor would have only one quality of the segment
     '''
     def fetchSegment(self, neighbor, nextSegId, nextQuality):
         timeneeded = 0.0
         if neighbor == SUPERPEER_ID:
             # the super peer is used to receive the segment
+            print("Fetching from superpeer %s %s" % (str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
             # TODO: add RTT to timeneeded
             timeneeded += self.timeTaken(neighbor, data)    
