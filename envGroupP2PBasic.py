@@ -234,6 +234,12 @@ class GroupP2PEnvBasic(SimpleEnvironment):
             self._rAddToDownloadQueue(nextSegId, nextQuality)
             return
 
+        if seg.status == SEGMENT_PEER_WORKING: 
+            if seg.peerTimeoutRef != -1 and not seg.peerTimeoutHappened:
+                timeout, ql = self._rTimeoutForPeer(nextSegId)
+                downloader = seg.peerResponsible
+                ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+            return
         assert False
 
 

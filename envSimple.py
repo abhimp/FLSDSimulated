@@ -117,9 +117,8 @@ class SimpleEnvironment():
             self._vTotalIdleTime += idleTime
             self._vWorkingTimes += [(now, 0, nextSegId)]
 
-        nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
-        if nextDur >= self._vVideoInfo.segmentDuration:
-            nextDur = self._vVideoInfo.segmentDuration
+        nextDur = self._vVideoInfo.getSegDuration(nextSegId)
+
         chsize = self._vVideoInfo.fileSizes[nextQuality][nextSegId]
         time = 0
         sentSize = 0
