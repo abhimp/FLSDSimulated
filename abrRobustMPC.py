@@ -73,7 +73,8 @@ def setup_mpc(log_file_path=LOG_FILE):
     return input_dict
 
 class AbrRobustMPC:
-    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
+    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
+        log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrRobustMPC.log")
         self.video = videoInfo
         self.agent = agent
         input_dict = setup_mpc(log_file_path)
@@ -85,6 +86,11 @@ class AbrRobustMPC:
         #self.r_batch = input_dict['r_batch']
         self.pastBandwidthEsts = []
         self.pastErrors = []
+
+    def stopAbr(self):
+        self.log_file.close()
+        self.log_file = None
+        del self.input_dict['log_file']
 
     def get_chunk_size(self, quality, index):
         if index >= self.video.segmentCount: return 0

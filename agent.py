@@ -15,9 +15,11 @@ class SimpAbr():
 
 class Agent():
     __count = 0
-    def __init__(self, videoInfo, env, abrClass = None):
+    def __init__(self, videoInfo, env, abrClass = None, logpath=None, resultpath=None):
         self._id = self.__count
         self.__count += 1
+        self._vLogPath = logpath
+        self._vResultPath = resultpath
         self._vEnv = env
         self._vVideoInfo = videoInfo
         self._vLastBitrateIndex = 0
@@ -37,7 +39,7 @@ class Agent():
         self._vMaxPlayerBufferLen = 50
         self._vTimeouts = []
         self._vRequests = [] # the rquest object
-        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self)
+        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self, log_file_path=logpath)
         self._vSetQuality = abr.getNextDownloadTime if abr else self._rWhenToDownload
         self._vStartingPlaybackTime = 0
         self._vStartingSegId = 0
@@ -48,12 +50,12 @@ class Agent():
         self._vDownloadPending = False
         self._vDead = False
         self._vBufferLenOverTime = [(0,0)]
-        self._vQualitiesPlayedOverTime = [(0,0)]
+        self._vQualitiesPlayedOverTime = []
 
         self._vFirstSegmentDlTime = 0
         self._vSegmentSkiped = 0
         self._vStartUpCallback = []
-        self._vTimeSlipage = []
+        self._vTimeSlipage = [(0,0,0)]
 
 
     @property
@@ -77,8 +79,39 @@ class Agent():
     def maxPlayerBufferLen(self):
         return self._vMaxPlayerBufferLen
 
+    @property
+    def playbackTime(self):
+        now = self._vEnv.getNow()
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        if playbackTime > self.bufferUpto:
+            return self.bufferUpto
+        return round(playbackTime, 3)
+
+    @property
+    def bufferLeft(self):
+        now = self._vEnv.getNow()
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        if playbackTime > self.bufferUpto:
+            return 0.0
+        return self.bufferUpto - playbackTime
+
+    @property
+    def stallTime(self):
+        now = self._vEnv.getNow()
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        return max(0, playbackTime - self.bufferUpto)
+
     def addStartupCB(self, func):
         self._vStartUpCallback.append(func)
+
+    def bufferAvailableIn(self):
+        return max(0, self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen + round(self.bufferLeft, 3))
 
 #=============================================
     def _rNextQuality(self, req):
@@ -107,27 +140,6 @@ class Agent():
         sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
         return sleepTime, level
 
-    @property
-    def playbackTime(self):
-        now = self._vEnv.getNow()
-        timeSpent = now - self._vLastEventTime
-
-        playbackTime = self._vPlaybacktime + timeSpent
-        if playbackTime > self.bufferUpto:
-            return self.bufferUpto
-        return round(playbackTime, 3)
-
-    @property
-    def bufferLeft(self):
-        now = self._vEnv.getNow()
-        timeSpent = now - self._vLastEventTime
-
-        playbackTime = self._vPlaybacktime + timeSpent
-        if playbackTime > self.bufferUpto:
-            return 0.0
-        return self.bufferUpto - playbackTime
-        
-            
 #=============================================
     def _rAddToBufferInternal(self, req, simIds = None):
         if self._vDead: return
@@ -148,8 +160,8 @@ class Agent():
             playbackTime = self.bufferUpto
 
         if not self._vIsStarted:
-            expectedPlaybackTime = 0
             startUpDelay = now - self._vStartedAt
+            expectedPlaybackTime = startUpDelay
             stallTime = 0
             playbackTime = segPlaybackStartTime
             bufferUpto = segPlaybackEndTime
@@ -158,12 +170,13 @@ class Agent():
 
             if  self._vCanSkip and expectedPlaybackTime - PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
                 #need to skip this segment
-                self._vNextSegmentIndex += 1
+                expectedSegId = int(expectedPlaybackTime / self._vVideoInfo.segmentDuration) + 1
+                self._vSegmentSkiped += expectedSegId - self._vNextSegmentIndex
+                self._vNextSegmentIndex = expectedSegId
                 if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
                     self._vEnv.finishedAfter(1)
                     return
                 self._rDownloadNextData(0)
-                self._vSegmentSkiped += 1
                 return
 
             if expectedPlaybackTime < segPlaybackStartTime:
@@ -211,7 +224,7 @@ class Agent():
         buflen = self.bufferUpto - self._vPlaybacktime
         self._vBufferLenOverTime.append((now, buflen))
         self._vQualitiesPlayed.append(ql)
-        self._vQualitiesPlayedOverTime.append((segPlaybackStartTime, ql))
+        self._vQualitiesPlayedOverTime.append((now + buflen - segDur, ql, self.nextSegmentIndex))
         self._vNextSegmentIndex += 1
         if self._vNextSegmentIndex == len(self._vVideoInfo.fileSizes[0]):
             self._vEnv.finishedAfter(buflen)
@@ -324,18 +337,19 @@ class Agent():
     def _rCalculateQoE(self):
         if self._vDead: return
         if self._vPlaybacktime == 0:
-            return
+            return 0 #not sure. But I think it is better
 
         return measureQoE(self._vVideoInfo.bitrates, self._vQualitiesPlayed, self._vTotalStallTime, self._vStartUpDelay, False)
 
 #=============================================
     def _rFinish(self):
         if self._vDead: return
+#         assert self.playbackTime > 0
         if self._vAbr and "stopAbr" in dir(self._vAbr) and callable(self._vAbr.stopAbr):
             self._vAbr.stopAbr()
         self._vFinished = True
         self._vBufferLenOverTime.append((self._vEnv.getNow(), 0))
-        self._vQualitiesPlayedOverTime.append((self._vEnv.getNow(), 0))
+        self._vQualitiesPlayedOverTime.append((self._vEnv.getNow(), 0, -1))
         print("Simulation finished at:", self._vEnv.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay, "firstSegDlTime:", self._vFirstSegmentDlTime, "segSkipped:", self._vSegmentSkiped)
         print("QoE:", self._rCalculateQoE())
         print("stallTime:", self._vStallsAt)

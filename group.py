@@ -1,14 +1,15 @@
 
-SPEED_TOLARANCE_PERCENT = 50
+SPEED_TOLARANCE_PERCENT = 100
 
 class Group():
-    def __init__(s, ql, network):
+    def __init__(s, ql, network, lonePeer = False):
         s.nodes = []
         s._schedules = {}
         s.segMents = 0
         s.nodeAddedWithSegId = {}
         s.qualityLevel = ql
         s.network = None
+        s.lonePeer = lonePeer
 
     def __schedule(s, segId):
         nodeslist = list(s.nodes)
@@ -60,6 +61,8 @@ class Group():
         return node in s.nodeAddedWithSegId
 
     def isSuitable(self, node):
+        if self.lonePeer:
+            return False
         if not self.network: return True
         for n in self.nodes:
             if not self.network.isClose(node.networkId, n.networkId):
@@ -80,6 +83,8 @@ class GroupManager():
         ql = s.defaultQL if ql < 0 else ql
 
         conn = node.connectionSpeedBPS
+
+        lonePeer = False
         
         if s.videoInfo:
             connQl = ql
@@ -91,6 +96,9 @@ class GroupManager():
 #             if ql != connQl:
 #                 print("assiging ql:", connQl, "instead of", ql)
             ql = connQl
+            
+            if ql == 0 and connTol < s.videoInfo.bitrates[ql]:
+                lonePeer = True  #there will be no other group for this peer
 
         group = None
         for grp in s.groups.get(ql, []):
@@ -100,7 +108,7 @@ class GroupManager():
                 break
 
         if not group:
-            group = Group(ql, s.network)
+            group = Group(ql, s.network, lonePeer)
             grps = s.groups.setdefault(ql, [])
             grps.append(group)
 
