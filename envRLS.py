@@ -26,6 +26,7 @@ This is the environment for a single agent. The actual agent delegates responsib
 Code mostly copied from envSimple.SingleEnvironment
 '''
 class SingleAgentEnv():
+    
     def __init__(self, vi, traces, simulator, nodeId, abr=None):
         # the catch here is that the traces we have is a map of neighbor node link to the cooked trace
         self.cookedTime, self.cookedBW, self.traceFile = {}, {}, {}
@@ -69,6 +70,7 @@ class SingleAgentEnv():
         if nodeId == SUPERPEER_ID:
             self.init_superpeer()
     
+
     '''Performs initialization required for a super peer
     Invoked only when nodeId = SUPERPEER_ID
     '''
@@ -96,7 +98,15 @@ class SingleAgentEnv():
     '''
     def getData(self, segid, quality):     
         assert segid in self.collectedChunks
-        return self.collectedChunks[segid][quality]
+        # there is atleast one quality present for the requested segid
+        assert len(self.collectedChunks[segid]) > 0
+        if quality in self.collectedChunks[segid]:
+            return self.collectedChunks[segid][quality]
+        else:
+            # TODO: make sure this branch is not called by inserting appropriate logic in fetchSegment
+            print("Node %s: Requested quality %s for segid %s not available" % (self.nodeId, str(quality), str(segid)))
+            for quality in self.collectedChunks[segid]:
+                return self.collectedChunks[segid][quality]
         
 
     def getNow(self):
@@ -119,13 +129,11 @@ class SingleAgentEnv():
 
     '''
     Get the corresponding timestep in the trace data to the current time in the simulator
-    '''
-   
+    '''   
     def getTraceTimestep(self, neighbor):
         now = self.simulator.getNow()
         assert self.start_time != None
         time_elapsed = now - self.start_time
-        print("Now: %s Start time: %s Time elapsed: %s" % (str(now), str(self.start_time), str(time_elapsed)))
 
         cooked_time = self.cookedTime[neighbor]
         i = self.startBandwidthPtr[neighbor]
@@ -135,10 +143,10 @@ class SingleAgentEnv():
         # as we will loop the trace after 'total_trace_time' period, take modulo 
         time_elapsed = time_elapsed % total_trace_time
         
-        print("total trace time: %s trace start time: %s Time elapsed: %s" % (str(total_trace_time), str(trace_start_time), str(time_elapsed)))
         # corresponding time to simulator.getNow() in the trace dataset
         trace_timestep = (trace_start_time + time_elapsed) % total_trace_time
         return trace_timestep 
+
 
     '''
     Get the present pointer to the trace dataset according to the current time in the simulator
@@ -148,9 +156,7 @@ class SingleAgentEnv():
         print("Trace timestep: %s" % str(trace_timestep)) 
         cooked_time = self.cookedTime[neighbor]
         i = bisect_left(cooked_time, trace_timestep)
-        
-        if cooked_time[i] != trace_timestep:
-            i -= 1
+        print("Detected bw is %s" % str(self.cookedBW[neighbor][i]))
         return i
 
 
@@ -195,10 +201,8 @@ class SingleAgentEnv():
             if segId in self.neighbor_envs[neighbor].collectedChunks:
                np.append(candidates, neighbor)
         
-        print("Log: Sim now: %s" % self.getNow())
         if len(candidates) == 0:
             # fetch from superpeer
-            print(SUPERPEER_ID, "Bandwidth: %s" % str(self.getBandwidth(SUPERPEER_ID)))
             return SUPERPEER_ID
        
         # the bandwidth changes cannot be predicted by the node throughout time, so it takes into consideration the present bandwidth of the link and calculates throughput accordingly
@@ -210,37 +214,61 @@ class SingleAgentEnv():
         return candidates[np.argmax([self.getBandwidth(n) for n in candidates])]
 
 
-
+    '''Compute the time taken to fetch a particular segment from neighbor
+    '''
     def timeTaken(self, neighbor, data):
         duration = data._segmentDuration
         chunk_len = data._clen
         # start point in the trace data
         start_trace_timestep = self.getTraceTimestep(neighbor)
         i = self.getTracePointer(neighbor)
-        '''
+        
+        sent_size = 0.0  # the amount of data sent
+        time = 0.0
         while True:
-            throughput = self.cookedBW[i]
+            throughput = self.cookedBW[neighbor][i]
             if i == 0:
-                # start of the trace - make it 
-            trace_dur = self.cookedTime[i]-self.cookedTime[i-1]
-        '''
-        print("Trace file: %s" % self.traceFile[neighbor])
-        print("Duration: %f\n Start trace timestep: %s\n pointer=%s\n" % (duration, str(start_trace_timestep), str(i)))
-        return 0
+                # increment it as we need to use from 1 to len(trace)-1
+                i += 1
 
-    '''
-    Fetches the segment nextSegId from neighbor
+            trace_dur = self.cookedTime[neighbor][i]-self.cookedTime[neighbor][i-1]
+            # 0.95 accounts for TCP overhead and loss
+            packet_payload = throughput * (1024 * 1024 / 8) * trace_dur * 0.95
+            # if we near the end of the segment/chunk, we need to compute only the fraction of the duration taken
+            if sent_size + packet_payload >= chunk_len:
+                frac_time = trace_dur * (chunk_len-sent_size) / packet_payload
+                time += frac_time
+                break
+            time += trace_dur
+            sent_size += packet_payload
+
+        time += 0.08 #delay
+        time *= np.random.uniform(0.9, 1.1)
+        return time
+
+
+    '''Fetches the segment nextSegId from neighbor
     Right now,the quality param as the neighbor would have only one quality of the segment
     '''
     def fetchSegment(self, neighbor, nextSegId, nextQuality):
         timeneeded = 0.0
         if neighbor == SUPERPEER_ID:
             # the super peer is used to receive the segment
+            print("Fetching from superpeer %s %s" % (str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
-            # TODO: add RTT to timeneeded
-            timeneeded += self.timeTaken(neighbor, data)    
-            # CONTINUE HERE
-                
+        else:
+            print("Fetching from peer %d %s %s" % (neighbor, str(nextSegId), str(nextQuality)))
+            data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
+        
+        segment_duration = 
+        # TODO: add RTT to timeneeded
+        time_taken= self.timeTaken(neighbor, data)    
+        timeneeded += time_taken
+        now = simulator.now()
+        # TODO: doubt: why use nextDur? 
+        self.simulator.runAfter(timeneeded, self.postFetchSegment, nextQuality, now, nextDur, nextSegId, chsize, simIds)
+
+
 
     '''
     This is the entry point which the agent calls for downloading the data
