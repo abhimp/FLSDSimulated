@@ -113,7 +113,8 @@ def incId():
     SETUP_ABR_CALL_COUNTER += 1
 
 class AbrPensieve:
-    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
+    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
+        log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrPensieve.log")
         self.agent = agent
         self.video = videoInfo
         self.parent_conn, child_conn = Pipe()

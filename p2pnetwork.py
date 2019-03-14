@@ -19,6 +19,9 @@ class P2PNetwork():
         for node in nodes:
             yield node
 
+    def numNodes(self):
+        return len(self.grp.nodes())
+
     def getDistance(self, n1, n2):
         return nx.shortest_path_length(self.grp, n1, n2)
 
@@ -29,13 +32,17 @@ class P2PNetwork():
 
     def getRtt(self, n1, n2):
         distance = self.getDistance(n1, n2)
-        distance = 9 if distance > 9 else distance
+        distance = min(9, distance)
+        distance = max(2, distance)
+
         rtt = 2**distance
+        rtt *= np.random.uniform(0.95, 1.05)
         return rtt/1000.0
 
-    def transmissionTime(self, n1, n2, size, buf=64*1024): #default 5mb data
+    def transmissionTime(self, n1, n2, size, buf=64*1024, maxSpeed=4000000): #default 5mb data
         rtt = self.getRtt(n1, n2)
         speed = buf * 8 / rtt
+        speed = min(4000000, speed)
         time = size*8/speed
         time *= np.random.uniform(0.95, 1.05)
         return time

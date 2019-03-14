@@ -72,7 +72,8 @@ def setup_mpc(log_file_path=LOG_FILE):
     return input_dict
 
 class AbrFastMPC:
-    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
+    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
+        log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrFastMPC.log")
         self.video = videoInfo
         self.agent = agent
         input_dict = setup_mpc(log_file_path)
@@ -82,6 +83,12 @@ class AbrFastMPC:
         self.s_batch = input_dict['s_batch']
         #self.a_batch = input_dict['a_batch']
         #self.r_batch = input_dict['r_batch']
+
+    def stopAbr(self):
+        self.log_file.close()
+        self.log_file = None
+        del self.input_dict['log_file']
+
 
     def get_chunk_size(self, quality, index):
         if index >= self.video.segmentCount: return 0
