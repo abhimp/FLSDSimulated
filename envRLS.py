@@ -159,10 +159,10 @@ class SingleAgentEnv():
     '''
     def getTracePointer(self, neighbor):
         trace_timestep = self.getTraceTimestep(neighbor)
-        print("Trace timestep: %s, Trace file: %s" % (str(trace_timestep), str(self.traceFile[neighbor]))) 
+#        print("Trace timestep: %s, Trace file: %s" % (str(trace_timestep), str(self.traceFile[neighbor]))) 
         cooked_time = self.cookedTime[neighbor]
         i = bisect_left(cooked_time, trace_timestep)
-        print("Detected bw is %s" % str(self.cookedBW[neighbor][i]))
+#        print("Detected bw is %s" % str(self.cookedBW[neighbor][i]))
         return i
 
 
@@ -202,12 +202,14 @@ class SingleAgentEnv():
         3. if none have it, use the super peer.
         '''
         
-        candidates = np.array([])
-        print("Node %d:" % self.nodeId)
+        candidates = []
+#        print("Node %d: fetching peers for seg id %d" % (self.nodeId, segId))
         for neighbor in self.peers:
+            #print(neighbor, self.neighbor_envs[neighbor].collectedChunks)
             if segId in self.neighbor_envs[neighbor].collectedChunks:
-               np.append(candidates, neighbor)
-        
+ #               print("Candidate %d\n" % neighbor)     
+                candidates.append(neighbor)
+    #      print("Candidates", candidates)
         if len(candidates) == 0:
             # fetch from superpeer
             return SUPERPEER_ID
@@ -218,7 +220,10 @@ class SingleAgentEnv():
         # 1. Best bandwidth [x]
         # 2, Best available quality of segment [ ]
         # 3. Greedy QoE optimization [ ]
-        return candidates[np.argmax([self.getBandwidth(n) for n in candidates])]
+
+        bandwidths = [self.getBandwidth(n) for n in candidates]
+        print(candidates)
+        return candidates[np.argmax([bandwidths])]
 
 
     '''Compute the time taken to fetch a particular segment from neighbor
@@ -285,6 +290,10 @@ class SingleAgentEnv():
     def postFetchSegment(self, quality, start_time, segment_duration, segid, chsize):
         now = self.simulator.getNow()
         req = SegmentRequest(quality, start_time, now, segment_duration, segid, chsize, self)
+        # add to collected chunks
+        if segid not in self.collectedChunks:
+            self.collectedChunks[segid] = {}
+        self.collectedChunks[segid][quality] = req
         self.addToBuffer(req)
 
     
