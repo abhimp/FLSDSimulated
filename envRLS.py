@@ -71,6 +71,17 @@ class SingleAgentEnv():
             self.init_superpeer()
     
 
+    '''Returns duration of a particular segment ad quality
+    '''
+    def getDuration(self, segid, quality):
+        if segid == len(self.videoInfo.fileSizes[quality])-1:
+            # the last segment might not have duration as vi.segmentDuration
+            duration = self.videoInfo.duration - segid*self.videoInfo.segmentDuration
+        else:
+            duration = self.videoInfo.segmentDuration
+        return duration    
+
+
     '''Performs initialization required for a super peer
     Invoked only when nodeId = SUPERPEER_ID
     '''
@@ -78,12 +89,7 @@ class SingleAgentEnv():
         print("Init superpeer")
         for quality in range(len(self.videoInfo.fileSizes)):
             for segid in range(len(self.videoInfo.fileSizes[quality])):
-                if segid == len(self.videoInfo.fileSizes[quality])-1:
-                    # the last segment might not have duration as vi.segmentDuration
-                    duration = self.videoInfo.duration - segid*self.videoInfo.segmentDuration
-                else:
-                    duration = self.videoInfo.segmentDuration
-                
+                duration = self.getDuration(segid, quality) 
                 if segid not in self.collectedChunks:
                     self.collectedChunks[segid] = {}
                 self.collectedChunks[segid][quality] = SegmentRequest(quality, 0, 0, duration, segid, self.videoInfo.fileSizes[quality][segid], self)
@@ -153,7 +159,7 @@ class SingleAgentEnv():
     '''
     def getTracePointer(self, neighbor):
         trace_timestep = self.getTraceTimestep(neighbor)
-        print("Trace timestep: %s" % str(trace_timestep)) 
+        print("Trace timestep: %s, Trace file: %s" % (str(trace_timestep), str(self.traceFile[neighbor]))) 
         cooked_time = self.cookedTime[neighbor]
         i = bisect_left(cooked_time, trace_timestep)
         print("Detected bw is %s" % str(self.cookedBW[neighbor][i]))
@@ -254,20 +260,35 @@ class SingleAgentEnv():
         timeneeded = 0.0
         if neighbor == SUPERPEER_ID:
             # the super peer is used to receive the segment
-            print("Fetching from superpeer %s %s" % (str(nextSegId), str(nextQuality)))
+            print("Node %d : Fetching from superpeer %s %s" % (self.nodeId, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
         else:
-            print("Fetching from peer %d %s %s" % (neighbor, str(nextSegId), str(nextQuality)))
+            print("Node %d : Fetching from peer %d %s %s" % (self.nodeId, neighbor, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
         
-        segment_duration = 
+        #segment_duration = 
         # TODO: add RTT to timeneeded
         time_taken= self.timeTaken(neighbor, data)    
         timeneeded += time_taken
-        now = simulator.now()
-        # TODO: doubt: why use nextDur? 
-        self.simulator.runAfter(timeneeded, self.postFetchSegment, nextQuality, now, nextDur, nextSegId, chsize, simIds)
+        chsize = self.videoInfo.fileSizes[nextQuality][nextSegId]
+        now = self.simulator.getNow()
+        segment_duration = self.getDuration(nextSegId, nextQuality) 
 
+        self.simulator.runAfter(timeneeded, self.postFetchSegment, nextQuality, now, segment_duration, nextSegId, chsize)
+
+    
+    '''Event to perform post fetching essentials like adding to the playback buffer'''
+    def postFetchSegment(self, quality, start_time, segment_duration, segid, chsize):
+        now = self.simulator.getNow()
+        req = SegmentRequest(quality, start_time, now, segment_duration, segid, chsize, self)
+        self.addToBuffer(req)
+
+    
+    '''Add to agent's playback buffer'''
+    def addToBuffer(self, req):
+        if self.isDead:
+            return
+        self.agent._rAddToBufferInternal(req)
 
 
     '''
