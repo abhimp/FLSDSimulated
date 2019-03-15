@@ -55,10 +55,10 @@ class P2PNetwork():
 The topology is randomly created
 '''
 class P2PRandomNetwork(P2PNetwork):
-    def __init__(self, num_nodes):
+    def __init__(self, num_nodes, connectivity=3):
         super().__init__(None)
         # for now, create a  random 3-regular graph wherein all nodes have exactly 3 neighbours
-        self.grp = nx.random_regular_graph(3, num_nodes)
+        self.grp = nx.random_regular_graph(connectivity, num_nodes)
 
 
 def main():
