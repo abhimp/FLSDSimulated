@@ -203,6 +203,7 @@ class SingleAgentEnv():
         '''
         
         candidates = np.array([])
+        print("Node %d:" % self.nodeId)
         for neighbor in self.peers:
             if segId in self.neighbor_envs[neighbor].collectedChunks:
                np.append(candidates, neighbor)
@@ -247,9 +248,12 @@ class SingleAgentEnv():
                 break
             time += trace_dur
             sent_size += packet_payload
+            i += 1
+            i = i % len(self.cookedBW[neighbor])
 
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
+        print("Time taken = %s"% str(time))
         return time
 
 
