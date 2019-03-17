@@ -56,6 +56,7 @@ class Agent():
         self._vSegmentSkiped = 0
         self._vStartUpCallback = []
         self._vTimeSlipage = [(0,0,0)]
+        self._vSyncSegment = -1
 
 
     @property
@@ -64,8 +65,8 @@ class Agent():
 
     @bufferUpto.setter
     def bufferUpto(self, value):
+        assert self._vMaxPlayerBufferLen >= round(value - self._vPlaybacktime, 3)
         self._vBufferUpto = value
-        assert self._vMaxPlayerBufferLen >= round(self._vBufferUpto - self._vPlaybacktime, 3)
 
     @property
     def nextSegmentIndex(self):
@@ -107,9 +108,11 @@ class Agent():
         playbackTime = self._vPlaybacktime + timeSpent
         return max(0, playbackTime - self.bufferUpto)
 
+#=============================================
     def addStartupCB(self, func):
         self._vStartUpCallback.append(func)
 
+#=============================================
     def bufferAvailableIn(self):
         return max(0, self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen + round(self.bufferLeft, 3))
 
@@ -139,6 +142,21 @@ class Agent():
             return 0, level
         sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
         return sleepTime, level
+
+#=============================================
+    def _rSyncNow(self):
+        now = self._vEnv.getNow()
+        curPlaybackTime = now - self._vGlobalStartedAt
+        curSegId = int(curPlaybackTime + self._vVideoInfo.segmentDuration - 1)/self._vVideoInfo.segmentDuration
+        curSegId = int(curSegId)
+        delay = int(curPlaybackTime)
+        if delay < self._vVideoInfo.segmentDuration * 0.8: #just a random thaught
+            curSegId += 1
+        
+        if self._vNextSegmentIndex < curSegId:
+            self._vNextSegmentIndex = curSegId
+            self._vSyncSegment = curSegId
+            self._rDownloadNextData(0)
 
 #=============================================
     def _rAddToBufferInternal(self, req, simIds = None):
@@ -216,6 +234,11 @@ class Agent():
             if buflen <= 0:
                 buflen = 0
             self._vBufferLenOverTime.append((now - 0.001, buflen))
+        
+        if self._vSyncSegment == req.segId:
+            skip = playbackTime - self._vPlaybacktime
+            self._vTotalStallTime += skip
+            playbackTime = self._vBufferUpto = self._vVideoInfo.segmentDuration * req.segId
 
 
         self._vPlaybacktime = playbackTime

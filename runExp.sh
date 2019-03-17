@@ -96,7 +96,7 @@ do
     for t in `seq 3`
     do
         #for sub in BOLA FastMPC RobustMPC Penseiv GroupP2PBasic GroupP2PTimeout
-        for sub in GroupP2PTimeout GroupP2PBasic
+        for sub in GroupP2PTimeout
         do
             echo python3 experiment_2.py $x powertest/$fname tc$t $sub 
             echo "===================================" > ${MAIL_FIFO_NAME}.mail

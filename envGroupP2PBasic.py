@@ -279,10 +279,12 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         if self._vDead: return
         now = self.getNow()
         seg = self._vSegmentStatus[nextSegId]
+
         if not self._vStarted or len(self._vGroupNodes) <= 1:
             seg.autoEntryOver = True
             return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
 
+        sleepTime = self._vAgent.bufferAvailableIn()
         if sleepTime > 0:
             self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
             return

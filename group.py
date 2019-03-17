@@ -1,5 +1,5 @@
 
-SPEED_TOLARANCE_PERCENT = 100
+SPEED_TOLARANCE_PERCENT = 50
 
 class Group():
     def __init__(s, ql, network, lonePeer = False):

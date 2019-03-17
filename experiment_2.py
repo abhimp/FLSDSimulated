@@ -18,7 +18,7 @@ from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
 
-RESULT_DIR = "./results/"
+RESULT_DIR = "./plotData/"
 
 def savePlotData(Xs, Ys, Zs, legend, pltTitle, result_dir):
     dpath = os.path.join(result_dir, pltTitle.replace(" ", "_"))
@@ -90,8 +90,8 @@ def main(videofile, randstatefp, result_dir, subjects = None):
     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC, result_dir)
     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC, result_dir)
     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve, result_dir)
-    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network, None, result_dir)
-    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network, None, result_dir)
+    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network, BOLA, result_dir)
+    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network, BOLA, result_dir)
 
     results = {}
 

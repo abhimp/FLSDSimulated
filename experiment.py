@@ -10,6 +10,7 @@ from p2pnetwork import P2PNetwork
 import randStateInit as randstate
 from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
+from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
@@ -139,15 +140,17 @@ def main():
 #     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
-    network = P2PNetwork("./graph/p2p-Gnutella04.txt")
+    network = P2PNetwork()
+#     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
 
     testCB = {}
     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
-#     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
 #     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
-#     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
+    testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
 
     results = {}
 
@@ -175,28 +178,6 @@ def main():
 #     plotIdleStallTIme(results)
 
 
-def main2():
-    testCB = {}
-    testCB["SimpleEnv-BOLA"] = (experimentSimpleEnv)
-    testCB["SimpleEnv-FastMPC"] = (experimentSimpleEnv)
-    testCB["SimpleEnv-RobustMPC"] = (experimentSimpleEnv)
-    testCB["SimpleEnv-Penseiv"] = (experimentSimpleEnv, traces, vi, network, AbrPensieve)
-    testCB["GroupP2P"] = (experimentGroupP2P)
-#     testCB["SimpleP2P"] = experimentSimpleP2P
-
-    results = [x for x in testCB]
-
-    plotAgentsData(results, "_vAgent.QoE", "QoE", "Player Id")
-    plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id")
-    plotAgentsData(results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id")
-    plotAgentsData(results, "_vAgent.avgQualityIndexVariation", "Average quality index variation", "Player Id")
-    plotAgentsData(results, "_vAgent.totalStallTime", "Stall Time", "Player Id")
-    plotAgentsData(results, "_vAgent.startUpDelay", "Start up delay", "Player Id")
-    plotAgentsData(results, "idleTime", "IdleTime", "Player Id")
-    plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id")
-
-
-    plt.show()
 
 if __name__ == "__main__":
 #     for x in range(20):

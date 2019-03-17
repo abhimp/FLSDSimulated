@@ -59,7 +59,7 @@ def setup_abr(video, log_file_path=LOG_FILE):
                              state_dim=[S_INFO, S_LEN], action_dim=A_DIM,
                              learning_rate=ACTOR_LR_RATE)
     critic = a3c.CriticNetwork(sess,
-                               state_dim=[S_INFO, S_LEN],
+                               state_dim=[S_INFO, S_LEN], action_dim=A_DIM,
                                learning_rate=CRITIC_LR_RATE)
 
     sess.run(tf.initialize_all_variables())

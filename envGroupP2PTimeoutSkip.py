@@ -65,7 +65,7 @@ class SegmentDlStat:
             assert st == SEGMENT_WORKING or st == SEGMENT_CACHED
         s._status = st
 
-class GroupP2PEnvTimeout(SimpleEnvironment):
+class GroupP2PEnvTimeoutSkip(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
 #         self._vAgent = Agent(vi, self, abr)
@@ -102,6 +102,9 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
 
     def schedulesChanged(self, changedFrom, nodes, sched):
         self._vGroupNodes = nodes
+        # need a way to findout syncal.
+        syncTime = (changedFrom + 1) * self._vVideoInfo.segmentDuration
+        self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow) 
 
     def _rGetRtt(self, node):
         return self._vGroup.getRtt(self, node)
@@ -235,6 +238,8 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
 
 #=============================================
     def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf")):
+        if self._vAgent._vSyncSegment > nextSegId: #no download requured as no one going to use it in the group
+            return
         seg = self._vSegmentStatus[nextSegId]
         assert seg.status == SEGMENT_NOT_WORKING
         position = min(position, len(self._vDownloadQueue))
@@ -585,7 +590,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
         trace = traces[idx]
         np.random.shuffle(deadAgents)
         nodeId, trace = deadAgents.pop()
-        env = GroupP2PEnvTimeout(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PEnvTimeoutSkip(vi, trace, simulator, None, grp, nodeId)
         simulator.runAfter(10, env.start, 5)
     ranwait = np.random.uniform(0, 1000)
     for x in agents:
@@ -698,7 +703,7 @@ def experimentGroupP2PTimeout(traces, vi, network):
         idx = np.random.randint(len(traces))
         startsAt = np.random.randint(vi.duration/2)
         trace = traces[idx]
-        env = GroupP2PEnvTimeout(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PEnvTimeoutSkip(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startsAt, env.start, 5)
         maxTime = 101.0 + x
         AGENT_TRACE_MAP[nodeId] = idx
@@ -723,7 +728,7 @@ def experimentGroupP2PSmall(traces, vi, network):
 
     for trx, nodeId, startedAt in [( 5, 267, 107), (36, 701, 111), (35, 1800, 124), (5, 2033, 127)]:
         trace = traces[trx]
-        env = GroupP2PEnvTimeout(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PEnvTimeoutSkip(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startedAt, env.start, 5)
         AGENT_TRACE_MAP[nodeId] = trx
         ags.append(env)
