@@ -2,6 +2,7 @@ import os
 import math
 import json
 import matplotlib.pyplot as plt
+import numpy as np
 import glob
 
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
@@ -32,6 +33,10 @@ SEGMENT_STATUS_STRING = [
 "SEGMENT_SLEEPING",
 "SEGMENT_PEER_WORKING",
 ]
+
+def default(o):
+    if isinstance(o, np.int64): return int(o)  
+    raise TypeError
 
 class SegmentDlStat:
     def __init__(self):
@@ -99,6 +104,9 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
 
     def schedulesChanged(self, changedFrom, nodes, sched):
         self._vGroupNodes = nodes
+        # need a way to findout syncal.
+        syncTime = (changedFrom + 1) * self._vVideoInfo.segmentDuration
+        self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow) 
 
     def _rGetRtt(self, node):
         return self._vGroup.getRtt(self, node)
@@ -120,7 +128,7 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
             with open(fpath, "w") as fp:
                 points = sorted(list(self._vTimeoutDataAndDecision.items()), key=lambda x:x[0])
                 for seg,pt in points:
-                    print(json.dumps(pt), file=fp)
+                    print(json.dumps(pt, default=default), file=fp)
         print(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
@@ -234,6 +242,8 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
 
 #=============================================
     def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf")):
+        if self._vAgent._vSyncSegment > nextSegId: #no download requured as no one going to use it in the group
+            return
         seg = self._vSegmentStatus[nextSegId]
         assert seg.status == SEGMENT_NOT_WORKING
         position = min(position, len(self._vDownloadQueue))
@@ -314,6 +324,8 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
                 timeout, ql = self._rTimeoutForPeer(nextSegId)
                 downloader = seg.peerResponsible
                 ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+            return
+        if seg.status == SEGMENT_CACHED: 
             return
         assert False
 
@@ -426,6 +438,7 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
             seg.autoEntryOver = True
             return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
 
+        sleepTime = self._vAgent.bufferAvailableIn()
         if sleepTime > 0:
             self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
             return
