@@ -40,10 +40,10 @@ class P2PNetwork():
         return rtt/1000.0
 
     def transmissionTime(self, n1, n2, size, buf=64*1024, maxSpeed=-1): #default 5mb data
-        maxSpeed = max(maxSpeed, 40*1000*1000)
+        maxSpeed = max(maxSpeed, 40*1000*1000) if maxSpeed == -1 else maxSpeed
         rtt = self.getRtt(n1, n2)
         speed = buf * 8 / rtt
-        speed = min(40000000, speed)
+        speed = min(maxSpeed, speed)
         time = size*8/speed
         time *= np.random.uniform(0.95, 1.05)
         return time
