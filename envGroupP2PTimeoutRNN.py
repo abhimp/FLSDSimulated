@@ -2,7 +2,6 @@ import os
 import math
 import json
 import matplotlib.pyplot as plt
-import mpld3
 import glob
 
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
@@ -597,14 +596,6 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             break
 
 #=============================================
-def storeAsPlotViewer(path, fig, label):
-    with open(path, "a") as fp:
-        print("<br><br>", file=fp)
-        print("<div><b>", label, "</b></div>", file=fp)
-        print('<div style="float:left; display:inline-block; width:95%">', file=fp)
-        mpld3.save_html(fig, fp)
-        print('</div><div style="clear:both"></div><br>', file=fp)
-
 def encloser(st, label):
         p = "<br><br>"
         p += "<div><b>" + label + "</b></div>"
@@ -639,7 +630,6 @@ def plotIdleStallTIme(dpath, group):
                 label += " startedAt: " + str(ag._vAgent._vStartedAt)
                 label += " traceIdx: " + str(AGENT_TRACE_MAP.get(ag._vPeerId, 0))
                 label += "</span>"
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
             label = "<h2>workingTime</h2>"
 #             plt.clf()
@@ -649,7 +639,6 @@ def plotIdleStallTIme(dpath, group):
                 pltData = ag._vWorkingTimes
                 Xs, Ys, Zs = list(zip(*pltData))
                 eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
             label = "<h2>StallTime</h2>"
 #             plt.clf()
@@ -659,7 +648,6 @@ def plotIdleStallTIme(dpath, group):
                 pltData = ag._vAgent._vTimeSlipage
                 Xs, Ys, Zs = list(zip(*pltData))
                 eplt.plot(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
 
             label = "<h2>qualityLevel</h2>"
@@ -670,7 +658,6 @@ def plotIdleStallTIme(dpath, group):
                 pltData = ag._vAgent._vQualitiesPlayedOverTime
                 Xs, Ys, Zs = list(zip(*pltData))
                 eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="post", color=colors[i%len(colors)])
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
 
     with open(pltHtmlPath, "w") as fp:
