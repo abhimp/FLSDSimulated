@@ -15,6 +15,65 @@ from rnnTimeout import getPensiveLearner, saveLearner
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
+VIDEO_FILES = [
+    "./videofilesizes/sizes_zC1ePnMTRPY.py",
+    "./videofilesizes/sizes_7HEKMRfM0vw.py",
+    "./videofilesizes/sizes_mUc_aJYlCfk.py",
+    "./videofilesizes/sizes_zq7iftN3in4.py",
+    "./videofilesizes/sizes_iX1JY2qWq2w.py",
+    "./videofilesizes/sizes_CidvwfIorPE.py",
+    "./videofilesizes/sizes_cCGuvUPSYU4.py",
+    "./videofilesizes/sizes_0yRnOU7s8UE.py",
+    "./videofilesizes/sizes_b6P4R3y3hH0.py",
+    "./videofilesizes/sizes_cn8YjC7s7B8.py",
+    "./videofilesizes/sizes_DCYzcX6xzBc.py",
+    "./videofilesizes/sizes_M6hRtv_x7gc.py",
+    "./videofilesizes/sizes_J_JdgAFcDF0.py",
+    "./videofilesizes/sizes_yv25Kx0dKBU.py",
+    "./videofilesizes/sizes_L_aySa3BvdA.py",
+    "./videofilesizes/sizes_kjRAWql2A3E.py",
+    "./videofilesizes/sizes_G-qd6YFFbc4.py",
+    "./videofilesizes/sizes_xRpLGifRHnI.py",
+    "./videofilesizes/sizes_LMWw-X6t8Wc.py",
+    "./videofilesizes/sizes_DwgGXGTtObc.py",
+    "./videofilesizes/sizes_prNYOW0_kms.py",
+    "./videofilesizes/sizes_qBVThFwdYTc.py",
+    "./videofilesizes/sizes_79g40dq3M9w.py",
+    "./videofilesizes/sizes_H0f7poWe8RI.py",
+    "./videofilesizes/sizes_0oly6d0zlZM.py",
+    "./videofilesizes/sizes_n6paI7fs5VM.py",
+    "./videofilesizes/sizes_cyMnKoAdbYI.py",
+    "./videofilesizes/sizes_T2vPDGzxq7o.py",
+    "./videofilesizes/sizes__GcDktjpp1w.py",
+    "./videofilesizes/sizes_hF8OoWadK4Q.py",
+    "./videofilesizes/sizes_b80ShWk_Aro.py",
+    "./videofilesizes/sizes_6jIIONaP0p4.py",
+    "./videofilesizes/sizes_7CgTlg_L_Sw.py",
+    "./videofilesizes/sizes_gtPIfchgItw.py",
+    "./videofilesizes/sizes_1s6zy8SB3Is.py",
+    "./videofilesizes/sizes_IDXTmCwAETM.py",
+    "./videofilesizes/sizes_ZyBsy5SQxqU.py",
+    "./videofilesizes/sizes_mRNWC0piPrQ.py",
+    "./videofilesizes/sizes_Al53BulB0H0.py",
+    "./videofilesizes/sizes_0b4SVyP0IqI.py",
+    "./videofilesizes/sizes_szdW22mqNBQ.py",
+    "./videofilesizes/sizes_O_sTdr-Aky0.py",
+    "./videofilesizes/sizes_oBLXbrD8Jek.py",
+    "./videofilesizes/sizes_ptWmIvm7UNk.py",
+    "./videofilesizes/sizes_llxRaBrZ45s.py",
+    "./videofilesizes/sizes_bSd2P0guPFk.py",
+    "./videofilesizes/sizes_Yo4oP2eyDtI.py",
+    "./videofilesizes/sizes_Q8vK7_B2WZ0.py",
+    "./videofilesizes/sizes_u3rl8NB8xIc.py",
+    "./videofilesizes/sizes_XOst4cXEXko.py",
+    "./videofilesizes/sizes_PqC9g7tkrEc.py",
+    "./videofilesizes/sizes_oO4xDieHKe4.py",
+    "./videofilesizes/sizes_8de4XDnJUKk.py",
+    "./videofilesizes/sizes__YAEitUAAZs.py",
+    "./videofilesizes/sizes_tQhqs1iFHDQ.py",
+    "./videofilesizes/sizes_b6TIMTvY8hM.py",
+    "./videofilesizes/sizes_qpdU1t2xyok.py"
+]
 
 def savePlotData(Xs, Ys, Zs, legend, pltTitle, result_dir):
     dpath = os.path.join(result_dir, pltTitle.replace(" ", "_"))
@@ -77,7 +136,7 @@ if __name__ == "__main__":
 
     subjects = subjects.split(",")
     networks = glob.glob("./graph/*.txt")
-    videos = glob.glob("./videofilesizes/*.py")
+    videos = VIDEO_FILES[:40] #glob.glob("./videofilesizes/*.py")
     traces = load_trace.load_trace()
     traces = list(zip(*traces))
     for vidPath in videos:
