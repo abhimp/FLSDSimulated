@@ -11,6 +11,7 @@ import randStateInit as randstate
 from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
+from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
@@ -19,6 +20,7 @@ from abrFastMPC import AbrFastMPC
 from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
+from cdnUsages import CDN
 
 
 RESULT_DIR = "./results/GenPlots"
@@ -84,20 +86,22 @@ def plotStoredData(legends, _, pltTitle, xlabel):
     plt.xlabel(xlabel)
 
 def findIgnorablePeers(results):
-    p = []
+    p = set()
     for name, res in results.items():
-        if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip"]:
+        if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN"]:
             continue
-        x = []
+#         x = []
         for ag in res:
             if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
-              x += [ag.networkId]
-        if len(x) > 0:
-            if len(p) > 0:
-                assert x == p[-1]
-            p.append(x)
-    if len(p): print(p)
-    return set(p[-1]) if len(p) else []
+                p.add(ag.networkId)
+    return p
+#               x += [ag.networkId]
+#         if len(x) > 0:
+#             if len(p) > 0:
+#                 assert x == p[-1]
+#             p.append(x)
+#     if len(p): print(p)
+#     return set(p[-1]) if len(p) else []
 
 def plotAgentsData(results, attrib, pltTitle, xlabel, lonePeers = []):
     font = {'family' : 'normal',
@@ -144,9 +148,31 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, lonePeers = []):
     plt.savefig(dpath + "_box.png", bbox_inches="tight")
     plt.savefig(dpath + "_box.eps", bbox_inches="tight")
 
+def plotCDNData(cdns):
+    font = {'family' : 'normal',
+            'weight' : 'bold',
+            'size'   : 22}
+
+    figsize=(7, 5)
+    plt.clf()
+    plt.rc('font', **font)
+    plt.figure(figsize=figsize, dpi=150)
+    pltData = {}
+    pltTitle = "cdnUploaded"
+    for name, res in cdns.items():
+        Xs, Ys = list(zip(*res.uploaded))
+        savePlotData(Xs, Ys, name, pltTitle)
+        plt.plot(Xs, Ys, label=name)
+
+    plt.legend(ncol = 2, loc = "upper center")
+    plt.title(pltTitle)
+    dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
+    plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
+    plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
+
 GLOBAL_STARTS_AT = 5
 
-def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None):
+def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -155,17 +181,18 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None):
     players = len(list(network.nodes()))
     idxs = np.random.randint(len(traces), size=players)
     startsAts = np.random.randint(GLOBAL_STARTS_AT + 1, vi.duration/2, size=players)
+    CDN.clear()
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
         trace = traces[idx]
         startsAt = startsAts[x]
-        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir)
+        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir, modelPath=modelPath)
         simulator.runAt(startsAt, env.start, GLOBAL_STARTS_AT)
         ags.append(env)
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
-    return ags
+    return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def main():
 #     randstate.storeCurrentState() #comment this line to use same state as before
@@ -181,24 +208,27 @@ def main():
 
     testCB = {}
     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
-    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
-#     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
-    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
-    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
+#     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+# #     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
+#     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+#     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
     testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
+    testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
+    cdns = {}
 
     for name, cb in testCB.items():
         randstate.loadCurrentState()
-        ags = runExperiments(*cb)
+        ags, cdn = runExperiments(*cb)
         results[name] = ags
+        cdns[name] = cdn
 
     print("ploting figures")
     print("="*30)
 
-    lonePeers = [] #findIgnorablePeers(results)
+    lonePeers = findIgnorablePeers(results)
 
     plotAgentsData(results, "_vAgent.QoE", "QoE", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id", lonePeers)
@@ -209,6 +239,7 @@ def main():
     plotAgentsData(results, "idleTime", "IdleTime", "Player Id", lonePeers)
     plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id", lonePeers)
 
+    plotCDNData(cdns)
 
 #     plt.show()
 
