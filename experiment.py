@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import mpld3
 import collections as cl
 
 import load_trace
@@ -11,6 +10,7 @@ import randStateInit as randstate
 from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
+from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
 from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 from envSimple import SimpleEnvironment
 from simulator import Simulator
@@ -207,14 +207,15 @@ def main():
 #     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
 
     testCB = {}
-    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
+#     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
 #     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
 # #     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
 #     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
 #     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
-    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
-    testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
-    testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
+#     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
+#     testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
+    testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
+#     testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
     cdns = {}

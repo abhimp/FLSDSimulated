@@ -170,6 +170,12 @@ class SimpleEnvironment():
                 #useful to calculate downloaded data 
 
 #=============================================
+    def _rGetWorkingSegid(self):
+        assert self._vWorking
+        now, time, nextSegId, clen, downloadData, simIds = self._vWorkingStatus
+        return nextSegId
+
+#=============================================
     def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, clen, simIds):
         assert self._vWorking
         self._vWorking = False
@@ -187,6 +193,24 @@ class SimpleEnvironment():
         while self._vLastTime >= self._vCookedTime[-1]:
             self._vLastTime -= self._vCookedTime[-1]
         self._rAddToBuffer(req, simIds)
+
+#=============================================
+    def _rStopDownload(self):
+        assert self._vWorking
+        now = self.getNow()
+        startedAt, dur, segId, clen, downloadData, simIds = self._vWorkingStatus 
+        time, downloaded, _ = self._rDownloadStatus()
+        self._vLastDownloadedAt = now
+        self._vTotalWorkingTime += time
+        req = SegmentRequest(ql, startedAt, now, dur, segId, downloaded, self)
+        self._vWorkingTimes += [(now, req.throughput, segId)]
+        self._vCdn.add(startedAt, now, req.throughput)
+        self._vLastTime += time
+        while self._vLastTime >= self._vCookedTime[-1]:
+            self._vLastTime -= self._vCookedTime[-1]
+
+        assert simIds
+        self._vSimulator.cancelTask(simIds)
 
 #=============================================
     def _rDownloadStatus(self):
