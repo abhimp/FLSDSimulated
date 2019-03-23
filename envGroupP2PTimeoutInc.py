@@ -166,6 +166,7 @@ class GroupP2PEnvTimeoutInc(SimpleEnvironment):
         self._rDistributeToOther(req) #sending to others
         self._vDownloadedReqByItSelf.append(req)
         self._vDownloadPending = False
+        self._rDownloadFromDownloadQueue()
         if seg.status == SEGMENT_CACHED:
             return
         assert seg.status != SEGMENT_CACHED
@@ -174,7 +175,6 @@ class GroupP2PEnvTimeoutInc(SimpleEnvironment):
         self._vCatched[segId] = req
 
         seg = self._vSegmentStatus[segId]
-        self._rDownloadFromDownloadQueue()
 
         if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
             self._rAddToAgentBuffer(req)
@@ -254,6 +254,7 @@ class GroupP2PEnvTimeoutInc(SimpleEnvironment):
 #=============================================
     def _rStopCurrentDownloadAndStartNextFromQueue(self):
         if not self._vDownloadPending:
+            assert len(self._vDownloadQueue) == 0
             return
         self._vDownloadPending = False
         self._rStopDownload()
