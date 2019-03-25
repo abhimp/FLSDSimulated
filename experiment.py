@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import collections as cl
+import sys
 
 import load_trace
 import videoInfo as video
@@ -11,7 +12,6 @@ from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
@@ -19,8 +19,12 @@ from group import GroupManager
 from abrFastMPC import AbrFastMPC
 from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
-from abrPensiev import AbrPensieve
 from cdnUsages import CDN
+
+# from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
+# from abrPensiev import AbrPensieve
+GroupP2PEnvTimeoutRNN = None
+AbrPensieve = None
 
 
 RESULT_DIR = "./results/GenPlots"
@@ -195,6 +199,19 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def main():
+    global GroupP2PEnvTimeoutRNN, AbrPensieve
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN"] 
+    if "-h" in sys.argv or len(sys.argv) <= 1:
+        print(" ".join(allowed))
+        return
+    allowed = sys.argv[1:]
+    if "Penseiv" in allowed and AbrPensieve is None:
+        from abrPensiev import AbrPensieve as abp
+        AbrPensieve = abp
+
+    if "GroupP2PEnvTimeoutRNN" in allowed and GroupP2PEnvTimeoutRNN is None:
+        from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN as gpe
+        GroupP2PEnvTimeoutRNN = gpe
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
@@ -207,20 +224,23 @@ def main():
 #     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
 
     testCB = {}
-#     testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
-#     testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
-# #     testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
-#     testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
-#     testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
-#     testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
-#     testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
+    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
+    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
+    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
+    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
+    testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
-#     testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
     cdns = {}
 
-    for name, cb in testCB.items():
+#     for name, cb in testCB.items():
+    for name in allowed:
+        assert name in testCB
+        cb = testCB[name]
         randstate.loadCurrentState()
         ags, cdn = runExperiments(*cb)
         results[name] = ags
