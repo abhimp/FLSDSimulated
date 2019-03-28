@@ -1,12 +1,13 @@
+import numpy as np
+
 from agent import Agent
 from simulator import Simulator
 import load_trace
 import videoInfo as video
-import numpy as np
 from abrBOLA import BOLA
-
 from p2pnetwork import P2PNetwork
 from segmentRequest import SegmentRequest
+from cdnUsages import CDN
 
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
@@ -14,7 +15,8 @@ REQUESTION_SIMID_KEY = "ri"
 class SimpleEnvironment():
     def __init__(self, vi, traces, simulator, abr = None, peerId = -1, logpath=None, resultpath=None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
-        self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
+#         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
+        self._vLastTime = -1
 #         self._vLastBandwidthTime = 
         self._vAgent = Agent(vi, self, abr, logpath=logpath, resultpath=resultpath)
         self._vLogPath = logpath
@@ -33,6 +35,7 @@ class SimpleEnvironment():
         
         self._vWorking = False
         self._vWorkingStatus = None
+        self._vCdn = CDN.getInstance()
 
     @property
     def networkId(self):
@@ -83,6 +86,7 @@ class SimpleEnvironment():
         if not self._vAgent:
             raise Exception("Node agent to start")
         self._vLastDownloadedAt = self.getNow()
+        self._vLastTime = np.random.uniform(self._vCookedTime[1], self._vCookedTime[-1])
         self._vAgent.start(startedAt)
 
 #=============================================
@@ -117,36 +121,43 @@ class SimpleEnvironment():
             self._vTotalIdleTime += idleTime
             self._vWorkingTimes += [(now, 0, nextSegId)]
 
-        nextDur = self._vVideoInfo.duration - self._vAgent.bufferUpto
-        if nextDur >= self._vVideoInfo.segmentDuration:
-            nextDur = self._vVideoInfo.segmentDuration
-        chsize = self._vVideoInfo.fileSizes[nextQuality][nextSegId]
-        time = 0
-        sentSize = 0
-        lastTime = self._vCookedTime[self._vLastBandwidthPtr - 1] + sleepTime
-        while lastTime > self._vCookedTime[self._vLastBandwidthPtr]:
-            self._vLastBandwidthPtr += 1
-            if self._vLastBandwidthPtr == len(self._vCookedTime):
-                self._vLastBandwidthPtr = 1
-                lastTime = 0
+        nextDur = self._vVideoInfo.getSegDuration(nextSegId)
 
+        clen = self._vVideoInfo.fileSizes[nextQuality][nextSegId]
+
+        curCookedTime = self._vLastTime + sleepTime
+        while curCookedTime >= self._vCookedTime[-1]:
+            curCookedTime -= self._vCookedTime[-1]
+        self._vLastTime = curCookedTime
+
+        bwPtr = 1
+        while curCookedTime > self._vCookedTime[bwPtr]:
+            bwPtr += 1
+            assert bwPtr < len(self._vCookedTime)
+        
         downloadData = [[0, 0]]
+        
+        sentSize = 0
+        time = 0
         while True:
-            self._vLastBandwidthPtr += 1
-            if self._vLastBandwidthPtr >= len(self._vCookedTime):
-                self._vLastBandwidthPtr = 1
-            throughput = self._vCookedBW[self._vLastBandwidthPtr]
-            dur = self._vCookedTime[self._vLastBandwidthPtr] - self._vCookedTime[self._vLastBandwidthPtr - 1]
+            assert curCookedTime <= self._vCookedTime[bwPtr]
+            dur = self._vCookedTime[bwPtr] - curCookedTime
+            throughput = self._vCookedBW[bwPtr]
             pktpyld = throughput * (1024 * 1024 / 8) * dur * 0.95
-            if sentSize + pktpyld >= chsize:
-                fracTime = dur * ( chsize - sentSize ) / pktpyld
+            if sentSize + pktpyld >= clen:
+                fracTime = dur * ( clen - sentSize ) / pktpyld
                 time += fracTime
                 if fracTime > 0:
-                    downloadData += [[time, chsize]]
+                    downloadData += [[time, clen]]
                 break
             time += dur
             sentSize += pktpyld
             downloadData += [[time, sentSize]] #I may not use it now
+            bwPtr += 1
+            if bwPtr >= len(self._vCookedBW):
+                curCookedTime = 0
+                bwPtr = 1
+
 
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
@@ -154,12 +165,18 @@ class SimpleEnvironment():
 
         downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
 
-        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, chsize, simIds)
-        self._vWorkingStatus = (now, time, nextSegId, chsize, downloadData, simIds)
+        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, clen, simIds)
+        self._vWorkingStatus = (now, time, nextSegId, clen, downloadData, simIds)
                 #useful to calculate downloaded data 
 
 #=============================================
-    def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, chsize, simIds):
+    def _rGetWorkingSegid(self):
+        assert self._vWorking
+        now, time, nextSegId, clen, downloadData, simIds = self._vWorkingStatus
+        return nextSegId
+
+#=============================================
+    def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, clen, simIds):
         assert self._vWorking
         self._vWorking = False
         self._vWorkingStatus = None
@@ -169,15 +186,37 @@ class SimpleEnvironment():
         time = now - startedAt
         self._vLastDownloadedAt = now
         self._vTotalWorkingTime += time
-        req = SegmentRequest(ql, startedAt, now, dur, segId, chsize, self)
+        req = SegmentRequest(ql, startedAt, now, dur, segId, clen, self)
         self._vWorkingTimes += [(now, req.throughput, segId)]
+        self._vCdn.add(startedAt, now, req.throughput)
+        self._vLastTime += time
+        while self._vLastTime >= self._vCookedTime[-1]:
+            self._vLastTime -= self._vCookedTime[-1]
         self._rAddToBuffer(req, simIds)
+
+#=============================================
+    def _rStopDownload(self):
+        assert self._vWorking
+        now = self.getNow()
+        startedAt, dur, segId, clen, downloadData, simIds = self._vWorkingStatus 
+        time, downloaded, _ = self._rDownloadStatus()
+        self._vLastDownloadedAt = now
+        self._vTotalWorkingTime += time
+        req = SegmentRequest(ql, startedAt, now, dur, segId, downloaded, self)
+        self._vWorkingTimes += [(now, req.throughput, segId)]
+        self._vCdn.add(startedAt, now, req.throughput)
+        self._vLastTime += time
+        while self._vLastTime >= self._vCookedTime[-1]:
+            self._vLastTime -= self._vCookedTime[-1]
+
+        assert simIds
+        self._vSimulator.cancelTask(simIds)
 
 #=============================================
     def _rDownloadStatus(self):
         assert self._vWorking
         now = self.getNow()
-        startedAt, dur, segId, chsize, downloadData, simIds = self._vWorkingStatus 
+        startedAt, dur, segId, clen, downloadData, simIds = self._vWorkingStatus 
         timeElapsed = now - startedAt
         downLoadedTillNow = 0
         for i,x in enumerate(downloadData):
@@ -191,9 +230,10 @@ class SimpleEnvironment():
                 amt = downloadData[i + 1][1] - s #downloaded in the slot
                 sltSpent = timeElapsed - t
 
-                downLoadedTillNow = round(s + amt*sltSpent/slt, 3)
+                downLoadedTillNow = s
+                downLoadedTillNow += 0 if slt == 0 else round(amt*sltSpent/slt, 3)
                 break
-        return round(timeElapsed, 3), round(downLoadedTillNow), chsize
+        return round(timeElapsed, 3), round(downLoadedTillNow), clen
 
 #=============================================
 def experimentSimpleEnv(traces, vi, network, abr = None):

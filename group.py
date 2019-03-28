@@ -160,6 +160,11 @@ class GroupManager():
             raise Exception("node not found")
         return s.peers[node].qualityLevel
 
+    def isLonepeer(s, node):
+        if node not in s.peers:
+            raise Exception("node not found")
+        return s.peers[node].lonePeer
+
     def getRtt(self, node1, node2):
         return self.network.getRtt(node1.networkId, node2.networkId)
 

@@ -22,6 +22,12 @@ class VideoInfo():
         s.bitrateReward = vi.bitrateReward
         s.birateRewardMap = {x:y for x, y in zip(s.bitrates, s.bitrateReward)}
         s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
+
+    def getSegDuration(s, segId):
+        assert segId < s.segmentCount
+        if segId == s.segmentCount - 1:
+            return int(s.duration)% int(s.segmentDuration)
+        return int(s.segmentDuration)
 #         dur = 0
 #         for x in s.fileSizes[0]:
 #             if s.duration - dur > vi.segmentDuration:
@@ -45,6 +51,11 @@ class PenseivVideoInfo():
         s.birateRewardMap = {x:y for x, y in zip(s.bitrates, s.bitrateReward)}
         s.globalDelayPlayback = GLOBAL_DELAY_PLAYBACK
 
+    def getSegDuration(s, segId):
+        assert segId < s.segmentCount
+        if segId == s.segmentCount - 1:
+            return int(s.duration)% int(s.segmentDuration)
+        return int(s.segmentDuration)
 
 
 def loadVideoTime(fileName):
