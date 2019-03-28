@@ -14,6 +14,7 @@ import load_trace
 import videoInfo as video
 
 SUPERPEER_ID = 0
+STALL_TIME = 0.5
 
 '''
 Rapid Livestreaming environment.
@@ -218,12 +219,17 @@ class SingleAgentEnv():
 
         # TODO: POSSIBLE HEURISTICS:
         # 1. Best bandwidth [x]
-        # 2, Best available quality of segment [ ]
+        # 2, Best available quality of segment [x]
         # 3. Greedy QoE optimization [ ]
+            
+        def best_bandwidth(candidates):
+            return [self.getBandwidth(n) for n in candidates]
 
-        bandwidths = [self.getBandwidth(n) for n in candidates]
+        def best_quality_segment(candidates, segid):
+            return [np.max(self.neighbor_envs[candidate].collectedChunks[segid].keys()) for candidate in candidates] 
+
         print(candidates)
-        return candidates[np.argmax([bandwidths])]
+        return candidates[np.argmax(best_bandwidth(candidates))]
 
 
     '''Compute the time taken to fetch a particular segment from neighbor
@@ -357,6 +363,14 @@ def setupEnv(traces, vi, network, abr=None):
         simulator.runAt(101.0 + x, envs[nodeId].start, 5)
     simulator.run()
 
+    # get the average QoE
+    qoes = []
+    for node in envs:
+        if node == SUPERPEER_ID:
+            continue
+        qoes.append(envs[node].agent._rCalculateQoE())
+    print("System average QoE: ", np.mean(qoes))
+
 
 def main():
     network = P2PRandomNetwork(6)
@@ -367,6 +381,6 @@ def main():
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     setupEnv(traces, vi, network)
-
+    
 if __name__ == '__main__':
     main()

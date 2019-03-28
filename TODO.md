@@ -3,9 +3,8 @@
 1. Rewrite the node distance part - make it distinct
  - modify the RTT part
 
-2. Each node has NUM_NEIGHBOURS neighbours where NUM_NEIGHBOURS <=3
- 
-# Doubts:
+2. ABR decision for each peer
 
-nextDur in SegmentRequest
-
+3. Reinforcement learning for peer fetching 
+	* multi agent 
+	* deep reinforcement learning
