@@ -1,7 +1,11 @@
+import os
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
 from group import GroupManager
 import math
 import randStateInit as randstate
+from easyPlotViewer import EasyPlot
+
+LOG_LOCATION = "./results/"
 
 SEGMENT_NOT_WORKING = 0
 SEGMENT_WORKING = 1
@@ -70,7 +74,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
         self._vEarlyDownloaded = 0
         self._vNormalDownloaded = 0
-        self._vThroughPutData = {}
+        self._vThroughPutData = []
         self._vDownloadQueue = []
         self._vServingPeers = {}
 
@@ -133,7 +137,7 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         if segId == self._vAgent.nextSegmentIndex and seg.autoEntryOver:
             self._vAgent._rAddToBufferInternal(req)
 
-        self._vThroughPutData[self.now] = req.throughput
+        self._vThroughPutData += [(self.now, req.throughput)]
 
         if self._vGroup.currentSchedule(self, segId) == self:
            for node in self._vGroupNodes:
@@ -168,8 +172,8 @@ class GroupP2PEnvBasic(SimpleEnvironment):
 
 #=============================================
     def _rPredictedThroughput(self):
-        maxTime = max(self._vThroughPutData.keys())
-        return self._vThroughPutData[maxTime]
+        thrpt = [1/x for t, x in self._vThroughPutData[-5:]]
+        return len(thrpt)/sum(thrpt)
 
 #=============================================
 # exit point from this class to envSimple
@@ -234,6 +238,14 @@ class GroupP2PEnvBasic(SimpleEnvironment):
             self._rAddToDownloadQueue(nextSegId, nextQuality)
             return
 
+        if seg.status == SEGMENT_PEER_WORKING: 
+            if seg.peerTimeoutRef != -1 and not seg.peerTimeoutHappened:
+                timeout, ql = self._rTimeoutForPeer(nextSegId)
+                downloader = seg.peerResponsible
+                ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+            return
+        if seg.status == SEGMENT_CACHED: 
+            return
         assert False
 
 
@@ -273,10 +285,12 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         if self._vDead: return
         now = self.getNow()
         seg = self._vSegmentStatus[nextSegId]
+
         if not self._vStarted or len(self._vGroupNodes) <= 1:
             seg.autoEntryOver = True
             return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
 
+        sleepTime = self._vAgent.bufferAvailableIn()
         if sleepTime > 0:
             self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
             return
@@ -421,32 +435,91 @@ class GroupP2PEnvBasic(SimpleEnvironment):
         self._vAgent.addStartupCB(self.playerStartedCB)
 
 #=============================================
-def randomDead(vi, traces, grp, simulator, agents, deadAgents):
-    now = simulator.getNow()
-    if now - 5 < vi.duration:
-        return
-    if np.random.randint(2) == 1 or len(deadAgents) == 0:
-        nextDead = np.random.randint(len(agents))
-        agents[nextDead].die()
-        del agents[nextDead]
-        trace = (agents[nextDead]._vCookedTime, agents[nextDead]._vCookedBW, agents[nextDead]._vTraceFile)
-        deadAgents.append((agents[nextDead]._vPeerId, trace))
-    else:
-        startAgain = np.random.randint(len(deadAgents))
-        idx = np.random.randint(len(traces))
-        trace = traces[idx]
-        np.random.shuffle(deadAgents)
-        nodeId, trace = deadAgents.pop()
-        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
-        simulator.runAfter(10, env.start, 5)
-    ranwait = np.random.uniform(0, 1000)
-    for x in agents:
-        if not x._vDead and not x._vFinished:
-            simulator.runAfter(ranwait, randomDead, vi, traces, grp, simulator, agents, deadAgents)
-            break
+def encloser(st, label):
+        p = "<br><br>"
+        p += "<div><b>" + label + "</b></div>"
+        return p + st
+
+def savePlotData(Xs, Ys, fpath):
+    with open(fpath, "w") as fp:
+        assert len(Xs) == len(Ys)
+        st = "\n".join(str(x) + "\t" + str(y) for x, y in zip(Xs, Ys))
+        fp.write(st)
+
+def plotIdleStallTIme(dpath, group, filename = "groupP2PBasic"):
+    if not os.path.isdir(dpath):
+        os.makedirs(dpath)
+
+    colors = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
+
+    pltHtmlPath = os.path.join(dpath, filename + ".html")
+    open(pltHtmlPath, "w").close()
+    eplt = EasyPlot()
+    for ql,grpSet in group.groups.items():
+        for grp in grpSet:
+            grpLabel = str([x._vPeerId for x in grp.getAllNode()])
+            label = "<hr><h2>BufferLen</h2>"
+            label += " NumNode:" + str(len(grp.getAllNode()))
+            label += " Quality Index: " + str(grp.qualityLevel)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vBufferLenOverTime
+                Xs, Ys = list(zip(*pltData))
+                eplt.plot(Xs, Ys, marker="x", label=str(ag._vPeerId), color=colors[i%len(colors)])
+                savePlotData(Xs, Ys, os.path.join(dpath, str(ag.networkId) + "_" + filename + "_bufferLen.dat"))
+                label += "\n<br><span style=\"color: " + colors[i%len(colors)] + "\" >PeerId: " + str(ag._vPeerId)
+                label += " avgQualityIndex: " + str(ag._vAgent.avgQualityIndex)
+                label += " avgStallTime: " + str(ag._vAgent.totalStallTime)
+                label += " startedAt: " + str(ag._vAgent._vStartedAt)
+                label += " traceIdx: " + str(AGENT_TRACE_MAP.get(ag._vPeerId, 0))
+                label += " QoE: " + str(ag._vAgent.QoE)
+                label += "</span>"
+
+            eplt.setFigHeader(label)
+            label = "<h2>workingTime</h2>"
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vWorkingTimes
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+                savePlotData(Xs, Ys, os.path.join(dpath, str(ag.networkId) + "_" + filename + "_workingTime.dat"))
+            eplt.setFigHeader(label)
+            label = "<h2>StallTime</h2>"
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vTimeSlipage
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.plot(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+                savePlotData(Xs, Ys, os.path.join(dpath, str(ag.networkId) + "_" + filename + "_stllTime.dat"))
+            eplt.setFigHeader(label)
+
+            label = "<h2>qualityLevel</h2>"
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vQualitiesPlayedOverTime
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="post", color=colors[i%len(colors)])
+                savePlotData(Xs, Ys, os.path.join(dpath, str(ag.networkId) + "_" + filename + "_qualitylevel.dat"))
+            eplt.setFigHeader(label)
+
+    with open(pltHtmlPath, "w") as fp:
+        eplt.printFigs(fp, width=1000, height=400)
 
 #=============================================
-def experimentGroupP2PBasic(traces, vi, network):
+def logThroughput(ag):
+    logPath = os.path.join(LOG_LOCATION, "logThroughput")
+    if not os.path.isdir(logPath):
+        os.makedirs(logPath)
+    path = os.path.join(logPath, "%s.csv"%(ag._vPeerId))
+    with open(path, "w") as fp:
+        print("#time\tBandwidth", file=fp)
+        for t, x in ag._vThroughPutData:
+            print("{t}\t{x}".format(t=t, x=x), file=fp)
+
+AGENT_TRACE_MAP = {}
+
+#=============================================
+def experimentGroupP2PTimeout(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -455,31 +528,61 @@ def experimentGroupP2PBasic(traces, vi, network):
     maxTime = 0
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
+        startsAt = np.random.randint(vi.duration/2)
         trace = traces[idx]
         env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
-#         env = SimpleEnvironment(vi, trace, simulator, BOLA)
-        simulator.runAt(101.0 + x, env.start, 5)
+        simulator.runAt(startsAt, env.start, 5)
         maxTime = 101.0 + x
+        AGENT_TRACE_MAP[nodeId] = idx
         ags.append(env)
-#     simulator.runAt(maxTime + 50, randomDead, vi, traces, grp, simulator, ags, deadAgents)
     simulator.run()
     grp.printGroupBucket()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
+        logThroughput(a)
+    if __name__ == "__main__":
+        plotIdleStallTIme("results/stall-idle/", grp)
+    return ags
+
+#=============================================
+def experimentGroupP2PSmall(traces, vi, network):
+    network = P2PNetwork()
+    simulator = Simulator()
+    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+
+    deadAgents = []
+    ags = []
+
+    for trx, nodeId, startedAt in [( 5, 267, 107), (36, 701, 111), (35, 1800, 124), (5, 2033, 127)]:
+        trace = traces[trx]
+        env = GroupP2PEnvBasic(vi, trace, simulator, None, grp, nodeId)
+        simulator.runAt(startedAt, env.start, 5)
+        AGENT_TRACE_MAP[nodeId] = trx
+        ags.append(env)
+
+    simulator.run()
+    grp.printGroupBucket()
+    for i,a in enumerate(ags):
+        assert a._vFinished # or a._vDead
+        logThroughput(a)
+    if __name__ == "__main__":
+        plotIdleStallTIme("results/stall-idle/", grp)
     return ags
 
 def main():
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
-    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
+#     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
+#     vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     network = P2PNetwork()
 
-    experimentGroupP2P(traces, vi, network)
+    experimentGroupP2PTimeout(traces, vi, network)
 
 if __name__ == "__main__":
-    for x in range(2000):
+    for x in range(1):
         main()
         print("=========================\n")

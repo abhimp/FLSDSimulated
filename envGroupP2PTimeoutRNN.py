@@ -2,7 +2,7 @@ import os
 import math
 import json
 import matplotlib.pyplot as plt
-import mpld3
+import numpy as np
 import glob
 
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
@@ -33,6 +33,10 @@ SEGMENT_STATUS_STRING = [
 "SEGMENT_SLEEPING",
 "SEGMENT_PEER_WORKING",
 ]
+
+def default(o):
+    if isinstance(o, np.int64): return int(o)  
+    raise TypeError
 
 class SegmentDlStat:
     def __init__(self):
@@ -100,6 +104,9 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
 
     def schedulesChanged(self, changedFrom, nodes, sched):
         self._vGroupNodes = nodes
+        # need a way to findout syncal.
+        syncTime = (changedFrom + 1) * self._vVideoInfo.segmentDuration
+        self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow) 
 
     def _rGetRtt(self, node):
         return self._vGroup.getRtt(self, node)
@@ -121,7 +128,7 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
             with open(fpath, "w") as fp:
                 points = sorted(list(self._vTimeoutDataAndDecision.items()), key=lambda x:x[0])
                 for seg,pt in points:
-                    print(json.dumps(pt), file=fp)
+                    print(json.dumps(pt, default=default), file=fp)
         print(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
@@ -235,6 +242,8 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
 
 #=============================================
     def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf")):
+        if self._vAgent._vSyncSegment > nextSegId: #no download requured as no one going to use it in the group
+            return
         seg = self._vSegmentStatus[nextSegId]
         assert seg.status == SEGMENT_NOT_WORKING
         position = min(position, len(self._vDownloadQueue))
@@ -315,6 +324,8 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
                 timeout, ql = self._rTimeoutForPeer(nextSegId)
                 downloader = seg.peerResponsible
                 ref = self.runAfter(timeout, self._rPeerDownloadTimeout, downloader, nextSegId, ql)
+            return
+        if seg.status == SEGMENT_CACHED: 
             return
         assert False
 
@@ -427,6 +438,7 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
             seg.autoEntryOver = True
             return self._rDownloadNextDataBeforeGroupStart(nextSegId, nextQuality, sleepTime)
 
+        sleepTime = self._vAgent.bufferAvailableIn()
         if sleepTime > 0:
             self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
             return
@@ -597,14 +609,6 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
             break
 
 #=============================================
-def storeAsPlotViewer(path, fig, label):
-    with open(path, "a") as fp:
-        print("<br><br>", file=fp)
-        print("<div><b>", label, "</b></div>", file=fp)
-        print('<div style="float:left; display:inline-block; width:95%">', file=fp)
-        mpld3.save_html(fig, fp)
-        print('</div><div style="clear:both"></div><br>', file=fp)
-
 def encloser(st, label):
         p = "<br><br>"
         p += "<div><b>" + label + "</b></div>"
@@ -639,7 +643,6 @@ def plotIdleStallTIme(dpath, group):
                 label += " startedAt: " + str(ag._vAgent._vStartedAt)
                 label += " traceIdx: " + str(AGENT_TRACE_MAP.get(ag._vPeerId, 0))
                 label += "</span>"
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
             label = "<h2>workingTime</h2>"
 #             plt.clf()
@@ -649,7 +652,6 @@ def plotIdleStallTIme(dpath, group):
                 pltData = ag._vWorkingTimes
                 Xs, Ys, Zs = list(zip(*pltData))
                 eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
             label = "<h2>StallTime</h2>"
 #             plt.clf()
@@ -659,7 +661,6 @@ def plotIdleStallTIme(dpath, group):
                 pltData = ag._vAgent._vTimeSlipage
                 Xs, Ys, Zs = list(zip(*pltData))
                 eplt.plot(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
 
             label = "<h2>qualityLevel</h2>"
@@ -670,7 +671,6 @@ def plotIdleStallTIme(dpath, group):
                 pltData = ag._vAgent._vQualitiesPlayedOverTime
                 Xs, Ys, Zs = list(zip(*pltData))
                 eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="post", color=colors[i%len(colors)])
-#             storeAsPlotViewer(pltHtmlPath, fig, label)
             eplt.setFigHeader(label)
 
     with open(pltHtmlPath, "w") as fp:

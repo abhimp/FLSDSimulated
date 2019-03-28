@@ -9,7 +9,7 @@ class Simulator():
         self.now = 0.0
 
     def runAfter(self, after, callback, *args, **kw):
-        self.runAt(self.now+after, callback, *args, **kw)
+        return self.runAt(self.now+after, callback, *args, **kw)
 
     def runAt(self, at, callback, *args, **kw):
         at = float(at)

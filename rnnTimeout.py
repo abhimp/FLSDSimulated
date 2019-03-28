@@ -218,14 +218,14 @@ class PensiveLearner():
 
 
 PENSIEVE_LEARNER_INSTANT=None
-def getPensiveLearner(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None):
+def getPensiveLearner(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
     global PENSIEVE_LEARNER_INSTANT
     if PENSIEVE_LEARNER_INSTANT:
         p = PENSIEVE_LEARNER_INSTANT
         assert p._vActionset == actionset and p._vInfoDept == infoDept
         return p
 
-    PENSIEVE_LEARNER_INSTANT = PensiveLearner(actionset, infoDept, log_path, summary_dir)
+    PENSIEVE_LEARNER_INSTANT = PensiveLearner(actionset, infoDept, log_path, summary_dir, *kw, **kws)
     return PENSIEVE_LEARNER_INSTANT
 
 
