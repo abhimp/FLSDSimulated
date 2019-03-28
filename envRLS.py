@@ -1,7 +1,7 @@
 '''envRLS - Rapid Live Streaming Environment
 
 '''
-from p2pnetwork import P2PRandomNetwork
+from p2pnetwork import P2PRandomNetwork, P2PNetwork, P2PFullyConnectedNetwork 
 from envSimpleP2P import P2PGroup
 from envSimple import SimpleEnvironment
 from simulator import Simulator
@@ -335,6 +335,7 @@ def setupEnv(traces, vi, network, abr=None):
     # allocate different traces for each link in the network
     for x, nodeId in enumerate(network.nodes()):
         link_traces = {}
+        print(nodeId, list(network.grp.neighbors(nodeId)))
         for neighbor in network.grp.neighbors(nodeId):
            edge = (min(neighbor, nodeId), max(neighbor, nodeId))
            if edge not in trace_map:
@@ -359,7 +360,7 @@ def setupEnv(traces, vi, network, abr=None):
         neighbor_envs = {neighbor: envs[neighbor] for neighbor in neighbors}
         if nodeId != SUPERPEER_ID and SUPERPEER_ID not in neighbor_envs:
             neighbor_envs[SUPERPEER_ID] = envs[SUPERPEER_ID]
-        envs[nodeId].setNeighbors(neighbor_envs)
+        envs[nodeId].setNeighbors(envs)
         simulator.runAt(101.0 + x, envs[nodeId].start, 5)
     simulator.run()
 
@@ -373,7 +374,7 @@ def setupEnv(traces, vi, network, abr=None):
 
 
 def main():
-    network = P2PRandomNetwork(6)
+    network = P2PFullyConnectedNetwork(6)
     # By default, we assume super peer to be node id 0
 
     traces = load_trace.load_trace()

@@ -60,6 +60,10 @@ class P2PRandomNetwork(P2PNetwork):
         # for now, create a  random 3-regular graph wherein all nodes have exactly 3 neighbours
         self.grp = nx.random_regular_graph(connectivity, num_nodes)
 
+class P2PFullyConnectedNetwork(P2PNetwork):
+    def __init__(self, num_nodes):
+        super().__init__(None)
+        self.grp = nx.complete_graph(num_nodes)
 
 def main():
     grp = P2PRandomNetwork(6)
