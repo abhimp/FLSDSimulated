@@ -258,6 +258,7 @@ def main():
     plotAgentsData(results, "_vAgent.totalStallTime", "Stall Time", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.startUpDelay", "Start up delay", "Player Id", lonePeers)
     plotAgentsData(results, "idleTime", "IdleTime", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.avgBitrateVariation", "Average Bitrate Variation", "Player Id", lonePeers)
     plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id", lonePeers)
 
     plotCDNData(cdns)

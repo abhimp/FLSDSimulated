@@ -117,36 +117,11 @@ class AbrPensieve:
         log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrPensieve.log")
         self.agent = agent
         self.video = videoInfo
-        self.parent_conn, child_conn = Pipe()
-        self.proc = Process(target=self.otherProcConnection, args=(child_conn, videoInfo, log_file_path))
+        self.abr = AbrPensieveProc.getInstance(videoInfo, log_file_path)
         incId()
-        self.proc.start()
-        ready = self.parent_conn.recv()
-        if ready != "ready":
-            print("="*50 + "\n" + "FATAL ERROR")
-            print("="*50 + "\n")
 
     def stopAbr(self):
-        if not self.proc:
-            return
-        rcv = {FINISHED_PROC : True}
-        self.parent_conn.send(rcv)
-        self.proc.join()
-        self.proc = None
-
-    def otherProcConnection(self, conn, videoInfo, log_file_path=LOG_FILE):
-#         conn = conn
-        abr = AbrPensieveProc(videoInfo, None, log_file_path)
-        conn.send("ready")
-        while True:
-            rcv = conn.recv()
-            if FINISHED_PROC in rcv:
-                break
-            info = abr.nextQuality(rcv)
-            conn.send(info)
-
-        print("="*50 + "\n" + "FINISHED:", SETUP_ABR_CALL_COUNTER)
-        print("="*50 + "\n")
+        self.abr = None 
 
     def getSleepTime(self, buflen):
         if (self.agent._vMaxPlayerBufferLen - self.video.segmentDuration) > buflen:
@@ -172,14 +147,26 @@ class AbrPensieve:
                 'buffer': bufferLeft,
                 'lastRequest': self.agent.nextSegmentIndex,
                 }
-        self.parent_conn.send(post_data)
-        ql = self.parent_conn.recv()
+        ql = self.abr.nextQuality(post_data)
         return self.getSleepTime(bufferLeft), ql
 
 class AbrPensieveProc:
-    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE):
+    __instance = None
+    @staticmethod
+    def getInstance(videoInfo, log_file_path=LOG_FILE):
+        if AbrPensieveProc.__instance == None:
+            AbrPensieveProc(videoInfo, log_file_path)
+        assert videoInfo == AbrPensieveProc.__instance.video
+        return AbrPensieveProc.__instance
+
+    @staticmethod
+    def clear():
+        AbrPensieveProc.__instance = None
+
+    def __init__(self, videoInfo, log_file_path=LOG_FILE):
+        assert AbrPensieveProc.__instance == None
+        AbrPensieveProc.__instance = self
         self.video = videoInfo
-#         self.agent = agent
         input_dict = setup_abr(videoInfo, log_file_path)
         self.input_dict = input_dict
         self.sess = input_dict['sess']
