@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
     subjects = subjects.split(",")
     networks = glob.glob("./graph/*.txt")
-    videos = VIDEO_FILES[:40] #glob.glob("./videofilesizes/*.py")
+    videos = VIDEO_FILES[:35] #glob.glob("./videofilesizes/*.py")
     traces = load_trace.load_trace()
     traces = list(zip(*traces))
     for vidPath in videos:
