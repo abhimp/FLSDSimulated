@@ -23,7 +23,9 @@ from cdnUsages import CDN
 
 # from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 # from abrPensiev import AbrPensieve
+# from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
 GroupP2PEnvTimeoutRNN = None
+GroupP2PEnvTimeoutIncRNN = None
 AbrPensieve = None
 
 
@@ -92,7 +94,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN"]:
+        if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
             continue
 #         x = []
         for ag in res:
@@ -199,8 +201,8 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def main():
-    global GroupP2PEnvTimeoutRNN, AbrPensieve
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN"] 
+    global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"] 
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -212,6 +214,11 @@ def main():
     if "GroupP2PEnvTimeoutRNN" in allowed and GroupP2PEnvTimeoutRNN is None:
         from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN as gpe
         GroupP2PEnvTimeoutRNN = gpe
+
+    if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
+        from envGroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
+        GroupP2PEnvTimeoutIncRNN = gpe
+
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
@@ -233,6 +240,7 @@ def main():
     testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
     testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
     cdns = {}
