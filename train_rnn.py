@@ -11,7 +11,8 @@ from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
 from p2pnetwork import P2PNetwork
-from rnnTimeout import getPensiveLearner, saveLearner
+from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer
+import multiprocessing as mp
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
@@ -110,7 +111,8 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, result_dir):
 
         savePlotData(Xs, Ys, Zs, name, pltTitle, result_dir)
 
-def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *kw, **kws):
+def runExperiments(pq, slvId, envCls, traces, vi, network, abr = None, result_dir = None, *kw, **kws):
+    setSlaveId(slvId)
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -126,12 +128,17 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
+    saveLearner()
+    pq.put(slvId)
     return ags
 
 
 if __name__ == "__main__":
     subjects = "GroupP2PTimeoutRNN"
-    modelPath = "ModelPath"
+    modelPath = "ResModelPath"
+    numSlave = 4
+    slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
+    slaveProcs = {}
 
 
     subjects = subjects.split(",")
@@ -139,9 +146,13 @@ if __name__ == "__main__":
     videos = VIDEO_FILES[:35] #glob.glob("./videofilesizes/*.py")
     traces = load_trace.load_trace()
     traces = list(zip(*traces))
+    centralLearner = None
+    procQueue = mp.Queue()
     for vidPath in videos:
-         vi = video.loadVideoTime(vidPath)
-         for netPath in networks:
+        vi = video.loadVideoTime(vidPath)
+        if not centralLearner:
+            centralLearner = runCentralServer(slaveIds, [-1] + list(range(len(vi.bitrates))), summary_dir = modelPath)
+        for netPath in networks:
             p2p = P2PNetwork(netPath)
             if p2p.numNodes() < 10:
                 continue
@@ -153,6 +164,25 @@ if __name__ == "__main__":
 
                 randstatefp = os.path.join(result_dir, "randstate")
                 #print(GroupP2PEnvTimeoutRNN, traces, vi, p2p, None, result_dir, modelPath)
-                runExperiments(GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+                if len(slaveIds) == 0:
+                    slvId = procQueue.get()
+                    slaveIds.append(slvId)
+                    slaveProcs[slvId].join()
+                slvId = slaveIds.pop()
+#                 runExperiments(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir, modelPath =  modelPath)
+#                 continue
+                p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})
+                p.start()
+                slaveProcs[slvId] = p
+            if len(slaveIds) == 0:
+                break
+        if len(slaveIds) == 0:
+            break
 
-    saveLearner()
+    while len(slaveIds) < numSlave:
+        slvId = procQueue.get()
+        slaveIds.append(slvId)
+        slaveProcs[slvId].join()
+
+    quitCentralServer()
+    centralLearner.join()
