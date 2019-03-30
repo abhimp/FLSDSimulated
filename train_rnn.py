@@ -136,7 +136,7 @@ def runExperiments(pq, slvId, envCls, traces, vi, network, abr = None, result_di
 if __name__ == "__main__":
     subjects = "GroupP2PTimeoutRNN"
     modelPath = "ResModelPath"
-    numSlave = 4
+    numSlave = 16
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slaveProcs = {}
 
@@ -174,10 +174,10 @@ if __name__ == "__main__":
                 p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})
                 p.start()
                 slaveProcs[slvId] = p
-            if len(slaveIds) == 0:
-                break
-        if len(slaveIds) == 0:
-            break
+#             if len(slaveIds) == 0:
+#                 break
+#         if len(slaveIds) == 0:
+#             break
 
     while len(slaveIds) < numSlave:
         slvId = procQueue.get()
