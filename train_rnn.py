@@ -6,7 +6,7 @@ import numpy as np
 import glob
 
 import videoInfo as video
-from envGroupP2PTimeoutRNN import GroupP2PEnvTimeoutRNN
+from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
@@ -153,6 +153,6 @@ if __name__ == "__main__":
 
                 randstatefp = os.path.join(result_dir, "randstate")
                 #print(GroupP2PEnvTimeoutRNN, traces, vi, p2p, None, result_dir, modelPath)
-                runExperiments(GroupP2PEnvTimeoutRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+                runExperiments(GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
 
     saveLearner()
