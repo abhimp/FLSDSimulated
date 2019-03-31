@@ -1,4 +1,5 @@
 
+from myprint import myprint
 import os
 import numpy as np
 import tensorflow as tf
@@ -82,10 +83,10 @@ class PensiveLearnerCentralAgent():
         self.actor_gradient_batch.append(actor_gradient)
         self.critic_gradient_batch.append(critic_gradient)
 
-        print("====")
-        print("Master: Epoch", self.epoch)
-        print("TD_loss", td_loss, "Avg_reward", np.mean(r_batch), "Avg_entropy", np.mean(entropy_record))
-        print("====")
+        myprint("====")
+        myprint("Master: Epoch", self.epoch)
+        myprint("TD_loss", td_loss, "Avg_reward", np.mean(r_batch), "Avg_entropy", np.mean(entropy_record))
+        myprint("====")
 
         summary_str = self.sess.run(self.summary_ops, feed_dict={
             self.summary_vars[0]: td_loss,

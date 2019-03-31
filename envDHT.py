@@ -1,4 +1,5 @@
 from envSimple import SimpleEnvironment
+from myprint import myprint
 import math
 import numpy as np
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork

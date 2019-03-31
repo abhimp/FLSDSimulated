@@ -1,4 +1,5 @@
 import random
+from myprint import myprint
 import math
 import numpy as np
 from group import Group, GroupManager
@@ -373,11 +374,11 @@ class Agent():
         self._vFinished = True
         self._vBufferLenOverTime.append((self._vEnv.getNow(), 0))
         self._vQualitiesPlayedOverTime.append((self._vEnv.getNow(), 0, -1))
-        print("Simulation finished at:", self._vEnv.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay, "firstSegDlTime:", self._vFirstSegmentDlTime, "segSkipped:", self._vSegmentSkiped)
-        print("QoE:", self._rCalculateQoE())
-        print("stallTime:", self._vStallsAt)
-#         print("Quality played:", self._vQualitiesPlayed)
-#         print("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
+        myprint("Simulation finished at:", self._vEnv.getNow(), "totalStallTime:", self._vTotalStallTime, "startUpDelay:", self._vStartUpDelay, "firstSegDlTime:", self._vFirstSegmentDlTime, "segSkipped:", self._vSegmentSkiped)
+        myprint("QoE:", self._rCalculateQoE())
+        myprint("stallTime:", self._vStallsAt)
+#         myprint("Quality played:", self._vQualitiesPlayed)
+#         myprint("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
 #                 "ration U/D:", self._vTotalUploaded/self._vTotalDownloaded)
 
 #=============================================
