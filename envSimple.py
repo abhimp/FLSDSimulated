@@ -56,6 +56,9 @@ class SimpleEnvironment():
     @property
     def totalWorkingTime(self):
         return self._vTotalWorkingTime
+    @property
+    def now(self):
+        return self._vSimulator.getNow()
 
     def addAgent(self, ag):
         self._vAgent = ag
