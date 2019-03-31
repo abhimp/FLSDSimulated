@@ -29,6 +29,66 @@ RESULT_DIR = "./results/GenPlots"
 BUFFER_LEN_PLOTS = "results/bufferlens"
 STALLTIME_IDLETIME_PLOTS = "results/stall-idle"
 
+VIDEO_FILES = [
+    "./videofilesizes/sizes_zC1ePnMTRPY.py",
+    "./videofilesizes/sizes_7HEKMRfM0vw.py",
+    "./videofilesizes/sizes_mUc_aJYlCfk.py",
+    "./videofilesizes/sizes_zq7iftN3in4.py",
+    "./videofilesizes/sizes_iX1JY2qWq2w.py",
+    "./videofilesizes/sizes_CidvwfIorPE.py",
+    "./videofilesizes/sizes_cCGuvUPSYU4.py",
+    "./videofilesizes/sizes_0yRnOU7s8UE.py",
+    "./videofilesizes/sizes_b6P4R3y3hH0.py",
+    "./videofilesizes/sizes_cn8YjC7s7B8.py",
+    "./videofilesizes/sizes_DCYzcX6xzBc.py",
+    "./videofilesizes/sizes_M6hRtv_x7gc.py",
+    "./videofilesizes/sizes_J_JdgAFcDF0.py",
+    "./videofilesizes/sizes_yv25Kx0dKBU.py",
+    "./videofilesizes/sizes_L_aySa3BvdA.py",
+    "./videofilesizes/sizes_kjRAWql2A3E.py",
+    "./videofilesizes/sizes_G-qd6YFFbc4.py",
+    "./videofilesizes/sizes_xRpLGifRHnI.py",
+    "./videofilesizes/sizes_LMWw-X6t8Wc.py",
+    "./videofilesizes/sizes_DwgGXGTtObc.py",
+    "./videofilesizes/sizes_prNYOW0_kms.py",
+    "./videofilesizes/sizes_qBVThFwdYTc.py",
+    "./videofilesizes/sizes_79g40dq3M9w.py",
+    "./videofilesizes/sizes_H0f7poWe8RI.py",
+    "./videofilesizes/sizes_0oly6d0zlZM.py",
+    "./videofilesizes/sizes_n6paI7fs5VM.py",
+    "./videofilesizes/sizes_cyMnKoAdbYI.py",
+    "./videofilesizes/sizes_T2vPDGzxq7o.py",
+    "./videofilesizes/sizes__GcDktjpp1w.py",
+    "./videofilesizes/sizes_hF8OoWadK4Q.py",
+    "./videofilesizes/sizes_b80ShWk_Aro.py",
+    "./videofilesizes/sizes_6jIIONaP0p4.py",
+    "./videofilesizes/sizes_7CgTlg_L_Sw.py",
+    "./videofilesizes/sizes_gtPIfchgItw.py",
+    "./videofilesizes/sizes_1s6zy8SB3Is.py",
+    "./videofilesizes/sizes_IDXTmCwAETM.py",
+    "./videofilesizes/sizes_ZyBsy5SQxqU.py",
+    "./videofilesizes/sizes_mRNWC0piPrQ.py",
+    "./videofilesizes/sizes_Al53BulB0H0.py",
+    "./videofilesizes/sizes_0b4SVyP0IqI.py",
+    "./videofilesizes/sizes_szdW22mqNBQ.py",
+    "./videofilesizes/sizes_O_sTdr-Aky0.py",
+    "./videofilesizes/sizes_oBLXbrD8Jek.py",
+    "./videofilesizes/sizes_ptWmIvm7UNk.py",
+    "./videofilesizes/sizes_llxRaBrZ45s.py",
+    "./videofilesizes/sizes_bSd2P0guPFk.py",
+    "./videofilesizes/sizes_Yo4oP2eyDtI.py",
+    "./videofilesizes/sizes_Q8vK7_B2WZ0.py",
+    "./videofilesizes/sizes_u3rl8NB8xIc.py",
+    "./videofilesizes/sizes_XOst4cXEXko.py",
+    "./videofilesizes/sizes_PqC9g7tkrEc.py",
+    "./videofilesizes/sizes_oO4xDieHKe4.py",
+    "./videofilesizes/sizes_8de4XDnJUKk.py",
+    "./videofilesizes/sizes__YAEitUAAZs.py",
+    "./videofilesizes/sizes_tQhqs1iFHDQ.py",
+    "./videofilesizes/sizes_b6TIMTvY8hM.py",
+    "./videofilesizes/sizes_qpdU1t2xyok.py"
+]
+
 def getPMF(x):
     x = [y for y in x]
     freq = list(cl.Counter(x).items())
@@ -89,7 +149,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
-    return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
+    return grp
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
@@ -120,15 +180,36 @@ def main():
 
 #     for name, cb in testCB.items():
     for name in allowed:
-        assert name in testCB
-        cb = testCB[name]
-        randstate.loadCurrentState()
-        ags, cdn = runExperiments(*cb)
-        results[name] = ags
-        cdns[name] = cdn
+        fis = []
+        QoEVar = []
+        for vfp in VIDEO_FILES:
+            vi = video.loadVideoTime(vfp)
+            assert name in testCB
+            cb = testCB[name]
+            randstate.loadCurrentState()
+            grp = runExperiments(*cb)
+            gp, igp = grp.getGroupFairness(), grp.getInterGroupFairness()
+            QoEVar += grp.getQoEVariation()
+            fis.append((gp, igp))
 
-    print("ploting figures")
-    print("="*30)
+        fpath = os.path.join(RESULT_DIR, "fairness")
+        if not os.path.isdir(fpath):
+            os.makedirs(fpath)
+        fpath = os.path.join(fpath, name+".dat")
+        with open(fpath, "w") as fp:
+            print("#gp igp", file=fp)
+            for x in fis:
+                print(*x, file=fp)
+
+        fpath = os.path.join(RESULT_DIR, "QoEVarInGroup")
+        if not os.path.isdir(fpath):
+            os.makedirs(fpath)
+        fpath = os.path.join(fpath, name+".dat")
+        with open(fpath, "w") as fp:
+            print("#", file=fp)
+            for x in QoEVar:
+                print(x, file=fp)
+
 
 
 
