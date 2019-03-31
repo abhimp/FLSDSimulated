@@ -63,7 +63,7 @@ class PensiveLearnerCentralAgent():
 #         nn_model = NN_MODEL
         if self.nn_model is not None:  # nn_model is the path to file
             self.saver.restore(self.sess, self.nn_model)
-            print("Model restored.")
+            myprint("Model restored.")
 
         self.epoch = 0
 
@@ -115,7 +115,7 @@ class PensiveLearnerCentralAgent():
                 # Save the neural net parameters to disk.
                 save_path = self.saver.save(self.sess, self.summary_dir + "/nn_model_ep_" +
                                        str(self.epoch) + ".ckpt")
-                print("Model saved in file: %s" % save_path)
+                myprint("Model saved in file: %s" % save_path)
 
         return self.getParams()
 
@@ -166,21 +166,21 @@ class PensiveLearner():
 #         nn_model = NN_MODEL
         if self.nn_model is not None and not self.ipcQueue:  # nn_model is the path to file
             self.saver.restore(self.sess, self.nn_model)
-            print("Model restored.")
+            myprint("Model restored.")
 
         self.epoch = 0
         
         if self.ipcQueue:
             self.ipcQueue[0].put({"id":self.ipcId, "cmd":IPC_CMD_PARAM})
-            print("="*50)
-            print(self.ipcId , ": waiting for ipc")
-            print("="*50)
+            myprint("="*50)
+            myprint(self.ipcId , ": waiting for ipc")
+            myprint("="*50)
             actor_net_params, critic_net_params = self.ipcQueue[1].get()
             self.actor.set_network_params(actor_net_params)
             self.critic.set_network_params(critic_net_params)
-            print("="*50)
-            print(self.ipcId , ": ipcOver")
-            print("="*50)
+            myprint("="*50)
+            myprint(self.ipcId , ": ipcOver")
+            myprint("="*50)
 
         self.s_batch = []
         self.a_batch = []
@@ -292,10 +292,10 @@ class PensiveLearner():
         self.actor_gradient_batch.append(actor_gradient)
         self.critic_gradient_batch.append(critic_gradient)
 
-        print("====")
-        print("Epoch", self.epoch)
-        print("TD_loss", td_loss, "Avg_reward", np.mean(self.r_batch), "Avg_entropy", np.mean(self.entropy_record))
-        print("====")
+        myprint("====")
+        myprint("Epoch", self.epoch)
+        myprint("TD_loss", td_loss, "Avg_reward", np.mean(self.r_batch), "Avg_entropy", np.mean(self.entropy_record))
+        myprint("====")
 
         summary_str = self.sess.run(self.summary_ops, feed_dict={
             self.summary_vars[0]: td_loss,
@@ -324,7 +324,7 @@ class PensiveLearner():
                 # Save the neural net parameters to disk.
                 save_path = self.saver.save(self.sess, self.summary_dir + "/nn_model_ep_" +
                                        str(self.epoch) + ".ckpt")
-                print("Model saved in file: %s" % save_path)
+                myprint("Model saved in file: %s" % save_path)
 
         del self.s_batch[:]
         del self.a_batch[:]
@@ -376,8 +376,8 @@ def _runCentralServer(actionset = [], infoDept=S_LEN, log_path=None, summary_dir
     masterQueue, slaveQueues = PENSIEVE_IPC_QUEUES
     while True:
         req = masterQueue.get()
-#         print("="*40)
-#         print("req received:", req)
+#         myprint("="*40)
+#         myprint("req received:", req)
         if "cmd" not in req:
             continue
         if req["cmd"] == IPC_CMD_UPDATE:
