@@ -69,6 +69,20 @@ class Group():
                 return False
         return True
 
+    def jainsFairnessQoEIndex(s):
+        qls = []
+        for n in s.nodes:
+            ql = n._vAgent.bitratePlayed
+            ql.reverse()
+            qls.append(ql)
+        qls = list(zip(*qls))
+        qls = list(zip(*qls))
+        assert len(qls) == len(s.nodes)
+        avgs = [sum(x)/len(x) for x in qls]
+        
+        jfi = sum(avgs)**2 / (sum([x**2 for x in avgs]))
+        return
+
 class GroupManager():
     def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
         self.groups = {}

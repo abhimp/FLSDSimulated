@@ -114,8 +114,13 @@ class Agent():
     def avgQualityIndex(self):
         if len(self._vQualitiesPlayed) == 0: return 0
 
-        bitratePlayed = self._vQualitiesPlayed
+        bitratePlayed = selfdeo_chunk._vQualitiesPlayed
         return float(sum(bitratePlayed))/len(bitratePlayed)
+
+#=============================================
+    @property
+    def bitratePlayed(self):
+        return [self._vVideoInfo.bitrates[x] for x in self._vQualitiesPlayed]
 
 #=============================================
     @property
