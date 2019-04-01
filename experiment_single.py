@@ -30,8 +30,7 @@ GroupP2PEnvTimeoutIncRNN = None
 AbrPensieve = None
 
 
-RESULT_DIR_ = "./results/GroupSizePlot"
-RESULT_DIR = RESULT_DIR_
+RESULT_DIR = "./results/GenPlots"
 BUFFER_LEN_PLOTS = "results/bufferlens"
 STALLTIME_IDLETIME_PLOTS = "results/stall-idle"
 
@@ -100,7 +99,7 @@ def findIgnorablePeers(results):
             continue
 #         x = []
         for ag in res:
-            if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) != ag._vGroup.peersPerGroup:
+            if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
                 p.add(ag.networkId)
     return p
 #               x += [ag.networkId]
@@ -111,22 +110,7 @@ def findIgnorablePeers(results):
 #     if len(p): print(p)
 #     return set(p[-1]) if len(p) else []
 
-def saveAgentsDataMulitAttrib(grpSz, results, attribs, pltTitle, lonePeers = []):
-    for name, res in results.items():
-        Xs, Ys = [], []
-        for x, ag in enumerate(res):
-            if ag.networkId in lonePeers:
-                continue
-            y = []
-            for at in attribs:
-                y.append(eval("ag." + at))
-            y = " ".join(str(i) for i in y)
-            Xs.append(x)
-            Ys.append(y)
-        savePlotData(Xs, Ys, name + "_"+str(grpSz), pltTitle)
-
-
-def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
+def plotAgentsData(results, attrib, pltTitle, xlabel, lonePeers = []):
     font = {'family' : 'normal',
             'weight' : 'bold',
             'size'   : 22}
@@ -146,10 +130,10 @@ def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
             Xs.append(x)
             Ys.append(y)
 
-        savePlotData(Xs, Ys, name + "_"+str(grpSz), pltTitle)
+        savePlotData(Xs, Ys, name, pltTitle)
         pltData[name] = Ys
         Xs, Ys = list(zip(*getCMF(Ys)))
-        savePlotData(Xs, Ys, name + "_"+str(grpSz) + "_cmf", pltTitle)
+        savePlotData(Xs, Ys, name+"_cmf", pltTitle)
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
@@ -171,7 +155,7 @@ def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
     plt.savefig(dpath + "_box.png", bbox_inches="tight")
     plt.savefig(dpath + "_box.eps", bbox_inches="tight")
 
-def plotCDNData(grpSz, cdns):
+def plotCDNData(cdns):
     font = {'family' : 'normal',
             'weight' : 'bold',
             'size'   : 22}
@@ -184,7 +168,7 @@ def plotCDNData(grpSz, cdns):
     pltTitle = "cdnUploaded"
     for name, res in cdns.items():
         Xs, Ys = list(zip(*res.uploaded))
-        savePlotData(Xs, Ys, name + "_"+str(grpSz), pltTitle)
+        savePlotData(Xs, Ys, name, pltTitle)
         plt.plot(Xs, Ys, label=name)
 
     plt.legend(ncol = 2, loc = "upper center")
@@ -195,9 +179,9 @@ def plotCDNData(grpSz, cdns):
 
 GLOBAL_STARTS_AT = 5
 
-def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
+def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
     simulator = Simulator()
-    grp = GroupManager(grpSz, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
     deadAgents = []
     ags = []
@@ -207,11 +191,12 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
     CDN.clear()
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
-        trace = traces[idx]
+        trace = traces[29]
         startsAt = startsAts[x]
         env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir, modelPath=modelPath)
         simulator.runAt(startsAt, env.start, GLOBAL_STARTS_AT)
         ags.append(env)
+        break
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
@@ -219,11 +204,19 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN"] 
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment"] 
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
     allowed = sys.argv[1:]
+    if "Penseiv" in allowed and AbrPensieve is None:
+        from abrPensiev import AbrPensieve as abp
+        AbrPensieve = abp
+
+    if "GroupP2PEnvTimeoutRNN" in allowed and GroupP2PEnvTimeoutRNN is None:
+        from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN as gpe
+        GroupP2PEnvTimeoutRNN = gpe
+
     if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
         from envGroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
         GroupP2PEnvTimeoutIncRNN = gpe
@@ -240,40 +233,46 @@ def main():
 #     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
 
     testCB = {}
+    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA)
+    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC)
+    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC)
+    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve)
+    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network)
+    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network)
+    testCB["GroupP2PTimeoutSkip"] = (GroupP2PEnvTimeoutSkip, traces, vi, network)
+    testCB["DHTEnvironment"] = (DHTEnvironment, traces, vi, network)
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
+    testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
     testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
     cdns = {}
 
-    for grpSz in [3, 4, 5, 6, 7, 8, 9, 10]:
-        for name in allowed:
-            assert name in testCB
-            cb = testCB[name]
-            randstate.loadCurrentState()
-            ags, cdn = runExperiments(grpSz, *cb)
-            results[name] = ags
-            cdns[name] = cdn
+#     for name, cb in testCB.items():
+    for name in allowed:
+        assert name in testCB
+        cb = testCB[name]
+        randstate.loadCurrentState()
+        ags, cdn = runExperiments(*cb)
+        results[name] = ags
+        cdns[name] = cdn
 
-        print("ploting figures")
-        print("="*30)
+    print("ploting figures")
+    print("="*30)
 
-        lonePeers = findIgnorablePeers(results)
+    lonePeers = findIgnorablePeers(results)
 
-        saveAgentsDataMulitAttrib(grpSz, results, ["_vTotalUploaded","_vTotalDownloaded"] , "upload_download", lonePeers)
-        saveAgentsDataMulitAttrib(grpSz, results, ["_vEarlyDownloaded","_vNormalDownloaded"] , "earlydownload", lonePeers)
+    plotAgentsData(results, "_vAgent.QoE", "QoE", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.avgQualityIndexVariation", "Average quality index variation", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.totalStallTime", "Stall Time", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.startUpDelay", "Start up delay", "Player Id", lonePeers)
+    plotAgentsData(results, "idleTime", "IdleTime", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.avgBitrateVariation", "Average Bitrate Variation", "Player Id", lonePeers)
+    plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id", lonePeers)
 
-        plotAgentsData(grpSz, results, "_vAgent.QoE", "QoE", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "_vAgent.avgQualityIndexVariation", "Average quality index variation", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "_vAgent.totalStallTime", "Stall Time", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "_vAgent.startUpDelay", "Start up delay", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "idleTime", "IdleTime", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "_vAgent.avgBitrateVariation", "Average Bitrate Variation", "Player Id", lonePeers)
-        plotAgentsData(grpSz, results, "totalWorkingTime", "workingTime", "Player Id", lonePeers)
-
-        plotCDNData(grpSz, cdns)
+    plotCDNData(cdns)
 
 #     plt.show()
 
