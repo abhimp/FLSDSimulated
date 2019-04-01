@@ -69,6 +69,30 @@ class Group():
                 return False
         return True
 
+    def QoEVariation(s):
+        qoes = []
+        for n in s.nodes:
+            qoe = n._vAgent.QoE
+            qoes.append(qoe)
+        qoesvar = [abs(qoes[x-1]-q) for x,q in enumerate(qoes) if x != 0]
+        avg = sum(qoesvar)/len(qoesvar)
+        return avg
+
+
+    def jainsFairnessQoEIndex(s):
+        qls = []
+        for n in s.nodes:
+            ql = n._vAgent.bitratePlayed
+            ql.reverse()
+            qls.append(ql)
+        qls = list(zip(*qls))
+        qls = list(zip(*qls))
+        assert len(qls) == len(s.nodes)
+        avgs = [sum(x)/len(x) for x in qls]
+        
+        jfi = sum(avgs)**2 / (sum([x**2 for x in avgs]))/len(avgs)
+        return jfi
+
 class GroupManager():
     def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
         self.groups = {}
@@ -78,6 +102,46 @@ class GroupManager():
         self.defaultQL = defaultQL
         self.videoInfo = videoInfo
         self.network = network
+
+    def getQoEVariation(self, saturated = True):
+        QoEVar = []
+        for x, grps in self.groups.items():
+            for grp in grps:
+                if not saturated or grp.numNodes() == self.peersPerGroup:
+                    QoEVar.append(grp.QoEVariation())
+        return QoEVar
+
+    def getGroupFairness(self, saturated = True):
+        fairnessIndeces = []
+        for x, grps in self.groups.items():
+            for grp in grps:
+                if not saturated or grp.numNodes() == self.peersPerGroup:
+                    fairnessIndeces.append(grp.jainsFairnessQoEIndex())
+        return sum(fairnessIndeces)/len(fairnessIndeces)
+
+    def getInterGroupFairness(self, saturated = True):
+        fairnessIndeces = []
+        for x, grps in self.groups.items():
+            nodes = []
+            for grp in grps:
+                if not saturated or grp.numNodes() == self.peersPerGroup:
+                    nodes += grp.getAllNode()
+            if len(nodes) == 0:
+                continue
+            qls = []
+            for n in nodes:
+                ql = n._vAgent.bitratePlayed
+                ql.reverse()
+                qls.append(ql)
+            qls = list(zip(*qls))
+            qls = list(zip(*qls))
+            assert len(qls) == len(nodes)
+            avgs = [sum(x)/len(x) for x in qls]
+            
+            jfi = sum(avgs)**2 / (sum([x**2 for x in avgs])) / len(avgs)
+            fairnessIndeces.append(jfi)
+        return sum(fairnessIndeces)/len(fairnessIndeces)
+        
 
     def add(s, node, segId = 0, ql = -1):
         ql = s.defaultQL if ql < 0 else ql

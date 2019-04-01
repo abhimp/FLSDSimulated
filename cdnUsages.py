@@ -19,8 +19,6 @@ class CDN():
     
     @staticmethod
     def clear():
-        if not CDN.__instance:
-            return
         CDN.__instance = None
 
     def add(self, fromTimeSec, toTimeSec, bandwidthBps):

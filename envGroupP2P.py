@@ -1,4 +1,5 @@
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
+from myprint import myprint
 from group import GroupManager
 import math
 import randStateInit as randstate
@@ -87,14 +88,14 @@ class GroupP2PEnv(SimpleEnvironment):
 
 #=============================================
     def _rFinish(self):
-        print(self._vTraceFile)
+        myprint(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
-        print("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
+        myprint("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
                 "ration U/D:", self._vTotalUploaded/self._vTotalDownloaded)
-        print("Early download:", self._vEarlyDownloaded, "normal:", self._vNormalDownloaded)
-        print("video id:", self._vPeerId)
-        print("=============================")
+        myprint("Early download:", self._vEarlyDownloaded, "normal:", self._vNormalDownloaded)
+        myprint("video id:", self._vPeerId)
+        myprint("=============================")
         self._vFinished = True
 
 #=============================================
