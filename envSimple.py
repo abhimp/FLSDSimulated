@@ -1,4 +1,5 @@
 import numpy as np
+from myprint import myprint
 
 from agent import Agent
 from simulator import Simulator
@@ -56,6 +57,9 @@ class SimpleEnvironment():
     @property
     def totalWorkingTime(self):
         return self._vTotalWorkingTime
+    @property
+    def now(self):
+        return self._vSimulator.getNow()
 
     def addAgent(self, ag):
         self._vAgent = ag
@@ -71,7 +75,7 @@ class SimpleEnvironment():
 
 #=============================================
     def _rFinish(self):
-        print(self._vTraceFile)
+        myprint(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
 

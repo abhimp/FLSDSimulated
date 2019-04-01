@@ -6,12 +6,13 @@ import numpy as np
 import glob
 
 import videoInfo as video
-from envGroupP2PTimeoutRNN import GroupP2PEnvTimeoutRNN
+from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
 from p2pnetwork import P2PNetwork
-from rnnTimeout import getPensiveLearner, saveLearner
+from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer
+import multiprocessing as mp
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
@@ -126,33 +127,92 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
+    saveLearner()
     return ags
+
+def runSlave(pq, sq, slvId):
+    setSlaveId(slvId)
+    while True:
+        q = sq.get()
+        if q == "quit":
+            break
+        runExperiments(*q[0], **q[1])
+        pq.put(slvId)
 
 
 if __name__ == "__main__":
     subjects = "GroupP2PTimeoutRNN"
-    modelPath = "ModelPath"
-
+    modelPath = "ResModelPath"
+    numSlave = 2
+    slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
+    slvQs = {x:mp.Queue() for x in slaveIds}
+    procQueue = mp.Queue() 
+    slaveProcs = {}
 
     subjects = subjects.split(",")
     networks = glob.glob("./graph/*.txt")
-    videos = VIDEO_FILES[:40] #glob.glob("./videofilesizes/*.py")
+    videos = VIDEO_FILES[:35] #glob.glob("./videofilesizes/*.py")
     traces = load_trace.load_trace()
     traces = list(zip(*traces))
-    for vidPath in videos:
-         vi = video.loadVideoTime(vidPath)
-         for netPath in networks:
-            p2p = P2PNetwork(netPath)
-            if p2p.numNodes() < 10:
-                continue
+    centralLearner = None
+    expParams = [(vidPath, netPath, tc) for vidPath in videos for netPath in networks for tc in ["tc1"]]
+    total = len(expParams)
+    
+    if not centralLearner:
+        vi = video.loadVideoTime(videos[0])
+        centralLearner = runCentralServer(slaveIds, [-1] + list(range(len(vi.bitrates))), summary_dir = modelPath)
+    for x in slaveIds:
+        p = mp.Process(target=runSlave, args = (procQueue, slvQs[x], x))
+        p.start()
+        slaveProcs[x] = p
 
-            for tc in ["tc1"]: #, "tc2", "tc3"]:
-                result_dir = os.path.join(RESULT_DIR, tc)
-                if not os.path.isdir(result_dir):
-                    os.makedirs(result_dir)
+    finished = 0
+    started = 0
+    with open(RESULT_DIR+"/progress", "w") as fp:
+        print("finished: ", finished, "of", total, file=fp)
+    for vidPath, netPath, tc in expParams:
+        vi = video.loadVideoTime(vidPath)
+        p2p = P2PNetwork(netPath)
+        if p2p.numNodes() < 10:
+            continue
 
-                randstatefp = os.path.join(result_dir, "randstate")
-                #print(GroupP2PEnvTimeoutRNN, traces, vi, p2p, None, result_dir, modelPath)
-                runExperiments(GroupP2PEnvTimeoutRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+        result_dir = os.path.join(RESULT_DIR, tc)
+        if not os.path.isdir(result_dir):
+            os.makedirs(result_dir)
 
-    saveLearner()
+        randstatefp = os.path.join(result_dir, "randstate")
+        if len(slaveIds) == 0:
+            slvId = procQueue.get()
+            slaveIds.append(slvId)
+            finished += 1
+            print("="*40)
+            print("finished: ", finished, "of", total)
+            print("="*40)
+            with open(RESULT_DIR+"/progress", "w") as fp:
+                print("finished: ", finished, "of", total, file=fp)
+        slvId = slaveIds.pop()
+#         if slvId in slaveProcs:
+#             sq = slvQs[slvId]
+#             p = mp.Process(target=runSlave, args = (procQueue, sq, slvId))
+#             p.start()
+#             slaveProcs[slvId] = p
+        print("Starting", started)
+        slvQs[slvId].put([(GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+        print("Started", started)
+        started += 1
+#         p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})
+#         p.start()
+#         slaveProcs[slvId] = p
+        if finished >= 1:
+            break
+
+    while len(slaveIds) < numSlave:
+        slvId = procQueue.get()
+        slvQs[slvId].put("quit")
+        slaveIds.append(slvId)
+        slaveProcs[slvId].join()
+        with open(RESULT_DIR+"/progress", "w") as fp:
+            print("finished: ", finished, "of", total, file=fp)
+
+    quitCentralServer()
+    centralLearner.join()

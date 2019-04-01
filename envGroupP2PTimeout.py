@@ -1,4 +1,5 @@
 import os
+from myprint import myprint
 import math
 import json
 import matplotlib.pyplot as plt
@@ -122,15 +123,15 @@ class GroupP2PEnvTimeout(SimpleEnvironment):
             with open(fpath, "w") as fp:
                 points = sorted(list(self._vTimeoutDataAndDecision.items()), key=lambda x:x[0])
                 for seg,pt in points:
-                    print(json.dumps(pt, default=default), file=fp)
-        print(self._vTraceFile)
+                    myprint(json.dumps(pt, default=default), file=fp)
+        myprint(self._vTraceFile)
         self._vAgent._rFinish()
         self._vFinished = True
-        print("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
+        myprint("Downloaded:", self._vTotalDownloaded, "uploaded:", self._vTotalUploaded, \
                 "ration U/D:", self._vTotalUploaded/self._vTotalDownloaded)
-        print("Early download:", self._vEarlyDownloaded, "normal:", self._vNormalDownloaded)
-        print("video id:", self._vPeerId)
-        print("=============================")
+        myprint("Early download:", self._vEarlyDownloaded, "normal:", self._vNormalDownloaded)
+        myprint("video id:", self._vPeerId)
+        myprint("=============================")
         self._vFinished = True
 
 #=============================================
