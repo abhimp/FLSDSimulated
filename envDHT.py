@@ -135,7 +135,7 @@ class DHTEnvironment(SimpleEnvironment):
         delay = self.grp.getRtt(nextNode, self)
         self.runAfter(delay, nextNode.queryDHT, key, networkId, qlId, segId, sleepTime, startTime)
 
-    def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
+    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         self.searchDHT(nextQuality, nextSegId, sleepTime, self.now)
 
     def runFailSafe(self, ql, segId, sleepTime, start):
@@ -143,7 +143,7 @@ class DHTEnvironment(SimpleEnvironment):
         if sleepTimeLeft > 0:
             self.runAfter(sleepTimeLeft, self.runFailSafe, ql, segId, sleepTime, start)
             return
-        self._rFetchNextSeg(segId, ql)
+        self._rFetchSegment(segId, ql)
 
     def ihaveDHT(self, ownersId, key, ql, segId, sleepTime, start):
         sleepTimeLeft = max(0, start + sleepTime - self.now)

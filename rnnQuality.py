@@ -29,7 +29,7 @@ class PensiveLearnerCentralAgent():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None):
         
         assert summary_dir
-        self.summary_dir = summary_dir
+        self.summary_dir = os.path.join(summary_dir, "rnnQuality")
         self.nn_model = nn_model
 
         self.a_dim = len(actionset)
@@ -188,7 +188,7 @@ class PensiveLearnerProc():
 
         self.ipcQueue = ipcQueue
         self.ipcId = ipcId
-        self.summary_dir = summary_dir
+        self.summary_dir = os.path.join(summary_dir, "rnnQuality")
         self.nn_model = nn_model
 
         self.a_dim = len(actionset)
@@ -251,16 +251,12 @@ class PensiveLearnerProc():
         self.keyedActionProb = {}
         self.keyedAction = {}
 
-    def getNextAction(self, peerId, segId, state): #peerId and segId are Identifier
-        timeBudget, localQualities_, elapsedLocal, \
-            downloadedLocal, clenLocal, throughputLocal_, \
-            downloadStartedLocal_, downloadFinishedLocal_, \
-            elapsedRemote, downloadedRemote, clenRemote, \
-            throughputRemote_, downloadStartedRemote_, \
-            downloadFinishedRemote_ = state
-        
+    def getNextAction(self, rnnkey, state): #peerId and segId are Identifier
 
-        v_dim = len(downloadStartedLocal_)
+        #pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, deadline = state
+        lastPlayerId_, lastQl_, lastClens_, lastStartsAt_, lastFinishAt_, pendings_, deadline = state
+
+        v_dim = len(pendings_)
 
         # reward is video quality - rebuffer penalty - smooth penalty
         # retrieve previous state
@@ -271,22 +267,16 @@ class PensiveLearnerProc():
 
         # dequeue history record
         state = np.roll(state, -1, axis=1)
+        
+        state[ 0, :v_dim]   = lastPlayerId_
+        state[ 1, :v_dim]   = lastQl_
+        state[ 2, :v_dim]   = lastClens_
+        state[ 3, :v_dim]   = lastStartsAt_
+        state[ 4, :v_dim]   = lastFinishAt_
+        state[ 5, :v_dim]   = pendings_
+        state[ 6, :v_dim]   = deadline
 
-        state[ 0, -1]       = timeBudget
-        state[ 1, :v_dim]   = localQualities_
-        state[ 2, -1]       = elapsedLocal
-        state[ 3, -1]       = downloadedLocal
-        state[ 4, -1]       = clenLocal
-        state[ 5, :v_dim]   = throughputLocal_
-        state[ 6, :v_dim]   = downloadStartedLocal_
-        state[ 7, :v_dim]   = downloadFinishedLocal_
-        state[ 8, -1]       = elapsedRemote
-        state[ 9, -1]       = downloadedRemote
-        state[10, -1]       = clenRemote
-        state[11, :v_dim]   = throughputRemote_
-        state[12, :v_dim]   = downloadStartedRemote_
-        state[13, :v_dim]   = downloadFinishedRemote_
-
+        
 
         action_prob = self.actor.predict(np.reshape(state, (1, self._vInfoDim, self._vInfoDept)))
         action_cumsum = np.cumsum(action_prob)
@@ -294,22 +284,22 @@ class PensiveLearnerProc():
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
         
-        self.keyedSBatch[(peerId, segId)] = state
-        self.keyedActionProb[(peerId, segId)] = action_prob
-        self.keyedAction[(peerId, segId)] = action
+        self.keyedSBatch[rnnkey] = state
+        self.keyedActionProb[rnnkey] = action_prob
+        self.keyedAction[rnnkey] = action
 
         return self._vActionset[action]
 
-    def addReward(self, peerId, segId, reward): 
-        assert (peerId, segId) in self.keyedSBatch and (peerId, segId) in self.keyedActionProb
+    def addReward(self, rnnkey, reward): 
+        assert rnnkey in self.keyedSBatch and rnnkey in self.keyedActionProb
         
-        state = self.keyedSBatch[(peerId, segId)]
-        action_prob = self.keyedActionProb[(peerId, segId)]
-        action = self.keyedAction[(peerId, segId)]
+        state = self.keyedSBatch[rnnkey]
+        action_prob = self.keyedActionProb[rnnkey]
+        action = self.keyedAction[rnnkey]
 
-        del self.keyedSBatch[(peerId, segId)]
-        del self.keyedActionProb[(peerId, segId)]
-        del self.keyedAction[(peerId, segId)]
+        del self.keyedSBatch[rnnkey]
+        del self.keyedActionProb[rnnkey]
+        del self.keyedAction[rnnkey]
 
         self.r_batch.append(reward)
         

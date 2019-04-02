@@ -12,6 +12,7 @@ from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
+from envGroupP2PRNN import GroupP2PEnvRNN
 from envSimple import SimpleEnvironment
 from envDHT import DHTEnvironment
 from simulator import Simulator
@@ -97,18 +98,10 @@ def findIgnorablePeers(results):
     for name, res in results.items():
         if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
             continue
-#         x = []
         for ag in res:
             if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
                 p.add(ag.networkId)
     return p
-#               x += [ag.networkId]
-#         if len(x) > 0:
-#             if len(p) > 0:
-#                 assert x == p[-1]
-#             p.append(x)
-#     if len(p): print(p)
-#     return set(p[-1]) if len(p) else []
 
 def plotAgentsData(results, attrib, pltTitle, xlabel, lonePeers = []):
     font = {'family' : 'normal',
@@ -204,7 +197,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment"] 
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN"] 
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -244,6 +237,7 @@ def main():
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
     testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
     testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
     cdns = {}

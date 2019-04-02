@@ -11,7 +11,7 @@ from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
 from p2pnetwork import P2PNetwork
-from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer
+from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
 import multiprocessing as mp
 # from envSimpleP2P import experimentSimpleP2P
 
@@ -135,6 +135,7 @@ def runSlave(pq, sq, slvId):
     while True:
         q = sq.get()
         if q == "quit":
+            slavecleanup()
             break
         runExperiments(*q[0], **q[1])
         pq.put(slvId)
@@ -214,5 +215,7 @@ if __name__ == "__main__":
         with open(RESULT_DIR+"/progress", "w") as fp:
             print("finished: ", finished, "of", total, file=fp)
 
+    print("Turning off central server")
     quitCentralServer()
     centralLearner.join()
+    print("finished")
