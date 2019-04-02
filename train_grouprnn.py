@@ -168,11 +168,11 @@ if __name__ == "__main__":
     if not centralLearnerQua and not centralLearnerAge:
         vi = video.loadVideoTime(videos[0])
         centralLearnerQua = rnnQuality.runCentralServer(slaveIds, list(range(len(vi.bitrates))), summary_dir = modelPath)
-        centralLearnerAge = rnnAgent.runCentralServer(slaveIds, list(range(len(5))), summary_dir = modelPath) #assuming max 5 player in a group
-#     for x in slaveIds:
-#         p = mp.Process(target=runSlave, args = (procQueue, slvQs[x], x))
-#         p.start()
-#         slaveProcs[x] = p
+        centralLearnerAge = rnnAgent.runCentralServer(slaveIds, list(range(5)), summary_dir = modelPath) #assuming max 5 player in a group
+    for x in slaveIds:
+        p = mp.Process(target=runSlave, args = (procQueue, slvQs[x], x))
+        p.start()
+        slaveProcs[x] = p
 
     finished = 0
     started = 0
@@ -205,11 +205,10 @@ if __name__ == "__main__":
 #             p.start()
 #             slaveProcs[slvId] = p
         print("Starting", started)
-#         slvQs[slvId].put([(GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
-#        slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
-        rnnAgent.setSlaveId(slvId)
-        rnnQuality.setSlaveId(slvId)
-        runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+        slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+#         rnnAgent.setSlaveId(slvId)
+#         rnnQuality.setSlaveId(slvId)
+#         runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
         print("Started", started)
         started += 1
 #         p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})
