@@ -20,6 +20,8 @@ GROUP_JOIN_THRESHOLD = 10
 BYTES_IN_MB = 1000000
 
 LOG_LOCATION = "./results/"
+NN_MODEL_QUA = None
+NN_MODEL_AGE = None
 
 class GroupP2PEnvRNN(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
@@ -57,8 +59,8 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vGroupStarted = False
         self._vNextGroupDownloader = -1
         self._vNextGroupDLSegId = -1
-        self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath)
-        self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), summary_dir = self._vModelPath)
+        self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
+        self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
 
 #=============================================
     def start(self, startedAt = -1):
@@ -176,7 +178,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         estThrput = [0]*5 + [n._rPredictedThroughput()/1000000 for n in self._vGroupNodes]
         deadline = self._vAgent._vGlobalStartedAt + segId*self._vVideoInfo.segmentDuration - self.now
 
-        players = [0]*5 + [n._vPlayerIdInGrp for n in self._vGroupNodes]
+        players = [-1]*5 + [n._vPlayerIdInGrp for n in self._vGroupNodes]
 
         rnnkey = (self.networkId, segId)
 
