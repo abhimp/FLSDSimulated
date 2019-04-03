@@ -162,7 +162,7 @@ if __name__ == "__main__":
     traces = list(zip(*traces))
     centralLearnerQua = None
     centralLearnerAge = None
-    expParams = [(vidPath, netPath, tc) for vidPath in videos for netPath in networks[:40] for tc in ["tc1"]]
+    expParams = [(vidPath, netPath, tc) for netPath in networks[:40] for vidPath in videos for tc in ["tc1"]]
     total = len(expParams)
     
     if not centralLearnerQua and not centralLearnerAge:
