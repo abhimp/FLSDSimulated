@@ -310,6 +310,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             self._vGroup.add(self, self._vAgent.nextSegmentIndex+2)
 
         if self._vGroupNodes:
+            self.gossipSend(self._rRecvReq, self, req)
             for n in self._vGroupNodes:
                 if n == self:
                     continue
