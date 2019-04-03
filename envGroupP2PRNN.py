@@ -311,10 +311,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 
         if self._vGroupNodes:
             self.gossipSend(self._rRecvReq, self, req)
-            for n in self._vGroupNodes:
-                if n == self:
-                    continue
-                self.requestLongRpc(n._rRecvReq, req.clen, self, req)
 
         if not rnnkey:
             return
