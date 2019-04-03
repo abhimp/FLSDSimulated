@@ -173,13 +173,14 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         uploaded = [0] *5 + [x for x in (np.array(uploaded) - np.mean(uploaded))/BYTES_IN_MB]
         lastDlAt = [n._vWorkingTimes[-1][0] for n in self._vGroupNodes]
         lastDlAt = [0]*5 + [x for x in np.array(lastDlAt) - self.now]
+        estThrput = [0]*5 + [n._rPredictedThroughput()/1000000 for n in self._vGroupNodes]
         deadline = self._vAgent._vGlobalStartedAt + segId*self._vVideoInfo.segmentDuration - self.now
 
         players = [0]*5 + [n._vPlayerIdInGrp for n in self._vGroupNodes]
 
         rnnkey = (self.networkId, segId)
 
-        state = (pendings[-5:], curbufs[-5:], pbdelay[-5:], uploaded[-5:], lastDlAt[-5:], players[-5:], deadline)
+        state = (pendings[-5:], curbufs[-5:], pbdelay[-5:], uploaded[-5:], lastDlAt[-5:], players[-5:], estThrput[-5:], deadline)
     
         nextPlayer = self._vPensieveAgentLearner.getNextAction(rnnkey, state)
         #print(rnnkey, state)

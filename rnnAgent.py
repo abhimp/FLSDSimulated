@@ -253,7 +253,7 @@ class PensiveLearnerProc():
 
     def getNextAction(self, rnnkey, state): #peerId and segId are Identifier
 
-        pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, deadline = state
+        pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, estThrput_, deadline = state
 
         v_dim = len(pendings_)
 
@@ -273,7 +273,8 @@ class PensiveLearnerProc():
         state[ 3, :v_dim]   = uploaded_
         state[ 4, :v_dim]   = lastDlAt_
         state[ 5, :v_dim]   = players_
-        state[ 6, -1]       = deadline
+        state[ 6, :v_dim]   = estThrput_
+        state[ 7, -1]       = deadline
         
 
         action_prob = self.actor.predict(np.reshape(state, (1, self._vInfoDim, self._vInfoDept)))
