@@ -189,7 +189,7 @@ class PensiveLearnerProc():
         self.ipcQueue = ipcQueue
         self.ipcId = ipcId
         self.summary_dir = os.path.join(summary_dir, "rnnAgent")
-        self.nn_model = nn_model
+        self.nn_model = None if not nn_model else os.path.join(self.summary_dir, nn_model)
 
         self.a_dim = len(actionset)
         self._vActionset = actionset
@@ -283,13 +283,16 @@ class PensiveLearnerProc():
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
         
-        self.keyedSBatch[rnnkey] = state
-        self.keyedActionProb[rnnkey] = action_prob
-        self.keyedAction[rnnkey] = action
+        if not self.nn_model: #i.e. only for training
+            self.keyedSBatch[rnnkey] = state
+            self.keyedActionProb[rnnkey] = action_prob
+            self.keyedAction[rnnkey] = action
 
         return self._vActionset[action]
 
     def addReward(self, rnnkey, reward): 
+        if self.nn_model: #i.e. no training
+            return
         assert rnnkey in self.keyedSBatch and rnnkey in self.keyedActionProb
         
         state = self.keyedSBatch[rnnkey]

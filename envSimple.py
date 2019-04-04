@@ -218,6 +218,8 @@ class SimpleEnvironment():
 
 #=============================================
     def _rDownloadStatus(self):
+        if not self._vWorking:
+            return (0,0,0)
         assert self._vWorking
         now = self.getNow()
         startedAt, dur, segId, clen, downloadData, simIds = self._vWorkingStatus 

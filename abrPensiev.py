@@ -43,6 +43,7 @@ LOG_FILE = './results/log'
 NN_MODEL = None
 NN_MODEL = './model/nn_model_ep_116300.ckpt'
 NN_MODEL = './model/pretrain_linear_reward.ckpt'
+NN_MODEL = './model/nn_model_ep_529500.ckpt'
 
 class AbrPensieve:
     def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):

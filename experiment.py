@@ -12,7 +12,8 @@ from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from envGroupP2PRNN import GroupP2PEnvRNN
+from envGroupP2PRNNTest import GroupP2PEnvRNN
+from envGroupP2PDeter import GroupP2PEnvDeter
 from envSimple import SimpleEnvironment
 from envDHT import DHTEnvironment
 from simulator import Simulator
@@ -196,7 +197,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN"] 
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN", "GrpDeter"] 
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -236,7 +237,8 @@ def main():
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
     testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
     testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "ResModelPathRNN/")
+    testCB["GrpDeter"] = (GroupP2PEnvDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
 
     results = {}
     cdns = {}

@@ -16,6 +16,7 @@ from abrFastMPC import AbrFastMPC
 from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
 from cdnUsages import CDN
+from envGroupP2PRNNTest import GroupP2PEnvRNN
 
 # from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 # from abrPensiev import AbrPensieve
@@ -153,7 +154,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN"] 
+    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN", "GroupP2PEnvRNN"] 
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -174,6 +175,7 @@ def main():
     testCB = {}
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
     testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "./ResModelPathRNN/")
 
     results = {}
     cdns = {}
