@@ -63,7 +63,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vGroupStarted = False
         self._vNextGroupDownloader = -1
         self._vNextGroupDLSegId = -1
-        self._vWeightedTHroughput = 0
+        self._vWeightedThroughput = 0
 #         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
 #         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
 
@@ -94,9 +94,6 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vGroupNodes = nodes
         syncTime = self.now + 1
         self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow)
-
-
-
 
 #=============================================
     def _rGroupStarted(self):
@@ -160,25 +157,25 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 
         thrpt = self._vThroughPutData[-5:]
         if curProg[1] > 0 and curProg[0] > 0:
-            thrpt += [(self.now, curProg[1] / curProg[0])]
+            thrpt += [(self.now, curProg[1] * 8 / curProg[0])]
         cur = [1/x for t, x in thrpt]
         cur = len(cur)/sum(cur)
 
-        thrpt = min(cur, thrpt[-1][1], self._vWeightedTHroughput)
+        thrpt = min(cur, thrpt[-1][1], self._vWeightedThroughput)
         
         timereq = 0
         if curProg[2] > 0:
-            timereq += ((curProg[2] - curProg[1])/thrpt)
+            timereq += ((curProg[2] - curProg[1])*8/thrpt)
 
         for s, q, k in self._vDownloadQueue:
             cl = self._vVideoInfo.fileSizes[q][s]
-            timereq += cl/thrpt
+            timereq += cl*8/thrpt
 
         realDeadLine = deadline - timereq
         if realDeadLine <= 0: #it is emergency
             return 0
 
-        times = [(realDeadLine - cl/thrpt, i) for i, cl in enumerate(clens)]
+        times = [(realDeadLine - cl*8/thrpt, i) for i, cl in enumerate(clens)]
         times = [x for x in times if x[0] > 0]
         if len(times) == 0:
             return 0
@@ -244,6 +241,13 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         if self._vDownloadPending:
             self._vRunWhenDownloadCompeltes.append((self._rSetNextDownloader, [playerId, segId, rnnkey, lastPlayerId, lastQl], {}))
             assert len(self._vRunWhenDownloadCompeltes) < 10
+            return
+        #check if there are bufferAvailable in player
+        segPlaybackTime = self._vVideoInfo.segmentDuration*segId
+        curPlaybackTime = self._vAgent.playbackTime
+        waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
+        if waitTime > 0:
+            self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastPlayerId, lastQl)
             return
 
         self._vNextGroupDownloader = playerId
@@ -345,7 +349,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         if self._vStarted:
             self._vPlayBackDlCnt += 1
         self._vThroughPutData += [(self.now, req.throughput)]
-        self._vWeightedTHroughput = 0.8*self._vWeightedTHroughput + 0.2*req.throughput if self._vWeightedTHroughput else req.throughput
+        self._vWeightedThroughput = 0.8*self._vWeightedThroughput + 0.2*req.throughput if self._vWeightedThroughput else req.throughput
         self._vDownloadedReqByItSelf += [req]
 
         calls = self._vRunWhenDownloadCompeltes
@@ -393,6 +397,68 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 #=============================================
 #=============================================
 AGENT_TRACE_MAP = {}
+def plotIdleStallTIme(dpath, group):
+    if not os.path.isdir(dpath):
+        os.makedirs(dpath)
+
+    colors = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
+
+    pltHtmlPath = os.path.join(dpath,"groupP2PTimeout.html")
+    open(pltHtmlPath, "w").close()
+    eplt = EasyPlot()
+    for ql,grpSet in group.groups.items():
+        for grp in grpSet:
+            grpLabel = str([x._vPeerId for x in grp.getAllNode()])
+            label = "<hr><h2>BufferLen</h2>"
+            label += " NumNode:" + str(len(grp.getAllNode()))
+            label += " Quality Index: " + str(grp.qualityLevel)
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vBufferLenOverTime
+                Xs, Ys = list(zip(*pltData))
+                eplt.plot(Xs, Ys, marker="x", label=str(ag._vPeerId), color=colors[i%len(colors)])
+
+                label += "\n<br><span style=\"color: " + colors[i%len(colors)] + "\" >PeerId: " + str(ag._vPeerId)
+                label += " avgQualityIndex: " + str(ag._vAgent.avgQualityIndex)
+                label += " avgStallTime: " + str(ag._vAgent.totalStallTime)
+                label += " startedAt: " + str(ag._vAgent._vStartedAt)
+                label += " traceIdx: " + str(AGENT_TRACE_MAP.get(ag._vPeerId, 0))
+                label += "</span>"
+            eplt.setFigHeader(label)
+            label = "<h2>workingTime</h2>"
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vWorkingTimes
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+            eplt.setFigHeader(label)
+            label = "<h2>StallTime</h2>"
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vTimeSlipage
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.plot(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
+            eplt.setFigHeader(label)
+
+            label = "<h2>qualityLevel</h2>"
+#             plt.clf()
+#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
+            eplt.addFig()
+            for i, ag in enumerate(grp.getAllNode()):
+                pltData = ag._vAgent._vQualitiesPlayedOverTime
+                Xs, Ys, Zs = list(zip(*pltData))
+                eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="post", color=colors[i%len(colors)])
+            eplt.setFigHeader(label)
+
+    with open(pltHtmlPath, "w") as fp:
+        eplt.printFigs(fp, width=1000, height=400)
+
 def experimentGroupP2PSmall(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
@@ -412,8 +478,8 @@ def experimentGroupP2PSmall(traces, vi, network):
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
 #         logThroughput(a)
-#     if __name__ == "__main__":
-#         plotIdleStallTIme("results/stall-idle/", grp)
+    if __name__ == "__main__":
+        plotIdleStallTIme("results/stall-idle/", grp)
     return ags
 
 def main():
