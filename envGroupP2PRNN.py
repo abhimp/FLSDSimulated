@@ -5,6 +5,10 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 import glob
+import smtplib
+from email.mime.text import MIMEText
+import sys
+import traceback as tb
 
 from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
 from group import GroupManager
@@ -26,6 +30,24 @@ def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError
 
+def sendErrorMail(sub, msg, pss):
+
+    frm = "abhimondal@iitkgpmail.iitkgp.ac.in"
+    to = "abhijitmanpur@gmail.com,abhimondal@iitkgp.ac.in"
+    body = msg
+
+
+    s = smtplib.SMTP("iitkgpmail.iitkgp.ac.in")
+    s.login("abhimondal", pss)
+    me="abhimondal@iitkgp.ac.in"
+
+    msg = MIMEText(open(body).read())
+    msg['From'] = me
+    msg['To'] = to
+    msg['Subject'] = sub
+    s.sendmail(me, to.split(","), msg.as_string())
+    s.quit()
+
 class GroupP2PEnvRNN(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
@@ -44,6 +66,9 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vFinished = False
         self._vModelPath = modelPath
         self._vRunWhenDownloadCompeltes = []
+        self._vEmailPass = open("emailpass.txt").read().strip()
+
+        self._vInfinityLoopCount = {}
 
         self._vGroupNodes = None
         self._vQueue = []
@@ -68,6 +93,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
+        self._vSyncSeg = -1
 
 #=============================================
     def start(self, startedAt = -1):
@@ -110,6 +136,14 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 #=============================================
     def _rTransmissionTime(self, *kw):
         return self._vGroup.transmissionTime(self, *kw)
+
+#=============================================
+    def _rSyncNow(self):
+        globalPlaybackTime = self.now - self._vAgent._vGlobalStartedAt
+        expSegNumber = int(globalPlaybackTime/self._vVideoInfo.segmentDuration + 1)
+        self._vSyncSeg = expSegNumber
+        self._vAgent._vSyncSegment = expSegNumber
+
 
 #=============================================
     def requestRpc(self, func, *argv, **kargv):
@@ -238,6 +272,14 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 
 #=============================================
     def _rSetNextDownloader(self, playerId, segId, rnnkey, lastPlayerId, lastQl):
+        cnt = self._vInfinityLoopCount.get((self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl), 0)
+        if cnt >= 20:
+            msg = str(tb.extract_stack())
+            sub = "Infinity Loop"
+            pss = self._vEmailPass
+            sendErrorMail(sub, msg, pss)
+            assert False
+        self._vInfinityLoopCount[(self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)] = cnt+1
         if not self._vGroupStarted:
             self._vGroupStarted = True
             self._vGroupStartedFromSegId = segId
@@ -263,7 +305,10 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         segPlaybackTime = self._vVideoInfo.segmentDuration*segId
         curPlaybackTime = self._vAgent.playbackTime
         waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
-        if waitTime > 0:
+        nextSegs = [n._vAgent.nextSegmentIndex for n in self._vGroupNodes]
+        if self._vAgent.nextSegmentIndex > segId and self._vAgent.nextSegmentIndex == self._vAgent._vSyncSegment:
+            segId = self._vAgent.nextSegmentIndex
+        elif waitTime > 0 and self._vAgent.nextSegmentIndex <= segId:
             self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastPlayerId, lastQl)
             return
 
@@ -272,6 +317,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vGroupSegDetails.append((segId - 1, lastPlayerId, lastQl))
 
         self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey)
+        del self._vInfinityLoopCount[(self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)]
 
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1):
