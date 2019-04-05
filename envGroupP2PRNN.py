@@ -39,6 +39,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vOtherPeerRequest = {}
         self._vTotalDownloaded = 0
         self._vTotalUploaded = 0
+        self._vTotalUploadedSegs = 0
         self._vStarted = False
         self._vFinished = False
         self._vModelPath = modelPath
@@ -201,8 +202,8 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         pendings = [0] * 5
         pendings += [len(n._vDownloadQueue) for n in self._vGroupNodes]
 
-        uploaded = [n._vTotalUploaded for n in self._vGroupNodes]
-        uploaded = [0] *5 + [x for x in (np.array(uploaded) - np.mean(uploaded))/BYTES_IN_MB]
+        uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
+        uploaded = [0] *5 + [x for x in (np.array(uploaded) - np.mean(uploaded))]
 
         deadline = segId*self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
 
@@ -359,11 +360,11 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             reward = -rebuf
             rnnkey, outofbound = rnnkey
             reward -= outofbound
-            uploaded = [n._vTotalUploaded for n in self._vGroupNodes]
-            contri = abs(self._vTotalUploaded - np.mean(uploaded))/BYTES_IN_MB
+            uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
+            contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
             reward -= contri
 
-            reward = 0.6 * qoe + 0.4 * reward
+            reward = 0.7 * qoe + 0.3 * reward
             #call rnn obj for working
             self._vPensieveAgentLearner.addReward(rnnkey, reward)
 
@@ -418,6 +419,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             self._rAddToAgentBuffer(req, None)
         if req.segId not in self._vCatched:
             node._vTotalUploaded += req.clen
+            node._vTotalUploadedSegs += 1
             self._vTotalDownloaded += req.clen #i.e. peer download
         self._vCatched[req.segId] = req
 
