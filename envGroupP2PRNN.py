@@ -41,7 +41,7 @@ def sendErrorMail(sub, msg, pss):
     s.login("abhimondal", pss)
     me="abhimondal@iitkgp.ac.in"
 
-    msg = MIMEText(open(body).read())
+    msg = MIMEText(msg)
     msg['From'] = me
     msg['To'] = to
     msg['Subject'] = sub
