@@ -16,6 +16,9 @@ import videoInfo as video
 SUPERPEER_ID = 0
 STALL_TIME = 0.5
 
+ALPHA = 0.8
+BETA = 0.2
+
 '''
 Rapid Livestreaming environment.
 This environment takes care of agents connected according to our topology
@@ -70,7 +73,15 @@ class SingleAgentEnv():
         # if it is the super peer, all the chunks of all qualities are present
         if nodeId == SUPERPEER_ID:
             self.init_superpeer()
-    
+   
+        # below two parameters are needed for calculation of QoE 
+        # size of the data sent by the Super Peer to other peers
+        self.sentData = 0.0
+
+        # first_chunk stores a mapping from segment_id -> chunk size 
+        # basically stores the size of the first chunk it sends corresponding to a segment segment_id
+        self.first_chunk = {}
+        
 
     '''Returns duration of a particular segment ad quality
     '''
@@ -237,6 +248,7 @@ class SingleAgentEnv():
     def timeTaken(self, neighbor, data):
         duration = data._segmentDuration
         chunk_len = data._clen
+
         # start point in the trace data
         start_trace_timestep = self.getTraceTimestep(neighbor)
         i = self.getTracePointer(neighbor)
@@ -265,6 +277,14 @@ class SingleAgentEnv():
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
         print("Time taken = %s"% str(time))
+
+        # update the neighbor's sent data size
+        self.neighbor_envs[neighbor].sentData += chunk_len
+        
+        # update the first chunk size data
+        if data._segId not in self.neighbor_envs[neighbor].first_chunk:
+            self.neighbor_envs[neighbor].first_chunk[data._segId] = chunk_len
+
         return time
 
 
@@ -281,7 +301,6 @@ class SingleAgentEnv():
             print("Node %d : Fetching from peer %d %s %s" % (self.nodeId, neighbor, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
         
-        #segment_duration = 
         # TODO: add RTT to timeneeded
         time_taken= self.timeTaken(neighbor, data)    
         timeneeded += time_taken
@@ -370,8 +389,15 @@ def setupEnv(traces, vi, network, abr=None):
         if node == SUPERPEER_ID:
             continue
         qoes.append(envs[node].agent._rCalculateQoE())
-    print("System average QoE: ", np.mean(qoes))
+    system_average_qoe = np.mean(qoes)
+    print("System average QoE: ", system_average_qoe)
 
+    # Get the penalty
+    # bits to MB
+    superpeer_penalty =  (envs[SUPERPEER_ID].sentData - sum(envs[SUPERPEER_ID].first_chunk.values()))/(8 * 1024 * 1024)
+    print("Penalty: ", superpeer_penalty)
+
+    print("Reward: ", ALPHA * system_average_qoe - BETA * superpeer_penalty)
 
 def main():
     network = P2PFullyConnectedNetwork(6)
