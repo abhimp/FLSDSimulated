@@ -4,6 +4,7 @@ import load_trace
 import pickle
 import numpy as np
 import glob
+import randStateInit
 
 import videoInfo as video
 from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
@@ -114,6 +115,7 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, result_dir):
         savePlotData(Xs, Ys, Zs, name, pltTitle, result_dir)
 
 def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *kw, **kws):
+    randStateInit.loadCurrentState()
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -152,7 +154,7 @@ if __name__ == "__main__":
     numSlave = 2
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
-    procQueue = mp.Queue() 
+    procQueue = mp.Queue()
     slaveProcs = {}
 
     subjects = subjects.split(",")
@@ -164,7 +166,7 @@ if __name__ == "__main__":
     centralLearnerAge = None
     expParams = [(vidPath, netPath, tc) for netPath in networks[:40] for vidPath in videos for tc in ["tc1"]]
     total = len(expParams)
-    
+
     if not centralLearnerQua and not centralLearnerAge:
         vi = video.loadVideoTime(videos[0])
         centralLearnerQua = rnnQuality.runCentralServer(slaveIds, list(range(len(vi.bitrates))), summary_dir = modelPath)
@@ -205,10 +207,10 @@ if __name__ == "__main__":
 #             p.start()
 #             slaveProcs[slvId] = p
         print("Starting", started)
-        slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
-#         rnnAgent.setSlaveId(slvId)
-#         rnnQuality.setSlaveId(slvId)
-#         runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+#         slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+        rnnAgent.setSlaveId(slvId)
+        rnnQuality.setSlaveId(slvId)
+        runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
         print("Started", started)
         started += 1
 #         p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})

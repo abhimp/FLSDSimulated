@@ -120,8 +120,8 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             if len(nodes) == 2:
                 self.requestRpc(newNodes[0]._rGroupStarted)
         self._vGroupNodes = nodes
-        syncTime = self.now + 1
-        self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow)
+#         syncTime = self.now + 1
+#         self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow)
 
 #=============================================
     def _rGroupStarted(self):
@@ -272,14 +272,15 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 
 #=============================================
     def _rSetNextDownloader(self, playerId, segId, rnnkey, lastPlayerId, lastQl):
-        cnt = self._vInfinityLoopCount.get((self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl), 0)
+        infKey = (self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)
+        cnt = self._vInfinityLoopCount.get(infKey, 0)
         if cnt >= 20:
             msg = str(tb.extract_stack())
             sub = "Infinity Loop"
             pss = self._vEmailPass
             sendErrorMail(sub, msg, pss)
             assert False
-        self._vInfinityLoopCount[(self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)] = cnt+1
+        self._vInfinityLoopCount[infKey] = cnt+1
         if not self._vGroupStarted:
             self._vGroupStarted = True
             self._vGroupStartedFromSegId = segId
@@ -305,10 +306,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         segPlaybackTime = self._vVideoInfo.segmentDuration*segId
         curPlaybackTime = self._vAgent.playbackTime
         waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
-        nextSegs = [n._vAgent.nextSegmentIndex for n in self._vGroupNodes]
-        if self._vAgent.nextSegmentIndex > segId and self._vAgent.nextSegmentIndex == self._vAgent._vSyncSegment:
-            segId = self._vAgent.nextSegmentIndex
-        elif waitTime > 0 and self._vAgent.nextSegmentIndex <= segId:
+        if waitTime > 0 and self._vAgent.nextSegmentIndex <= segId:
             self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastPlayerId, lastQl)
             return
 
@@ -317,7 +315,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vGroupSegDetails.append((segId - 1, lastPlayerId, lastQl))
 
         self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey)
-        del self._vInfinityLoopCount[(self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)]
+        del self._vInfinityLoopCount[infKey]
 
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1):
