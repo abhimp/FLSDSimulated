@@ -41,87 +41,19 @@ SUMMARY_DIR = './results'
 LOG_FILE = './results/log'
 # in format of time_stamp bit_rate buffer_size rebuffer_time video_chunk_size download_time reward
 NN_MODEL = None
-NN_MODEL = './model/nn_model_ep_89600.ckpt'
-
-# CHUNK_COMBO_OPTIONS = []
-SETUP_ABR_CALL_COUNTER = 0
-def setup_abr(video, log_file_path=LOG_FILE):
-    print("setup_abr called:", SETUP_ABR_CALL_COUNTER, "\n", "="*20)
-
-    A_DIM = len(video.bitratesKbps)
-    if not os.path.exists(SUMMARY_DIR):
-        os.makedirs(SUMMARY_DIR)
-
-    sess = tf.Session() 
-    log_file = open(log_file_path, 'w')
-
-    actor = a3c.ActorNetwork(sess,
-                             state_dim=[S_INFO, S_LEN], action_dim=A_DIM,
-                             learning_rate=ACTOR_LR_RATE)
-    critic = a3c.CriticNetwork(sess,
-                               state_dim=[S_INFO, S_LEN], action_dim=A_DIM,
-                               learning_rate=CRITIC_LR_RATE)
-
-    sess.run(tf.initialize_all_variables())
-    saver = tf.train.Saver()  # save neural net parameters
-
-    # restore neural net parameters
-    nn_model = NN_MODEL
-    if nn_model is not None:  # nn_model is the path to file
-        saver.restore(sess, nn_model)
-        print("Model restored.")
-
-    init_action = np.zeros(A_DIM)
-    init_action[DEFAULT_QUALITY] = 1
-
-    s_batch = [np.zeros((S_INFO, S_LEN))]
-    a_batch = [init_action]
-    r_batch = []
-
-    train_counter = 0
-
-    last_bit_rate = DEFAULT_QUALITY
-    last_total_rebuf = 0
-    # need this storage, because observation only contains total rebuffering time
-    # we compute the difference to get
-
-    video_chunk_count = 0
-
-    input_dict = {
-                    'sess': sess, 
-                    'log_file': log_file,
-                    'actor': actor, 
-                    'critic': critic,
-                    'saver': saver, 
-                    'train_counter': train_counter,
-                    'last_bit_rate': last_bit_rate,
-                    'last_total_rebuf': last_total_rebuf,
-                    'video_chunk_coount': video_chunk_count,
-                    's_batch': s_batch, 
-                    'a_batch': a_batch, 
-                    'r_batch': r_batch,
-                    'chunkComboOptions': [],
-                }
-
-    # interface to abr_rl server
-    return input_dict
-
-FINISHED_PROC = "FINISHED_PROC"
-
-def incId():
-    global SETUP_ABR_CALL_COUNTER
-    SETUP_ABR_CALL_COUNTER += 1
+NN_MODEL = './model/nn_model_ep_116300.ckpt'
+NN_MODEL = './model/pretrain_linear_reward.ckpt'
+NN_MODEL = './model/nn_model_ep_529500.ckpt'
 
 class AbrPensieve:
     def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
-        log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrPensieve.log")
-        self.agent = agent
         self.video = videoInfo
-        self.abr = AbrPensieveProc.getInstance(videoInfo, log_file_path)
-        incId()
+        self.agent = agent
+        self.abr = AbrPensieveClass.getInstance(videoInfo, agent, log_file_path, *kw, **kws)
 
     def stopAbr(self):
-        self.abr = None 
+        if self.abr:
+            self.abr = None
 
     def getSleepTime(self, buflen):
         if (self.agent._vMaxPlayerBufferLen - self.video.segmentDuration) > buflen:
@@ -132,42 +64,96 @@ class AbrPensieve:
     def getNextDownloadTime(self, *kw, **kws):
         if len(self.agent._vRequests) == 0:
             return 0, 0
-
         req = self.agent._vRequests[-1]
-        
         bufferLeft = self.agent._vBufferUpto - self.agent._vPlaybacktime
         if bufferLeft < 0:
             bufferLeft = 0
+
         post_data = {
                 'lastquality': self.agent._vLastBitrateIndex,
                 'RebufferTime': self.agent._vTotalStallTime,
-                'lastChunkFinishTime': req.downloadFinished,
-                'lastChunkStartTime': req.downloadStarted,
+                'lastChunkFinishTime': req.downloadFinished * M_IN_K,
+                'lastChunkStartTime': req.downloadStarted * M_IN_K,
                 'lastChunkSize': req.clen,
                 'buffer': bufferLeft,
                 'lastRequest': self.agent.nextSegmentIndex,
-                }
-        ql = self.abr.nextQuality(post_data)
-        return self.getSleepTime(bufferLeft), ql
 
-class AbrPensieveProc:
+                'a_dim' : len(self.video.bitratesKbps),
+                'bitrates' : self.video.bitratesKbps,
+                'tot_chunks' : self.video.segmentCount,
+                'bitrate_reward' : self.video.bitrateReward,
+                'video' : self.video,
+                }
+        return self.getSleepTime(bufferLeft), self.abr.do_POST(post_data)
+
+class AbrPensieveClass:
     __instance = None
     @staticmethod
-    def getInstance(videoInfo, log_file_path=LOG_FILE):
-        if AbrPensieveProc.__instance == None:
-            AbrPensieveProc(videoInfo, log_file_path)
-        assert videoInfo == AbrPensieveProc.__instance.video
-        return AbrPensieveProc.__instance
+    def getInstance(videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
+        if AbrPensieveClass.__instance == None:
+            AbrPensieveClass(videoInfo, agent, log_file_path, *kw, **kws)
+        return AbrPensieveClass.__instance
 
     @staticmethod
     def clear():
-        AbrPensieveProc.__instance = None
+        AbrPensieveClass.__instance = None
 
-    def __init__(self, videoInfo, log_file_path=LOG_FILE):
-        assert AbrPensieveProc.__instance == None
-        AbrPensieveProc.__instance = self
-        self.video = videoInfo
-        input_dict = setup_abr(videoInfo, log_file_path)
+    def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
+        assert AbrPensieveClass.__instance == None
+        AbrPensieveClass.__instance = self
+        self.video = None
+        #=====================================
+        # SETUP
+        #=====================================
+        log_file = None if not log_file_path else open(log_file_path, 'wb')
+        sess = tf.Session()
+
+        A_DIM = len(videoInfo.bitratesKbps)
+
+        actor = a3c.ActorNetwork(sess,
+                                 state_dim=[S_INFO, S_LEN], action_dim=A_DIM,
+                                 learning_rate=ACTOR_LR_RATE)
+        critic = a3c.CriticNetwork(sess,
+                                   state_dim=[S_INFO, S_LEN], action_dim=A_DIM,
+                                   learning_rate=CRITIC_LR_RATE)
+
+        sess.run(tf.initialize_all_variables())
+        saver = tf.train.Saver()  # save neural net parameters
+
+        # restore neural net parameters
+        nn_model = NN_MODEL
+        if nn_model is not None:  # nn_model is the path to file
+            saver.restore(sess, nn_model)
+            print("Model restored.")
+
+        init_action = np.zeros(A_DIM)
+        init_action[DEFAULT_QUALITY] = 1
+
+        s_batch = [np.zeros((S_INFO, S_LEN))]
+        a_batch = [init_action]
+        r_batch = []
+
+        train_counter = 0
+
+        last_bit_rate = DEFAULT_QUALITY
+        last_total_rebuf = 0
+        # need this storage, because observation only contains total rebuffering time
+        # we compute the difference to get
+
+        video_chunk_count = 0
+
+        input_dict = {'sess': sess, 'log_file': log_file,
+                      'actor': actor, 'critic': critic,
+                      'saver': saver, 'train_counter': train_counter,
+                      'last_bit_rate': last_bit_rate,
+                      'last_total_rebuf': last_total_rebuf,
+                      'video_chunk_coount': video_chunk_count,
+                      's_batch': s_batch, 'a_batch': a_batch, 'r_batch': r_batch}
+
+        #=====================================
+        # INIT
+        #=====================================
+
         self.input_dict = input_dict
         self.sess = input_dict['sess']
         self.log_file = input_dict['log_file']
@@ -177,30 +163,23 @@ class AbrPensieveProc:
         self.s_batch = input_dict['s_batch']
         self.a_batch = input_dict['a_batch']
         self.r_batch = input_dict['r_batch']
-        self.pastBandwidthEsts = []
-        self.pastErrors = []
+        
 
     def get_chunk_size(self, quality, index):
         if index >= self.video.segmentCount: return 0
         return self.video.fileSizes[quality][index]
 
-    
-    def nextQuality(self, post_data):
-        if ( 'pastThroughput' in post_data ):
-            # @Hongzi: this is just the summary of throughput/quality at the end of the load
-            # so we don't want to use this information to send back a new quality
-            print ("Summary: ", post_data)
-            return 0
 
-        A_DIM = len(self.video.bitratesKbps)
-        CHUNK_COMBO_OPTIONS = self.input_dict['chunkComboOptions']
-        VIDEO_BIT_RATE = self.video.bitratesKbps
-        BITRATE_REWARD = self.video.bitrateReward
-        CHUNK_TIL_VIDEO_END_CAP = TOTAL_VIDEO_CHUNKS = self.video.segmentCount
-        past_bandwidth_ests = self.pastBandwidthEsts
-        past_errors = self.pastErrors
+    def do_POST(self, post_data):
 
-#================================================
+        A_DIM = post_data['a_dim']
+        VIDEO_BIT_RATE = post_data['bitrates']
+        TOTAL_VIDEO_CHUNKS = post_data['tot_chunks']
+        CHUNK_TIL_VIDEO_END_CAP = TOTAL_VIDEO_CHUNKS
+        BITRATE_REWARD = post_data['bitrate_reward']
+
+        self.video = post_data['video']
+
         # option 1. reward for just quality
         # reward = post_data['lastquality']
         # option 2. combine reward for quality and rebuffer time
@@ -219,7 +198,6 @@ class AbrPensieveProc:
                 - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
                                           self.input_dict['last_bit_rate']) / M_IN_K
 
-        reward = measureQoE(VIDEO_BIT_RATE, [self.input_dict['last_bit_rate'], post_data['lastquality']], rebuffer_time, 0)
         # --log reward--
         # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))   
         # log_last_bit_rate = np.log(self.input_dict['last_bit_rate'] / float(VIDEO_BIT_RATE[0]))
@@ -232,7 +210,7 @@ class AbrPensieveProc:
         # reward = BITRATE_REWARD[post_data['lastquality']] \
         #         - 8 * rebuffer_time / M_IN_K - np.abs(BITRATE_REWARD[post_data['lastquality']] - BITRATE_REWARD_MAP[self.input_dict['last_bit_rate']])
 
-        self.input_dict['last_bit_rate'] = post_data['lastquality']
+        self.input_dict['last_bit_rate'] = VIDEO_BIT_RATE[post_data['lastquality']]
         self.input_dict['last_total_rebuf'] = post_data['RebufferTime']
 
         # retrieve previous state
@@ -273,14 +251,15 @@ class AbrPensieveProc:
                 state = np.array(self.s_batch[-1], copy=True)
 
         # log wall_time, bit_rate, buffer_size, rebuffer_time, video_chunk_size, download_time, reward
-        self.log_file.write(str(time.time()) + '\t' +
+        if self.log_file:
+            self.log_file.write(str(time.time()) + '\t' +
                             str(VIDEO_BIT_RATE[post_data['lastquality']]) + '\t' +
                             str(post_data['buffer']) + '\t' +
                             str(rebuffer_time / M_IN_K) + '\t' +
                             str(video_chunk_size) + '\t' +
                             str(video_chunk_fetch_time) + '\t' +
                             str(reward) + '\n')
-        self.log_file.flush()
+            self.log_file.flush()
 
         action_prob = self.actor.predict(np.reshape(state, (1, S_INFO, S_LEN)))
         action_cumsum = np.cumsum(action_prob)
@@ -289,9 +268,5 @@ class AbrPensieveProc:
         # because there is an intrinsic discrepancy in passing single state and batch states
 
         # send data to html side
-        send_data = bit_rate
-
-#================================================
-        return send_data
-        #print "TOOK: " + str(end-start)
+        return bit_rate
 

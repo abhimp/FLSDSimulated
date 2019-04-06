@@ -95,6 +95,7 @@ class DHTEnvironment(SimpleEnvironment):
         self.querySeen = set()
         self.keyAdded = set()
         self._vThroughPutData = []
+        self._vOngoingUploads = {}
 
     def searchDHT(self, qlId, segId, sleepTime, startTime):
         key = qlId * self._vVideoInfo.segmentCount + segId
@@ -135,7 +136,7 @@ class DHTEnvironment(SimpleEnvironment):
         delay = self.grp.getRtt(nextNode, self)
         self.runAfter(delay, nextNode.queryDHT, key, networkId, qlId, segId, sleepTime, startTime)
 
-    def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
+    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         self.searchDHT(nextQuality, nextSegId, sleepTime, self.now)
 
     def runFailSafe(self, ql, segId, sleepTime, start):
@@ -143,7 +144,7 @@ class DHTEnvironment(SimpleEnvironment):
         if sleepTimeLeft > 0:
             self.runAfter(sleepTimeLeft, self.runFailSafe, ql, segId, sleepTime, start)
             return
-        self._rFetchNextSeg(segId, ql)
+        self._rFetchSegment(segId, ql)
 
     def ihaveDHT(self, ownersId, key, ql, segId, sleepTime, start):
         sleepTimeLeft = max(0, start + sleepTime - self.now)
@@ -157,11 +158,22 @@ class DHTEnvironment(SimpleEnvironment):
         delay = self.grp.getRtt(self, node)
         self.runAfter(delay, node.reqDHT, self, key, ql, segId)
 
+    def finishUploading(self, func, networkId, ql, segId):
+        assert (networkId, ql, segId) in self._vOngoingUploads
+        del self._vOngoingUploads[(networkId, ql, segId)]
+        func(self.cache[(ql, segId)])
+
     def reqDHT(self, node, key, ql, segId):
         assert self.networkId != node.networkId
-        clen = self._vVideoInfo.fileSizes[ql][segId]
-        transmissionTime = self.grp.transmissionTime(self, node, clen)
-        self.runAfter(transmissionTime, node._rAddToBuffer, self.cache[(ql, segId)]) 
+        if len(self._vOngoingUploads) < 4 and (node.networkId, ql, segId) not in self._vOngoingUploads:
+            clen = self._vVideoInfo.fileSizes[ql][segId]
+            transmissionTime = self.grp.transmissionTime(self, node, clen)
+            self.runAfter(transmissionTime, self.finishUploading, node._rAddToBuffer, node.networkId, ql, segId)
+            self._vOngoingUploads[(node.networkId, ql, segId)] = True
+            return
+        
+        delay = self.grp.getRtt(self, node)
+        self.runAfter(delay, node.runFailSafe, ql, segId, 0, self.now)
 
     def _rAddToBuffer(self, req, simIds = None):
         segId = req.segId
