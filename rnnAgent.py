@@ -27,9 +27,9 @@ IPC_CMD_QUIT = "quit"
 
 class PensiveLearnerCentralAgent():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None):
-        
+
         assert summary_dir
-        self.summary_dir = summary_dir
+        self.summary_dir = os.path.join(summary_dir, "rnnAgent")
         self.nn_model = nn_model
 
         self.a_dim = len(actionset)
@@ -85,7 +85,7 @@ class PensiveLearnerCentralAgent():
         self.critic_gradient_batch.append(critic_gradient)
 
         myprint("====")
-        myprint("Master: Epoch", self.epoch)
+        myprint("Master: Agent: Epoch", self.epoch)
         myprint("TD_loss", td_loss, "Avg_reward", np.mean(r_batch), "Avg_entropy", np.mean(entropy_record))
         myprint("====")
 
@@ -151,14 +151,14 @@ class PensiveLearner():
                 send.put("exit")
                 return
             send.put(res)
-    
+
     def cleanup(self, *arg, **karg):
         if not self._vRunning:
             return
         self.send.put(("cleanup", arg, karg))
         self.recv.get()
         self._vRunning = False
-    
+
     def getNextAction(self, *arg, **kwarg):
         self.send.put(("getNextAction", arg, kwarg))
         return self.recv.get()
@@ -180,7 +180,7 @@ class PensiveLearner():
 
 
 
-        
+
 class PensiveLearnerProc():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None, ipcQueue=None, ipcId=None):
         assert summary_dir
@@ -188,8 +188,8 @@ class PensiveLearnerProc():
 
         self.ipcQueue = ipcQueue
         self.ipcId = ipcId
-        self.summary_dir = summary_dir
-        self.nn_model = nn_model
+        self.summary_dir = os.path.join(summary_dir, "rnnAgent")
+        self.nn_model = None if not nn_model else os.path.join(self.summary_dir, nn_model)
 
         self.a_dim = len(actionset)
         self._vActionset = actionset
@@ -226,7 +226,7 @@ class PensiveLearnerProc():
             myprint("Model restored.")
 
         self.epoch = 0
-        
+
         if self.ipcQueue:
             self.ipcQueue[0].put({"id":self.ipcId, "cmd":IPC_CMD_PARAM})
             myprint("="*50)
@@ -251,16 +251,12 @@ class PensiveLearnerProc():
         self.keyedActionProb = {}
         self.keyedAction = {}
 
-    def getNextAction(self, peerId, segId, state): #peerId and segId are Identifier
-        timeBudget, localQualities_, elapsedLocal, \
-            downloadedLocal, clenLocal, throughputLocal_, \
-            downloadStartedLocal_, downloadFinishedLocal_, \
-            elapsedRemote, downloadedRemote, clenRemote, \
-            throughputRemote_, downloadStartedRemote_, \
-            downloadFinishedRemote_ = state
-        
+    def getNextAction(self, rnnkey, state): #peerId and segId are Identifier
 
-        v_dim = len(downloadStartedLocal_)
+#         pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, estThrput_, deadline = state
+        uploaded_, players_, idleTimes_, thrpt_, prog_, clens_, deadline = state
+
+        v_dim = len(uploaded_)
 
         # reward is video quality - rebuffer penalty - smooth penalty
         # retrieve previous state
@@ -272,20 +268,13 @@ class PensiveLearnerProc():
         # dequeue history record
         state = np.roll(state, -1, axis=1)
 
-        state[ 0, -1]       = timeBudget
-        state[ 1, :v_dim]   = localQualities_
-        state[ 2, -1]       = elapsedLocal
-        state[ 3, -1]       = downloadedLocal
-        state[ 4, -1]       = clenLocal
-        state[ 5, :v_dim]   = throughputLocal_
-        state[ 6, :v_dim]   = downloadStartedLocal_
-        state[ 7, :v_dim]   = downloadFinishedLocal_
-        state[ 8, -1]       = elapsedRemote
-        state[ 9, -1]       = downloadedRemote
-        state[10, -1]       = clenRemote
-        state[11, :v_dim]   = throughputRemote_
-        state[12, :v_dim]   = downloadStartedRemote_
-        state[13, :v_dim]   = downloadFinishedRemote_
+        state[ 0, :v_dim]       = uploaded_
+        state[ 1, :v_dim]       = players_
+        state[ 2, :v_dim]       = idleTimes_
+        state[ 3, :v_dim]       = thrpt_
+        state[ 4, :v_dim]       = prog_
+        state[ 5, :len(clens_)] = clens_
+        state[ 6, -1]           = deadline
 
 
         action_prob = self.actor.predict(np.reshape(state, (1, self._vInfoDim, self._vInfoDept)))
@@ -293,26 +282,29 @@ class PensiveLearnerProc():
         action = (action_cumsum > np.random.randint(1, RAND_RANGE) / float(RAND_RANGE)).argmax()
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
-        
-        self.keyedSBatch[(peerId, segId)] = state
-        self.keyedActionProb[(peerId, segId)] = action_prob
-        self.keyedAction[(peerId, segId)] = action
+
+        if not self.nn_model: #i.e. only for training
+            self.keyedSBatch[rnnkey] = state
+            self.keyedActionProb[rnnkey] = action_prob
+            self.keyedAction[rnnkey] = action
 
         return self._vActionset[action]
 
-    def addReward(self, peerId, segId, reward): 
-        assert (peerId, segId) in self.keyedSBatch and (peerId, segId) in self.keyedActionProb
-        
-        state = self.keyedSBatch[(peerId, segId)]
-        action_prob = self.keyedActionProb[(peerId, segId)]
-        action = self.keyedAction[(peerId, segId)]
+    def addReward(self, rnnkey, reward):
+        if self.nn_model: #i.e. no training
+            return
+        assert rnnkey in self.keyedSBatch and rnnkey in self.keyedActionProb
 
-        del self.keyedSBatch[(peerId, segId)]
-        del self.keyedActionProb[(peerId, segId)]
-        del self.keyedAction[(peerId, segId)]
+        state = self.keyedSBatch[rnnkey]
+        action_prob = self.keyedActionProb[rnnkey]
+        action = self.keyedAction[rnnkey]
+
+        del self.keyedSBatch[rnnkey]
+        del self.keyedActionProb[rnnkey]
+        del self.keyedAction[rnnkey]
 
         self.r_batch.append(reward)
-        
+
         self.entropy_record.append(a3c.compute_entropy(action_prob[0]))
 
         self.s_batch.append(state)
@@ -350,7 +342,7 @@ class PensiveLearnerProc():
         self.critic_gradient_batch.append(critic_gradient)
 
         myprint("====")
-        myprint("Epoch", self.epoch)
+        myprint("Agent: Epoch", self.epoch)
         myprint("TD_loss", td_loss, "Avg_reward", np.mean(self.r_batch), "Avg_entropy", np.mean(self.entropy_record))
         myprint("====")
 

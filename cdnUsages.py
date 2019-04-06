@@ -37,9 +37,9 @@ class CDN():
                 curBw += bw
             else:
                 curBw -= bw
-            curBw = round(curBw, 3) #it is in bps
-            assert curBw >= 0
-            self._vThroughput.append((t, curBw))
+            cbw = round(curBw, 3) #it is in bps
+            assert cbw >= 0
+            self._vThroughput.append((t, cbw))
         return self._vThroughput
 
     @property
@@ -67,15 +67,6 @@ class CDN():
         self.points.append((toTime, bandwidthBps, False))
         self._vThroughput = None
         self._vUploaded = None
-#         for t in range(len(self.throughput), fromTime + 1):
-#             assert t == len(self.throughput)
-#             self.throughput.append(0)
-#         for t in range(fromTime, min(len(self.throughput), toTime+1)):
-#             assert t < len(self.throughput)
-#             self.throughput[t] += bandwidthBps
-#         for t in range(len(self.throughput), toTime+1):
-#             assert t == len(self.throughput)
-#             self.throughput.append(bandwidthBps)
 
 
 

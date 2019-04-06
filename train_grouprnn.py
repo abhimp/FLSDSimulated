@@ -4,14 +4,17 @@ import load_trace
 import pickle
 import numpy as np
 import glob
+import randStateInit
 
 import videoInfo as video
 from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
+from envGroupP2PRNN import GroupP2PEnvRNN
 from envSimple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
 from p2pnetwork import P2PNetwork
-from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
+#from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
+import rnnAgent, rnnQuality
 import multiprocessing as mp
 # from envSimpleP2P import experimentSimpleP2P
 
@@ -112,6 +115,7 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, result_dir):
         savePlotData(Xs, Ys, Zs, name, pltTitle, result_dir)
 
 def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *kw, **kws):
+    randStateInit.loadCurrentState()
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
@@ -127,15 +131,18 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
-    saveLearner()
+    rnnAgent.saveLearner()
+    rnnQuality.saveLearner()
     return ags
 
 def runSlave(pq, sq, slvId):
-    setSlaveId(slvId)
+    rnnAgent.setSlaveId(slvId)
+    rnnQuality.setSlaveId(slvId)
     while True:
         q = sq.get()
         if q == "quit":
-            slavecleanup()
+            rnnQuality.slavecleanup()
+            rnnAgent.slavecleanup()
             break
         runExperiments(*q[0], **q[1])
         pq.put(slvId)
@@ -143,11 +150,11 @@ def runSlave(pq, sq, slvId):
 
 if __name__ == "__main__":
     subjects = "GroupP2PTimeoutRNN"
-    modelPath = "ResModelPath"
+    modelPath = "ResModelPathRNN"
     numSlave = 2
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
-    procQueue = mp.Queue() 
+    procQueue = mp.Queue()
     slaveProcs = {}
 
     subjects = subjects.split(",")
@@ -155,13 +162,15 @@ if __name__ == "__main__":
     videos = VIDEO_FILES[:35] #glob.glob("./videofilesizes/*.py")
     traces = load_trace.load_trace()
     traces = list(zip(*traces))
-    centralLearner = None
-    expParams = [(vidPath, netPath, tc) for vidPath in videos for netPath in networks for tc in ["tc1"]]
+    centralLearnerQua = None
+    centralLearnerAge = None
+    expParams = [(vidPath, netPath, tc) for netPath in networks[:40] for vidPath in videos for tc in ["tc1"]]
     total = len(expParams)
-    
-    if not centralLearner:
+
+    if not centralLearnerQua and not centralLearnerAge:
         vi = video.loadVideoTime(videos[0])
-        centralLearner = runCentralServer(slaveIds, [-1] + list(range(len(vi.bitrates))), summary_dir = modelPath)
+        centralLearnerQua = rnnQuality.runCentralServer(slaveIds, list(range(len(vi.bitrates))), summary_dir = modelPath)
+        centralLearnerAge = rnnAgent.runCentralServer(slaveIds, list(range(5)), summary_dir = modelPath) #assuming max 5 player in a group
     for x in slaveIds:
         p = mp.Process(target=runSlave, args = (procQueue, slvQs[x], x))
         p.start()
@@ -198,7 +207,10 @@ if __name__ == "__main__":
 #             p.start()
 #             slaveProcs[slvId] = p
         print("Starting", started)
-        slvQs[slvId].put([(GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+#         slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+        rnnAgent.setSlaveId(slvId)
+        rnnQuality.setSlaveId(slvId)
+        runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
         print("Started", started)
         started += 1
 #         p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})
@@ -216,6 +228,8 @@ if __name__ == "__main__":
             print("finished: ", finished, "of", total, file=fp)
 
     print("Turning off central server")
-    quitCentralServer()
-    centralLearner.join()
+    rnnAgent.quitCentralServer()
+    rnnQuality.quitCentralServer()
+    centralLearnerAge.join()
+    centralLearnerQua.join()
     print("finished")

@@ -12,8 +12,7 @@ from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from envGroupP2PRNNTest import GroupP2PEnvRNN
-from envGroupP2PDeter import GroupP2PEnvDeter
+from envGroupP2PRNN import GroupP2PEnvRNN
 from envSimple import SimpleEnvironment
 from envDHT import DHTEnvironment
 from simulator import Simulator
@@ -185,11 +184,12 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     CDN.clear()
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
-        trace = traces[idx]
+        trace = traces[29]
         startsAt = startsAts[x]
         env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir, modelPath=modelPath)
         simulator.runAt(startsAt, env.start, GLOBAL_STARTS_AT)
         ags.append(env)
+        break
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
@@ -197,7 +197,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN", "GrpDeter"] 
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN"] 
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -218,7 +218,7 @@ def main():
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
-    vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
+#     vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
 #     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
@@ -237,8 +237,7 @@ def main():
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
     testCB["GroupP2PEnvTimeoutRNN"] = (GroupP2PEnvTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
     testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "ResModelPathRNN/")
-    testCB["GrpDeter"] = (GroupP2PEnvDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
+    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "ModelPath")
 
     results = {}
     cdns = {}

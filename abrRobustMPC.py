@@ -33,63 +33,50 @@ MODEL_SAVE_INTERVAL = 100
 RANDOM_SEED = 42
 RAND_RANGE = 1000
 SUMMARY_DIR = './results'
-LOG_FILE = './results/log'
-# in format of time_stamp bit_rate buffer_size rebuffer_time video_chunk_size download_time reward
-NN_MODEL = None
+LOG_FILE = './results/log_file'
 
-# CHUNK_COMBO_OPTIONS = []
-def setup_mpc(log_file_path=LOG_FILE):
-
-#     np.random.seed(RANDOM_SEED)
-
-    if not os.path.exists(SUMMARY_DIR):
-        os.makedirs(SUMMARY_DIR)
-
-    # make chunk combination options
-    chunkComboOptions = []
-    for combo in itertools.product([0,1,2,3,4,5], repeat=5):
-        chunkComboOptions.append(combo)
-
-    log_file = open(log_file_path, 'w')
-
-    s_batch = [np.zeros((S_INFO, S_LEN))]
-
-    last_bit_rate = DEFAULT_QUALITY
-    last_total_rebuf = 0
-    # need this storage, because observation only contains total rebuffering time
-    # we compute the difference to get
-
-    video_chunk_count = 0
-
-    input_dict = {'log_file': log_file,
-                  'last_bit_rate': last_bit_rate,
-                  'last_total_rebuf': last_total_rebuf,
-                  'video_chunk_coount': video_chunk_count,
-                  's_batch': s_batch,
-                  'chunkComboOptions': chunkComboOptions,
-                  }
-
-    # interface to abr_rl server
-    return input_dict
 
 class AbrRobustMPC:
     def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
-        log_file_path = LOG_FILE if not log_file_path else os.path.join(log_file_path, "AbrRobustMPC.log")
+        #=====================================
+        # SETUP
+        #=====================================
+        log_file = None if not log_file_path else open(log_file_path, 'wb')
+
+
+        s_batch = [np.zeros((S_INFO, S_LEN))]
+
+        last_bit_rate = DEFAULT_QUALITY
+        last_total_rebuf = 0
+        # need this storage, because observation only contains total rebuffering time
+        # we compute the difference to get
+
+        video_chunk_count = 0
+
+        input_dict = {'log_file': log_file,
+                      'last_bit_rate': last_bit_rate,
+                      'last_total_rebuf': last_total_rebuf,
+                      'video_chunk_coount': video_chunk_count,
+                      's_batch': s_batch}
+        #=====================================
+        # INIT
+        #=====================================
+
+        self.CHUNK_COMBO_OPTIONS = [combo for combo in itertools.product([0,1,2,3,4,5], repeat=5)]
         self.video = videoInfo
         self.agent = agent
-        input_dict = setup_mpc(log_file_path)
+        
         self.input_dict = input_dict
         self.log_file = input_dict['log_file']
         #self.saver = input_dict['saver']
         self.s_batch = input_dict['s_batch']
-        #self.a_batch = input_dict['a_batch']
-        #self.r_batch = input_dict['r_batch']
-        self.pastBandwidthEsts = []
-        self.pastErrors = []
+        self.past_bandwidth_ests = []
+        self.past_errors = []
 
     def stopAbr(self):
-        self.log_file.close()
-        self.log_file = None
+        if self.log_file:
+            self.log_file.close()
+            self.log_file = None
         del self.input_dict['log_file']
 
     def get_chunk_size(self, quality, index):
@@ -112,29 +99,20 @@ class AbrRobustMPC:
         post_data = {
                 'lastquality': self.agent._vLastBitrateIndex,
                 'RebufferTime': self.agent._vTotalStallTime,
-                'lastChunkFinishTime': req.downloadFinished,
-                'lastChunkStartTime': req.downloadStarted,
+                'lastChunkFinishTime': req.downloadFinished * M_IN_K,
+                'lastChunkStartTime': req.downloadStarted * M_IN_K,
                 'lastChunkSize': req.clen,
                 'buffer': bufferLeft,
                 'lastRequest': self.agent.nextSegmentIndex,
                 }
-        return self.getSleepTime(bufferLeft), self.nextQuality(post_data)
-    
-    def nextQuality(self, post_data):
-        if ( 'pastThroughput' in post_data ):
-            # @Hongzi: this is just the summary of throughput/quality at the end of the load
-            # so we don't want to use this information to send back a new quality
-            print ("Summary: ", post_data)
-            return 0
+        return self.getSleepTime(bufferLeft), self.do_POST(post_data)
 
-        CHUNK_COMBO_OPTIONS = self.input_dict['chunkComboOptions']
+    def do_POST(self, post_data):
+
         VIDEO_BIT_RATE = self.video.bitratesKbps
+        TOTAL_VIDEO_CHUNKS = self.video.segmentCount
+        CHUNK_TIL_VIDEO_END_CAP = TOTAL_VIDEO_CHUNKS
         BITRATE_REWARD = self.video.bitrateReward
-        CHUNK_TIL_VIDEO_END_CAP = TOTAL_VIDEO_CHUNKS = self.video.segmentCount
-        past_bandwidth_ests = self.pastBandwidthEsts
-        past_errors = self.pastErrors
-
-#================================================
         # option 1. reward for just quality
         # reward = post_data['lastquality']
         # option 2. combine reward for quality and rebuffer time
@@ -148,12 +126,10 @@ class AbrRobustMPC:
         rebuffer_time = float(post_data['RebufferTime'] -self.input_dict['last_total_rebuf'])
 
         # --linear reward--
-#         reward = VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
-#                 - REBUF_PENALTY * rebuffer_time / M_IN_K \
-#                 - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
-#                                           self.input_dict['last_bit_rate']) / M_IN_K
-
-        reward = measureQoE(VIDEO_BIT_RATE, [self.input_dict['last_bit_rate'], post_data['lastquality']], rebuffer_time, 0)
+        reward = VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
+                - REBUF_PENALTY * rebuffer_time / M_IN_K \
+                - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
+                                          self.input_dict['last_bit_rate']) / M_IN_K
 
         # --log reward--
         # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))   
@@ -167,7 +143,7 @@ class AbrRobustMPC:
         # reward = BITRATE_REWARD[post_data['lastquality']] \
         #         - 8 * rebuffer_time / M_IN_K - np.abs(BITRATE_REWARD[post_data['lastquality']] - BITRATE_REWARD_MAP[self.input_dict['last_bit_rate']])
 
-        self.input_dict['last_bit_rate'] = post_data['lastquality']
+        self.input_dict['last_bit_rate'] = VIDEO_BIT_RATE[post_data['lastquality']]
         self.input_dict['last_total_rebuf'] = post_data['RebufferTime']
 
         # retrieve previous state
@@ -195,27 +171,28 @@ class AbrRobustMPC:
             state[3, -1] = float(video_chunk_size) / float(video_chunk_fetch_time) / M_IN_K  # kilo byte / ms
             state[4, -1] = np.minimum(video_chunk_remain, CHUNK_TIL_VIDEO_END_CAP) / float(CHUNK_TIL_VIDEO_END_CAP)
             curr_error = 0 # defualt assumes that this is the first request so error is 0 since we have never predicted bandwidth
-            if ( len(past_bandwidth_ests) > 0 ):
-                curr_error  = abs(past_bandwidth_ests[-1]-state[3,-1])/float(state[3,-1])
-            past_errors.append(curr_error)
+            if ( len(self.past_bandwidth_ests) > 0 ):
+                curr_error  = abs(self.past_bandwidth_ests[-1]-state[3,-1])/float(state[3,-1])
+            self.past_errors.append(curr_error)
         except ZeroDivisionError:
             # this should occur VERY rarely (1 out of 3000), should be a dash issue
             # in this case we ignore the observation and roll back to an eariler one
-            past_errors.append(0)
+            self.past_errors.append(0)
             if len(self.s_batch) == 0:
                 state = [np.zeros((S_INFO, S_LEN))]
             else:
                 state = np.array(self.s_batch[-1], copy=True)
 
         # log wall_time, bit_rate, buffer_size, rebuffer_time, video_chunk_size, download_time, reward
-        self.log_file.write(str(time.time()) + '\t' +
+        if self.log_file:
+            self.log_file.write(str(time.time()) + '\t' +
                             str(VIDEO_BIT_RATE[post_data['lastquality']]) + '\t' +
                             str(post_data['buffer']) + '\t' +
                             str(rebuffer_time / M_IN_K) + '\t' +
                             str(video_chunk_size) + '\t' +
                             str(video_chunk_fetch_time) + '\t' +
                             str(reward) + '\n')
-        self.log_file.flush()
+            self.log_file.flush()
 
         # pick bitrate according to MPC           
         # first get harmonic mean of last 5 bandwidths
@@ -235,11 +212,11 @@ class AbrRobustMPC:
         # divide by 1 + max of last 5 (or up to 5) errors
         max_error = 0
         error_pos = -5
-        if ( len(past_errors) < 5 ):
-            error_pos = -len(past_errors)
-        max_error = float(max(past_errors[error_pos:]))
+        if ( len(self.past_errors) < 5 ):
+            error_pos = -len(self.past_errors)
+        max_error = float(max(self.past_errors[error_pos:]))
         future_bandwidth = harmonic_bandwidth/(1+max_error)
-        past_bandwidth_ests.append(harmonic_bandwidth)
+        self.past_bandwidth_ests.append(harmonic_bandwidth)
 
 
         # future chunks length (try 4 if that many remaining)
@@ -254,7 +231,7 @@ class AbrRobustMPC:
         best_combo = ()
         start_buffer = float(post_data['buffer'])
         #start = time.time()
-        for full_combo in CHUNK_COMBO_OPTIONS:
+        for full_combo in self.CHUNK_COMBO_OPTIONS:
             combo = full_combo[0:future_chunk_length]
             # calculate total rebuffer time for this combination (start with start_buffer and subtract
             # each download time and add 2 seconds in that order)
@@ -304,15 +281,10 @@ class AbrRobustMPC:
             if ( reward > max_reward ):
                 max_reward = reward
                 best_combo = combo
+        
         # send data to html side (first chunk of best combo)
         send_data = 0 # no combo had reward better than -1000000 (ERROR) so send 0
         if ( best_combo != () ): # some combo was good
             send_data = best_combo[0]
-
-        end = time.time()
-        #print "TOOK: " + str(end-start)
-
-#================================================
         return send_data
-        #print "TOOK: " + str(end-start)
 

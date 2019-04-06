@@ -100,7 +100,7 @@ def findIgnorablePeers(results):
             continue
 #         x = []
         for ag in res:
-            if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
+            if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) != ag._vGroup.peersPerGroup:
                 p.add(ag.networkId)
     return p
 #               x += [ag.networkId]
@@ -110,6 +110,21 @@ def findIgnorablePeers(results):
 #             p.append(x)
 #     if len(p): print(p)
 #     return set(p[-1]) if len(p) else []
+
+def saveAgentsDataMulitAttrib(grpSz, results, attribs, pltTitle, lonePeers = []):
+    for name, res in results.items():
+        Xs, Ys = [], []
+        for x, ag in enumerate(res):
+            if ag.networkId in lonePeers:
+                continue
+            y = []
+            for at in attribs:
+                y.append(eval("ag." + at))
+            y = " ".join(str(i) for i in y)
+            Xs.append(x)
+            Ys.append(y)
+        savePlotData(Xs, Ys, name + "_"+str(grpSz), pltTitle)
+
 
 def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
     font = {'family' : 'normal',
@@ -244,6 +259,9 @@ def main():
         print("="*30)
 
         lonePeers = findIgnorablePeers(results)
+
+        saveAgentsDataMulitAttrib(grpSz, results, ["_vTotalUploaded","_vTotalDownloaded"] , "upload_download", lonePeers)
+        saveAgentsDataMulitAttrib(grpSz, results, ["_vEarlyDownloaded","_vNormalDownloaded"] , "earlydownload", lonePeers)
 
         plotAgentsData(grpSz, results, "_vAgent.QoE", "QoE", "Player Id", lonePeers)
         plotAgentsData(grpSz, results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id", lonePeers)
