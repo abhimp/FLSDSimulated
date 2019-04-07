@@ -181,7 +181,7 @@ class Agent():
     def _rNextQuality(self, req):
         if self._vDead: return
 
-        assert req.segId == self._vNextSegmentIndex
+        assert req.segId == self._vNextSegmentIndex or (req.syncSeg and req.segId > self._vNextSegmentIndex)
         self._vRequests.append(req)
 
 #=============================================
@@ -213,7 +213,7 @@ class Agent():
         delay = int(curPlaybackTime)
         if delay < self._vVideoInfo.segmentDuration * 0.8: #just a random thaught
             curSegId += 1
-        
+
         if self._vNextSegmentIndex < curSegId:
             self._vNextSegmentIndex = curSegId
             self._vSyncSegment = curSegId
@@ -224,6 +224,9 @@ class Agent():
         if self._vDead: return
 
         self._rNextQuality(req)
+        if self._vNextSegmentIndex <= req.segId and req.syncSeg:
+            self._vNextSegmentIndex =  self._vSyncSegment = req.segId
+
         ql, timetaken, segDur, segId, clen = req.qualityIndex, req.timetaken, req.segmentDuration, req.segId, req.clen
 
         now = self._vEnv.getNow()
@@ -295,7 +298,7 @@ class Agent():
             if buflen <= 0:
                 buflen = 0
             self._vBufferLenOverTime.append((now - 0.001, buflen))
-        
+
         if self._vSyncSegment == req.segId:
             skip = playbackTime - self._vPlaybacktime
             self._vTotalStallTime += skip
@@ -315,6 +318,10 @@ class Agent():
             return
         self._vLastBitrateIndex = self._vCurrentBitrateIndex
         self._rDownloadNextData(buflen)
+
+    def _rSkipToSegId(self, segId):
+        self._vPlaybacktime = self._vBufferUpto = self._vVideoInfo.segmentDuration * segId
+        self._vNextSegmentIndex = segId
 
 #=============================================
     def _rDownloadNextData(self, buflen):
