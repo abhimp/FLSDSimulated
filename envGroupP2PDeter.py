@@ -23,7 +23,7 @@ LOG_LOCATION = "./results/"
 # NN_MODEL_QUA = "nn_model_ep_72500.ckpt"
 # NN_MODEL_AGE = "nn_model_ep_72500.ckpt"
 def default(o):
-    if isinstance(o, np.int64): return int(o)  
+    if isinstance(o, np.int64): return int(o)
     raise TypeError
 
 class GroupP2PEnvDeter(SimpleEnvironment):
@@ -150,7 +150,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         deadline = segId*self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
         curProg = self._rDownloadStatus()
         prog = len(self._vDownloadQueue) * 100 + (curProg[1] / curProg[2] if curProg[2] else 0)
-        
+
         targetQl = lastQl[-1] if len(lastQl) > 1 else self._vAgent._vQualitiesPlayed[-1]
 
         clens = [ql[segId] for ql in self._vVideoInfo.fileSizes]
@@ -162,7 +162,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         cur = len(cur)/sum(cur)
 
         thrpt = min(cur, thrpt[-1][1], self._vWeightedThroughput)
-        
+
         timereq = 0
         if curProg[2] > 0:
             timereq += ((curProg[2] - curProg[1])*8/thrpt)
@@ -204,7 +204,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         qlen = np.array(qlen) * 100
 
         prog = [n._rDownloadStatus() for n in self._vGroupNodes]
-        prog = [0 if x[2] == 0 else float(x[1])/float(x[2]) for x in prog]
+        prog = [0 if x[2] == 0 else float(x[1])*100/float(x[2]) for x in prog]
         prog = np.array(prog)
 
         res = idleTimes - qlen - prog
@@ -253,7 +253,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vNextGroupDownloader = playerId
         self._vNextGroupDLSegId = segId
         self._vGroupSegDetails.append((segId - 1, lastPlayerId, lastQl))
-        
+
         self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey)
 
 #=============================================

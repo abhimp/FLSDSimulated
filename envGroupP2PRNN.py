@@ -30,8 +30,6 @@ def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError
 
-groupDownloadLoopDetection = {}
-
 def sendErrorMail(sub, msg, pss):
 
     frm = "abhimondal@iitkgpmail.iitkgp.ac.in"
@@ -93,8 +91,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
         #Loop debug
-        self._vInfinityLoopCount = {}
-        self._vPushedToAgent = []
         self._vSyncNow = False
         self._vLastSyncSeg = -1
 
@@ -282,14 +278,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 #=============================================
     def _rSetNextDownloader(self, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl):
         infKey = (self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)
-        cnt = self._vInfinityLoopCount.get(infKey, 0)
-#         if cnt >= 20:
-#             msg = str(tb.extract_stack())
-#             sub = "Infinity Loop"
-#             pss = self._vEmailPass
-# #             sendErrorMail(sub, msg, pss)
-#             assert False
-        self._vInfinityLoopCount[infKey] = cnt+1
         if not self._vGroupStarted:
             self._vGroupStarted = True
             self._vGroupStartedFromSegId = segId
@@ -329,19 +317,14 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vGroupSegDetails.append((lastSegId, lastPlayerId, lastQl))
 
         self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey, syncSeg = True)
-        del self._vInfinityLoopCount[infKey]
 
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1, syncSeg = False):
-        global groupDownloadLoopDetection
-        assert groupDownloadLoopDetection[self.groupId] == 0
-        groupDownloadLoopDetection[self.groupId] += 1
         nextDownloader, rnnkey = self._rGetNextDownloader(segId)
         ql = self._rGetMyQuality(ql, segId, rnnkey)
         assert ql < len(self._vVideoInfo.fileSizes)
         self.gossipSend(self._rSetNextDownloader, nextDownloader, segId+1, rnnkey, segId, self._vPlayerIdInGrp, ql)
         self._rAddToDownloadQueue(segId, ql, rnnkey=rnnkey, syncSeg=syncSeg)
-        groupDownloadLoopDetection[self.groupId] -= 1
         self._rSetNextDownloader(nextDownloader, segId + 1, rnnkey, segId, self._vPlayerIdInGrp, ql)
 
 #=============================================
@@ -377,7 +360,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
-        global groupDownloadLoopDetection
         if sleepTime > 0:
             self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
             return
@@ -394,7 +376,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             self._vImStarter = False
             self._vGroupStarted = True
             self._vGroupStartedFromSegId = nextSegId
-            groupDownloadLoopDetection[self.groupId] = 0
             self._rDownloadAsTeamPlayer(nextSegId, ql = nextQuality)
             return
 
@@ -408,7 +389,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             self.runAfter(waitTime, self._rAddToAgentBuffer, req, 0)
             return
         lastStalls = self._vAgent._vTotalStallTime
-        self._vPushedToAgent.append(req.segId)
         self._vAgent._rAddToBufferInternal(req)
         if req.segId in self._vSegIdRNNKeyMap:
             rnnkey = self._vSegIdRNNKeyMap[req.segId]

@@ -12,7 +12,7 @@ from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from envGroupP2PRNNTest import GroupP2PEnvRNN
+# from envGroupP2PRNNTest import GroupP2PEnvRNN
 from envGroupP2PDeter import GroupP2PEnvDeter
 from envSimple import SimpleEnvironment
 from envDHT import DHTEnvironment
@@ -30,6 +30,7 @@ from cdnUsages import CDN
 GroupP2PEnvTimeoutRNN = None
 GroupP2PEnvTimeoutIncRNN = None
 AbrPensieve = None
+GroupP2PEnvRNN = None
 
 
 RESULT_DIR = "./results/GenPlots"
@@ -180,7 +181,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     deadAgents = []
     ags = []
     players = len(list(network.nodes()))
-    idxs = np.random.randint(len(traces), size=players)
+    idxs = [x%len(traces) for x in range(players)] #np.random.randint(len(traces), size=players)
     startsAts = np.random.randint(GLOBAL_STARTS_AT + 1, vi.duration/2, size=players)
     CDN.clear()
     for x, nodeId in enumerate(network.nodes()):
@@ -196,8 +197,8 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def main():
-    global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN", "GrpDeter"] 
+    global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN, GroupP2PEnvRNN
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN", "DHTEnvironment", "GroupP2PEnvRNN", "GrpDeter"]
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -213,6 +214,10 @@ def main():
     if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
         from envGroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
         GroupP2PEnvTimeoutIncRNN = gpe
+
+    if "GroupP2PEnvRNN" in allowed and GroupP2PEnvRNN is None:
+        from envGroupP2PRNNTest import GroupP2PEnvRNN as obj
+        GroupP2PEnvRNN = obj
 
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
