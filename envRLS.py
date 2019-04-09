@@ -182,7 +182,7 @@ class SingleAgentEnv():
     Gets the bandwidth of the link between the node and the given neighbor
     '''
     def getBandwidth(self, neighbor):
-        print("Trace file: %s" % self.traceFile[neighbor])
+        #print("Trace file: %s" % self.traceFile[neighbor])
         i = self.getTracePointer(neighbor)
         return self.cookedBW[neighbor][i]
 
@@ -294,6 +294,8 @@ class SingleAgentEnv():
     def fetchSegment(self, neighbor, nextSegId, nextQuality):
         timeneeded = 0.0
         if neighbor == SUPERPEER_ID:
+            # TODO: use pensieve fetch here
+            
             # the super peer is used to receive the segment
             print("Node %d : Fetching from superpeer %s %s" % (self.nodeId, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
@@ -379,6 +381,7 @@ def setupEnv(traces, vi, network, abr=None):
         neighbor_envs = {neighbor: envs[neighbor] for neighbor in neighbors}
         if nodeId != SUPERPEER_ID and SUPERPEER_ID not in neighbor_envs:
             neighbor_envs[SUPERPEER_ID] = envs[SUPERPEER_ID]
+        envs[nodeId].setNeighbors(neighbor_envs) # partially observable
         envs[nodeId].setNeighbors(envs)
         simulator.runAt(101.0 + x, envs[nodeId].start, 5)
     simulator.run()
@@ -396,18 +399,52 @@ def setupEnv(traces, vi, network, abr=None):
     # bits to MB
     superpeer_penalty =  (envs[SUPERPEER_ID].sentData - sum(envs[SUPERPEER_ID].first_chunk.values()))/(8 * 1024 * 1024)
     print("Penalty: ", superpeer_penalty)
+    reward = ALPHA * system_average_qoe - BETA * superpeer_penalty
+    print("Reward: ", reward)
+    return system_average_qoe, superpeer_penalty, reward
 
-    print("Reward: ", ALPHA * system_average_qoe - BETA * superpeer_penalty)
 
-def main():
-    network = P2PFullyConnectedNetwork(6)
+def simulate_system(n_peers=100, pos=False):
+    
+    if pos:
+        network = P2PRandomNetwork(n_peers)  # partially observable
+    else:
+        network = P2PFullyConnectedNetwork(n_peers)
     # By default, we assume super peer to be node id 0
 
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
-    setupEnv(traces, vi, network)
+    return setupEnv(traces, vi, network)
+
+
+def compare_POS_global_state(n_iter=10):
+    pos_qoes = []
+    pos_penalties = []
+    pos_rewards = []
+    for i in range(n_iter):
+        qoe, penalty, reward = simulate_system(pos=True)
+        pos_qoes.append(qoe)
+        pos_penalties.append(penalty)
+        pos_rewards.append(reward)
+
+    qoes = []
+    penalties = []
+    rewards = []
+    for i in range(n_iter):
+        qoe, penalty, reward = simulate_system()
+        qoes.append(qoe)
+        penalties.append(penalty)
+        rewards.append(reward)
     
+    print("Global state: ", np.mean(qoes), np.mean(penalties), np.mean(rewards))
+    print("POS: ", np.mean(pos_qoes), np.mean(pos_penalties), np.mean(pos_rewards))
+
+
+def main():
+    simulate_system()
+    # compare_POS_global_state()
+
 if __name__ == '__main__':
     main()
