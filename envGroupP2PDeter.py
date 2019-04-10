@@ -72,7 +72,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vMaxSegDownloading = -1
         self._vSyncNow = False
         self._vLastSyncSeg = -1
-        self._vSleepingSegs = []
+        self._vSleepingSegs = {}
 
 
     @property
@@ -332,12 +332,12 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
         if sleepTime > 0:
-            self._vSleepingSegs.append(nextSegId)
+            self._vSleepingSegs[nextSegId] = self.now
             self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
             return
 
         if nextSegId in self._vSleepingSegs:
-            self._vSleepingSegs.remove(nextSegId)
+            del self._vSleepingSegs[nextSegId]
 
         if nextSegId in self._vCatched:
             self._rAddToAgentBuffer(self._vCatched[nextSegId])
