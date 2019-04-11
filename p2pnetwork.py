@@ -59,12 +59,25 @@ class P2PRandomNetwork(P2PNetwork):
     def __init__(self, num_nodes, connectivity=3):
         super().__init__(None)
         # for now, create a  random 3-regular graph wherein all nodes have exactly 3 neighbours
+        print(connectivity, num_nodes)
         self.grp = nx.random_regular_graph(connectivity, num_nodes)
 
+
+'''Fully connected graph to know global state
+'''
 class P2PFullyConnectedNetwork(P2PNetwork):
     def __init__(self, num_nodes):
         super().__init__(None)
         self.grp = nx.complete_graph(num_nodes)
+
+
+'''Star graph - each peer downloads only from Super Peer
+'''
+class P2PStarNetwork(P2PNetwork):
+    def __init__(self, num_nodes):
+        super().__init__(None)
+        self.grp = nx.star_graph(num_nodes)
+
 
 def main():
     grp = P2PRandomNetwork(6)

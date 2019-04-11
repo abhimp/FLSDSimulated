@@ -1,7 +1,7 @@
 '''envRLS - Rapid Live Streaming Environment
 
 '''
-from p2pnetwork import P2PRandomNetwork, P2PNetwork, P2PFullyConnectedNetwork 
+from p2pnetwork import P2PRandomNetwork, P2PStarNetwork, P2PNetwork, P2PFullyConnectedNetwork 
 from envSimpleP2P import P2PGroup
 from envSimple import SimpleEnvironment
 from simulator import Simulator
@@ -77,7 +77,7 @@ class SingleAgentEnv():
         # below two parameters are needed for calculation of QoE 
         # size of the data sent by the Super Peer to other peers
         self.sentData = 0.0
-
+        self.sentChunks = []
         # first_chunk stores a mapping from segment_id -> chunk size 
         # basically stores the size of the first chunk it sends corresponding to a segment segment_id
         self.first_chunk = {}
@@ -122,7 +122,7 @@ class SingleAgentEnv():
             return self.collectedChunks[segid][quality]
         else:
             # TODO: make sure this branch is not called by inserting appropriate logic in fetchSegment
-            print("Node %s: Requested quality %s for segid %s not available" % (self.nodeId, str(quality), str(segid)))
+            #print("Node %s: Requested quality %s for segid %s not available" % (self.nodeId, str(quality), str(segid)))
             for quality in self.collectedChunks[segid]:
                 return self.collectedChunks[segid][quality]
         
@@ -239,7 +239,7 @@ class SingleAgentEnv():
         def best_quality_segment(candidates, segid):
             return [np.max(self.neighbor_envs[candidate].collectedChunks[segid].keys()) for candidate in candidates] 
 
-        print(candidates)
+        #print(candidates)
         return candidates[np.argmax(best_bandwidth(candidates))]
 
 
@@ -276,13 +276,17 @@ class SingleAgentEnv():
 
         time += 0.08 #delay
         time *= np.random.uniform(0.9, 1.1)
-        print("Time taken = %s"% str(time))
+        #print("Time taken = %s"% str(time))
 
         # update the neighbor's sent data size
         self.neighbor_envs[neighbor].sentData += chunk_len
-        
+        if neighbor == SUPERPEER_ID:
+            self.neighbor_envs[SUPERPEER_ID].sentChunks.append((data._segId, chunk_len))
+            print("Node ", self.nodeId, "SP chunk total: ", self.neighbor_envs[neighbor].sentData)
         # update the first chunk size data
         if data._segId not in self.neighbor_envs[neighbor].first_chunk:
+            if neighbor == SUPERPEER_ID:
+                print("Node id: ", self.nodeId, data._segId, chunk_len)
             self.neighbor_envs[neighbor].first_chunk[data._segId] = chunk_len
 
         return time
@@ -297,10 +301,10 @@ class SingleAgentEnv():
             # TODO: use pensieve fetch here
             
             # the super peer is used to receive the segment
-            print("Node %d : Fetching from superpeer %s %s" % (self.nodeId, str(nextSegId), str(nextQuality)))
+            #print("Node %d : Fetching from superpeer %s %s" % (self.nodeId, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
         else:
-            print("Node %d : Fetching from peer %d %s %s" % (self.nodeId, neighbor, str(nextSegId), str(nextQuality)))
+            #print("Node %d : Fetching from peer %d %s %s" % (self.nodeId, neighbor, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
         
         # TODO: add RTT to timeneeded
@@ -342,7 +346,7 @@ class SingleAgentEnv():
 
        # TODO: The ABR policy is delegated to the agent at present. We must add logic to handle P2P fetching
         neighborToFetchFrom = self.getPeerToFetchFrom(nextSegId)
-        print(neighborToFetchFrom)
+        #print(neighborToFetchFrom)
         
         self.simulator.runAfter(sleepTime, self.fetchSegment, neighborToFetchFrom, nextSegId, nextQuality)
 
@@ -356,7 +360,7 @@ def setupEnv(traces, vi, network, abr=None):
     # allocate different traces for each link in the network
     for x, nodeId in enumerate(network.nodes()):
         link_traces = {}
-        print(nodeId, list(network.grp.neighbors(nodeId)))
+        #print(nodeId, list(network.grp.neighbors(nodeId)))
         for neighbor in network.grp.neighbors(nodeId):
            edge = (min(neighbor, nodeId), max(neighbor, nodeId))
            if edge not in trace_map:
@@ -377,7 +381,7 @@ def setupEnv(traces, vi, network, abr=None):
 
     for x, nodeId in enumerate(network.nodes()):
         neighbors = network.grp.neighbors(nodeId) 
-
+        print("Neighbors: ", nodeId, neighbors)
         neighbor_envs = {neighbor: envs[neighbor] for neighbor in neighbors}
         if nodeId != SUPERPEER_ID and SUPERPEER_ID not in neighbor_envs:
             neighbor_envs[SUPERPEER_ID] = envs[SUPERPEER_ID]
@@ -401,13 +405,15 @@ def setupEnv(traces, vi, network, abr=None):
     print("Penalty: ", superpeer_penalty)
     reward = ALPHA * system_average_qoe - BETA * superpeer_penalty
     print("Reward: ", reward)
-    return system_average_qoe, superpeer_penalty, reward
+    return system_average_qoe, superpeer_penalty, reward, envs[SUPERPEER_ID].sentChunks
 
 
-def simulate_system(n_peers=100, pos=False):
-    
-    if pos:
-        network = P2PRandomNetwork(n_peers)  # partially observable
+def simulate_system(n_peers=10, flag='pos'):
+    print("Flag: ", flag)
+    if flag == 'pos':
+        network = P2PRandomNetwork(num_nodes=n_peers)  # partially observable
+    elif flag == 'star':
+        network = P2PStarNetwork(n_peers) # only get the super peer
     else:
         network = P2PFullyConnectedNetwork(n_peers)
     # By default, we assume super peer to be node id 0
@@ -419,32 +425,35 @@ def simulate_system(n_peers=100, pos=False):
     return setupEnv(traces, vi, network)
 
 
-def compare_POS_global_state(n_iter=10):
-    pos_qoes = []
-    pos_penalties = []
-    pos_rewards = []
-    for i in range(n_iter):
-        qoe, penalty, reward = simulate_system(pos=True)
-        pos_qoes.append(qoe)
-        pos_penalties.append(penalty)
-        pos_rewards.append(reward)
-
+def run_for_network(n_iter, flag):
     qoes = []
     penalties = []
     rewards = []
     for i in range(n_iter):
-        qoe, penalty, reward = simulate_system()
+        qoe, penalty, reward, chunks = simulate_system(flag=flag)
         qoes.append(qoe)
         penalties.append(penalty)
         rewards.append(reward)
+    return np.mean(qoes), np.mean(penalties), np.mean(rewards), chunks
+
+
+def compare_POS_global_state(n_iter=1):
+    pos_qoe, pos_penalty,pos_reward, pos_sent_chunks = run_for_network(n_iter, flag='pos')
+    star_qoe, star_penalty, star_reward, star_sent_chunks = run_for_network(n_iter, flag='star')
+    glob_qoe, glob_penalty, glob_reward, glob_sent_chunks = run_for_network(n_iter, flag='fully')
     
-    print("Global state: ", np.mean(qoes), np.mean(penalties), np.mean(rewards))
-    print("POS: ", np.mean(pos_qoes), np.mean(pos_penalties), np.mean(pos_rewards))
+    print("Star: ", star_qoe, star_penalty, star_reward)
+    print("Chunks: ", len(star_sent_chunks), star_sent_chunks)
 
+    print("POS: ", pos_qoe, pos_penalty, pos_reward)
+    print("Chunks: ", len(pos_sent_chunks), pos_sent_chunks)
 
+    print("Global state: ", glob_qoe, glob_penalty, glob_reward)
+    print("Chunks: ", len(glob_sent_chunks), glob_sent_chunks)
 def main():
-    simulate_system()
-    # compare_POS_global_state()
+    #simulate_system(flag='star')
+    
+    compare_POS_global_state()
 
 if __name__ == '__main__':
     main()
