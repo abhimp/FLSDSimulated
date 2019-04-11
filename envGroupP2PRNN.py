@@ -336,7 +336,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 #=============================================
     def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf"), sleepTime = 0, rnnkey = None, syncSeg = False):
         if sleepTime > 0:
-            self.runAfter(sleepTime, self._rAddToDownloadQueue, nextSegId, nextQuality)
+            self.runAfter(sleepTime, self._rAddToDownloadQueue, nextSegId, nextQuality, position, 0, rnnkey, syncSeg)
             return
         found = False
         for s, q, k, _ in self._vDownloadQueue:
@@ -448,7 +448,6 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         if self._vGroupNodes:
             self.gossipSend(self._rRecvReq, self, req)
 
-        return
 
 #=============================================
     def _rRecvReq(self, node, req):

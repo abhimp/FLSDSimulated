@@ -182,6 +182,7 @@ class SimpleEnvironment():
 #=============================================
     def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, clen, simIds, extraData):
         assert self._vWorking
+        _, _, _, _, downloadData, _ = self._vWorkingStatus
         self._vWorking = False
         self._vWorkingStatus = None
 

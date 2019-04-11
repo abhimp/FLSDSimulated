@@ -11,6 +11,7 @@ from group import GroupManager
 import randStateInit as randstate
 from easyPlotViewer import EasyPlot
 from calculateMetric import measureQoE
+
 # from rnnTimeout import getPensiveLearner, saveLearner
 # import rnnAgent
 # import rnnQuality
@@ -68,11 +69,12 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 #         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
 #         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
 #                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
-        #Loop debug
         self._vMaxSegDownloading = -1
         self._vSyncNow = False
         self._vLastSyncSeg = -1
         self._vSleepingSegs = {}
+        #Loop debug
+        self._vWaitedFor = {}
 
 
     @property
@@ -105,7 +107,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
                 self.requestRpc(newNodes[0]._rGroupStarted)
         self._vGroupNodes = nodes
         syncTime = self.now + 1
-#         self._vSimulator.runAt(syncTime, self._rSyncNow)
+        self._vSimulator.runAt(syncTime, self._rSyncNow)
 #         self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow)
 
 #=============================================
@@ -259,6 +261,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 
         waitTime = self._vAgent._rIsAvailable(segId)
         if waitTime > 0:
+            self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc1"))
             self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
             return
         if self._vDownloadPending:
@@ -267,19 +270,25 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             return
 
         syncSeg = False
-        if not self._vSyncNow:
+        if self._vSyncNow:
+            segId = max([n._vMaxSegDownloading + 1 for n in self._vGroupNodes] + [segId])
+            self.gossipSend(self._rSyncComplete, segId)
+            self._rSyncComplete(segId)
+            syncSeg = True
+            self._rSetNextDownloader(playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
+            return
+        elif segId == self._vLastSyncSeg:
+            syncSeg = True
+        elif self._vAgent.nextSegmentIndex > self._vLastSyncSeg:
             #check if there are bufferAvailable in player
             segPlaybackTime = self._vVideoInfo.segmentDuration*segId
             curPlaybackTime = self._vAgent.playbackTime
             waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
             if waitTime > 0:
+                assert waitTime < 100
+                tmp = self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc2"))
                 self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
                 return
-        else:
-            segId = max([n._vMaxSegDownloading + 1 for n in self._vGroupNodes] + [segId])
-            self.gossipSend(self._rSyncComplete, segId)
-            self._rSyncComplete(segId)
-            syncSeg = True
 
         self._vNextGroupDownloader = playerId
         self._vNextGroupDLSegId = segId
@@ -360,11 +369,13 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             return
         assert self._vAgent.nextSegmentIndex == req.segId or req.syncSeg
         if self._vAgent.nextSegmentIndex == req.segId:
-            assert req.segId in self._vCatched and round(self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft, 3) >= self._vVideoInfo.segmentDuration
+            assert req.segId in self._vCatched and (round(self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft, 3) >= self._vVideoInfo.segmentDuration or req.syncSeg)
 
         waitTime = self._vAgent.bufferAvailableIn()
-        if waitTime > 0 and not req.syncSeg:
-            self.runAfter(waitTime, self._rAddToAgentBuffer, req, 0)
+        assert waitTime <= 0
+        playableIn = req.segId * self._vVideoInfo.segmentDuration + self._vAgent._vGlobalStartedAt - (self._vAgent.bufferLeft * ( 1 - req.syncSeg)) - self.now
+        if playableIn > 0:
+            self.runAfter(playableIn, self._rAddToAgentBuffer, req, 0)
             return
         lastStalls = self._vAgent._vTotalStallTime
         self._vAgent._rAddToBufferInternal(req)
@@ -404,8 +415,10 @@ class GroupP2PEnvDeter(SimpleEnvironment):
                 or req.qualityIndex > self._vCatched[req.segId].qualityIndex:
             self._vCatched[req.segId] = req
         self._vCatched[req.segId].syncSeg = syncSeg
-        if (self._vAgent.nextSegmentIndex == req.segId and req.segId not in self._vSleepingSegs) or syncSeg:
+        if (self._vAgent.nextSegmentIndex == req.segId and req.segId not in self._vSleepingSegs):
             self._rAddToAgentBuffer(self._vCatched[req.segId])
+        elif syncSeg:
+            self._rPushSyncSegInTime(req)
 
         if self._vPlayBackDlCnt == GROUP_JOIN_THRESHOLD:
             self._vConnectionSpeed = self._rPredictedThroughput()/1000000
@@ -414,6 +427,14 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         if self._vGroupNodes:
             self.gossipSend(self._rRecvReq, self, req)
 
+#=============================================
+    def _rPushSyncSegInTime(self, req):
+        startTime = self._vAgent._vGlobalStartedAt + self._vVideoInfo.segmentDuration * req.segId
+        waitTime = max(0, startTime - self.now)
+        if waitTime > 0:
+            self.runAfter(waitTime, self._rPushSyncSegInTime, req)
+            return
+        self._rAddToAgentBuffer(self._vCatched[req.segId])
 
 #=============================================
     def _rRecvReq(self, node, req):
@@ -428,8 +449,10 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             self._vCatched[req.segId] = req
         self._vCatched[req.segId].syncSeg = syncSeg
 
-        if (self._vAgent.nextSegmentIndex == req.segId and req.segId not in self._vSleepingSegs) or syncSeg:
+        if (self._vAgent.nextSegmentIndex == req.segId and req.segId not in self._vSleepingSegs):
             self._rAddToAgentBuffer(self._vCatched[req.segId])
+        elif syncSeg:
+            self._rPushSyncSegInTime(req)
 
 #=============================================
 #=============================================
@@ -497,6 +520,35 @@ def plotIdleStallTIme(dpath, group):
     with open(pltHtmlPath, "w") as fp:
         eplt.printFigs(fp, width=1000, height=400)
 
+#=============================================
+def experimentGroupP2PBig(traces, vi, network):
+    randstate.loadCurrentState()
+    simulator = Simulator()
+    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+
+    deadAgents = []
+    ags = []
+    maxTime = 0
+    startsAts= np.random.randint(5, vi.duration/2, size=network.numNodes())
+    trx = np.random.randint(len(traces), size=network.numNodes())
+    for x, nodeId in enumerate(network.nodes()):
+        idx = trx[x]
+        startsAt = startsAts[x]
+        trace = traces[idx]
+        env = GroupP2PEnvDeter(vi, trace, simulator, None, grp, nodeId)
+        simulator.runAt(startsAt, env.start, 5)
+        maxTime = 101.0 + x
+        AGENT_TRACE_MAP[nodeId] = idx
+        ags.append(env)
+    simulator.run()
+    grp.printGroupBucket()
+    for i,a in enumerate(ags):
+        assert a._vFinished # or a._vDead
+#         logThroughput(a)
+    if __name__ == "__main__":
+        plotIdleStallTIme("results/stall-idle/", grp)
+    return ags
+
 def experimentGroupP2PSmall(traces, vi, network):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
@@ -532,8 +584,9 @@ def main():
         assert len(traces[0]) == len(traces[1]) == len(traces[2])
         traces = list(zip(*traces))
         network = P2PNetwork("./p2p-Gnutella04.txt")
+        network = P2PNetwork()
 
-        experimentGroupP2PSmall(traces, vi, network)
+        experimentGroupP2PBig(traces, vi, network)
         return
 
 if __name__ == "__main__":
