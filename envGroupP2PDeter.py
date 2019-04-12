@@ -73,8 +73,12 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vSyncNow = False
         self._vLastSyncSeg = -1
         self._vSleepingSegs = {}
+
+        self._vDeadLines = {}
+        self._vDeadLineMissed = []
         #Loop debug
         self._vWaitedFor = {}
+        self._vGrpIds = []
 
 
     @property
@@ -106,6 +110,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             if len(nodes) == 2:
                 self.requestRpc(newNodes[0]._rGroupStarted)
         self._vGroupNodes = nodes
+        self._vGrpIds = [n.networkId for n in nodes]
         syncTime = self.now + 1
         self._vSimulator.runAt(syncTime, self._rSyncNow)
 #         self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow)
@@ -171,7 +176,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         lastPlayerId = [0]*5 + list(lastPlayerId)
         lastQl = [0]*5 + list(lastQl)
 
-        deadline = segId*self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
+        deadLine = segId*self._vVideoInfo.segmentDuration - max([n._vAgent.playbackTime for n in self._vGroupNodes])
         curProg = self._rDownloadStatus()
         prog = len(self._vDownloadQueue) * 100 + (curProg[1] / curProg[2] if curProg[2] else 0)
 
@@ -195,8 +200,10 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             cl = self._vVideoInfo.fileSizes[q][s]
             timereq += cl*8/thrpt
 
-        realDeadLine = deadline - timereq
+        self._vDeadLines[segId] = self.now + deadLine
+        realDeadLine = deadLine - timereq
         if realDeadLine <= 0: #it is emergency
+
             return 0
 
         times = [(realDeadLine - cl*8/thrpt, i) for i, cl in enumerate(clens)]
@@ -219,19 +226,30 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         return 0
 
 #=============================================
+    def _rPenaltyDegradeTime(self, time, penalty):
+        tsp = self.now - time
+        PENALTY_ELIVATION_RATE = 1.5
+        assert tsp >= 0
+        penalty = time - penalty
+        penalty -= PENALTY_ELIVATION_RATE*tsp
+        return max(penalty, 0)
+
+#=============================================
     def _rGetNextDownloader(self, segId):
         idleTimes = [ 0 if n._vDownloadPending else self.now - n._vWorkingTimes[-1][0]
                         for n in self._vGroupNodes]
         idleTimes = np.array(idleTimes)
 
-        qlen = [len(n._vDownloadQueue) for n in self._vGroupNodes]
+        qlen = [len(n._vDownloadQueue) + (n==self) for n in self._vGroupNodes]
         qlen = np.array(qlen) * 100
 
         prog = [n._rDownloadStatus() for n in self._vGroupNodes]
-        prog = [0 if x[2] == 0 else float(x[1])/float(x[2]) for x in prog]
+        prog = [0 if x[2] == 0 else float(x[1])*100/float(x[2]) for x in prog]
         prog = np.array(prog)
 
-        res = idleTimes - qlen - prog
+        deadLinePenalty = np.array([0 if len(n._vDeadLineMissed)==0 else self._rPenaltyDegradeTime(*n._vDeadLineMissed[-1]) for n in self._vGroupNodes])
+
+        res = idleTimes - qlen - prog - deadLinePenalty
 
         return np.argmax(res), None
 
@@ -239,7 +257,6 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         if nextPlayer >= len(self._vGroupNodes):
             penalty = 1000
             nextPlayer = np.random.randint(len(self._vGroupNodes))
-
 
         return nextPlayer, (rnnkey, penalty)
 
@@ -254,6 +271,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             self._vNextGroupDownloader = playerId
             self._vNextGroupDLSegId = segId
             self._vGroupSegDetails.append((lastSegId, lastPlayerId, lastQl))
+
             return #ignore the msg
 
         if segId >= self._vVideoInfo.segmentCount: #endof video
@@ -301,8 +319,8 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         nextDownloader, rnnkey = self._rGetNextDownloader(segId)
         ql = self._rGetMyQuality(ql, segId, rnnkey)
         assert ql < len(self._vVideoInfo.fileSizes)
-        self.gossipSend(self._rSetNextDownloader, nextDownloader, segId+1, rnnkey, segId, self._vPlayerIdInGrp, ql)
         self._rAddToDownloadQueue(segId, ql, rnnkey=rnnkey, syncSeg=syncSeg)
+        self.gossipSend(self._rSetNextDownloader, nextDownloader, segId+1, rnnkey, segId, self._vPlayerIdInGrp, ql)
         self._rSetNextDownloader(nextDownloader, segId + 1, rnnkey, segId, self._vPlayerIdInGrp, ql)
 
 #=============================================
@@ -333,10 +351,19 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             return
         while len(self._vDownloadQueue):
             segId, ql, rnnkey, syncSeg = self._vDownloadQueue.pop(0)
+            if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
+                continue
             self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg})
             self._vDownloadPending = True
             self._vDownloadPendingRnnkey = rnnkey
             break
+
+#=============================================
+    def _rDeadlineReached(self, segId):
+        if segId in self._vCatched or segId < self._vAgent.nextSegmentIndex:
+            return
+        syncSeg = self._vLastSyncSeg == segId
+        self._rAddToDownloadQueue(segId, 0, syncSeg=syncSeg)
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
@@ -356,6 +383,9 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             self._rAddToDownloadQueue(nextSegId, nextQuality, sleepTime=sleepTime)
             return
 
+        deadLine = nextSegId * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
+        self.runAfter(deadLine, self._rDeadlineReached, nextSegId)
+
         if self._vImStarter:
             self._vImStarter = False
             self._vGroupStarted = True
@@ -372,7 +402,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             assert req.segId in self._vCatched and (round(self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft, 3) >= self._vVideoInfo.segmentDuration or req.syncSeg)
 
         waitTime = self._vAgent.bufferAvailableIn()
-        assert waitTime <= 0
+        assert waitTime <= 0 or req.syncSeg
         playableIn = req.segId * self._vVideoInfo.segmentDuration + self._vAgent._vGlobalStartedAt - (self._vAgent.bufferLeft * ( 1 - req.syncSeg)) - self.now
         if playableIn > 0:
             self.runAfter(playableIn, self._rAddToAgentBuffer, req, 0)
@@ -403,6 +433,9 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vWeightedThroughput = 0.8*self._vWeightedThroughput + 0.2*req.throughput if self._vWeightedThroughput else req.throughput
         self._vDownloadedReqByItSelf += [req]
 
+        if req.segId in self._vDeadLines:
+            self._vDeadLineMissed.append((self.now, self._vDeadLines[req.segId]))
+            del self._vDeadLines[req.segId]
         calls = self._vRunWhenDownloadCompeltes
         self._vRunWhenDownloadCompeltes = []
         for func, arg, kwarg in calls:
@@ -439,6 +472,10 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 #=============================================
     def _rRecvReq(self, node, req):
         syncSeg = req.syncSeg
+        if self._vWorking:
+            _, _, dlSeg, _, downloadData, _, _ = self._vWorkingStatus
+            if dlSeg == req.segId:
+                self._rStopDownload()
         if req.segId in self._vCatched:
             syncSeg = syncSeg or self._vCatched[req.segId].syncSeg
         if req.segId not in self._vCatched \
@@ -473,8 +510,6 @@ def plotIdleStallTIme(dpath, group):
             label = "<hr><h2>BufferLen</h2>"
             label += " NumNode:" + str(len(grp.getAllNode()))
             label += " Quality Index: " + str(grp.qualityLevel)
-#             plt.clf()
-#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
             eplt.addFig()
             for i, ag in enumerate(grp.getAllNode()):
                 pltData = ag._vAgent._vBufferLenOverTime
@@ -489,8 +524,6 @@ def plotIdleStallTIme(dpath, group):
                 label += "</span>"
             eplt.setFigHeader(label)
             label = "<h2>workingTime</h2>"
-#             plt.clf()
-#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
             eplt.addFig()
             for i, ag in enumerate(grp.getAllNode()):
                 pltData = ag._vWorkingTimes
@@ -498,8 +531,6 @@ def plotIdleStallTIme(dpath, group):
                 eplt.step(Xs, Ys, toolTipData=Zs, marker="o", label="idleTime", where="pre", color=colors[i%len(colors)])
             eplt.setFigHeader(label)
             label = "<h2>StallTime</h2>"
-#             plt.clf()
-#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
             eplt.addFig()
             for i, ag in enumerate(grp.getAllNode()):
                 pltData = ag._vAgent._vTimeSlipage
@@ -508,8 +539,6 @@ def plotIdleStallTIme(dpath, group):
             eplt.setFigHeader(label)
 
             label = "<h2>qualityLevel</h2>"
-#             plt.clf()
-#             fig, ax1 = plt.subplots(figsize=(15, 7), dpi=90)
             eplt.addFig()
             for i, ag in enumerate(grp.getAllNode()):
                 pltData = ag._vAgent._vQualitiesPlayedOverTime
@@ -544,7 +573,6 @@ def experimentGroupP2PBig(traces, vi, network):
     grp.printGroupBucket()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
-#         logThroughput(a)
     if __name__ == "__main__":
         plotIdleStallTIme("results/stall-idle/", grp)
     return ags
@@ -567,7 +595,6 @@ def experimentGroupP2PSmall(traces, vi, network):
     grp.printGroupBucket()
     for i,a in enumerate(ags):
         assert a._vFinished # or a._vDead
-#         logThroughput(a)
     if __name__ == "__main__":
         plotIdleStallTIme("results/stall-idle/", grp)
     return ags
@@ -581,6 +608,7 @@ def main():
         vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
         vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
         vi = video.loadVideoTime(fpath)
+        vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
         assert len(traces[0]) == len(traces[1]) == len(traces[2])
         traces = list(zip(*traces))
         network = P2PNetwork("./p2p-Gnutella04.txt")

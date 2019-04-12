@@ -33,6 +33,7 @@ class SimpleEnvironment():
         self._vWorkingTimes = []
         self._vTotalIdleTime = 0
         self._vTotalWorkingTime = 0
+        self._vNextDownloadId = 0
 
         self._vWorking = False
         self._vWorkingStatus = None
@@ -90,7 +91,7 @@ class SimpleEnvironment():
         if not self._vAgent:
             raise Exception("Node agent to start")
         self._vLastDownloadedAt = self.getNow()
-        self._vLastTime = np.random.uniform(self._vCookedTime[1], self._vCookedTime[-1])
+        self._vLastTime = (self._vCookedTime[1] + self.now) % int(self._vCookedTime[-1]) # np.random.uniform(self._vCookedTime[1], self._vCookedTime[-1])
         self._vAgent.start(startedAt)
 
 #=============================================
@@ -169,20 +170,23 @@ class SimpleEnvironment():
 
         downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
 
-        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, clen, simIds, extraData)
-        self._vWorkingStatus = (now, time, nextSegId, clen, downloadData, simIds)
+        simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, clen, simIds, extraData, self._vNextDownloadId)
+        self._vWorkingStatus = (now, time, nextSegId, clen, downloadData, simIds, self._vNextDownloadId)
+        self._vNextDownloadId += 1
                 #useful to calculate downloaded data
 
 #=============================================
     def _rGetWorkingSegid(self):
         assert self._vWorking
-        now, time, nextSegId, clen, downloadData, simIds = self._vWorkingStatus
+        now, time, nextSegId, clen, downloadData, simIds, dlId = self._vWorkingStatus
         return nextSegId
 
 #=============================================
-    def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, clen, simIds, extraData):
+    def _rFetchNextSegReturn(self, ql, startedAt, dur, segId, clen, simIds, extraData, dlId):
+        if not self._vWorking or self._vWorkingStatus[6] != dlId:
+            return
         assert self._vWorking
-        _, _, _, _, downloadData, _ = self._vWorkingStatus
+        _, _, _, _, downloadData, _, dlId = self._vWorkingStatus
         self._vWorking = False
         self._vWorkingStatus = None
 
@@ -203,19 +207,19 @@ class SimpleEnvironment():
     def _rStopDownload(self):
         assert self._vWorking
         now = self.getNow()
-        startedAt, dur, segId, clen, downloadData, simIds = self._vWorkingStatus
+        startedAt, dur, segId, clen, downloadData, simIds, dlId = self._vWorkingStatus
         time, downloaded, _ = self._rDownloadStatus()
         self._vLastDownloadedAt = now
         self._vTotalWorkingTime += time
-        req = SegmentRequest(ql, startedAt, now, dur, segId, downloaded, self)
+        req = SegmentRequest(0, startedAt, now, dur, segId, downloaded, self)
         self._vWorkingTimes += [(now, req.throughput, segId)]
         self._vCdn.add(startedAt, now, req.throughput)
         self._vLastTime += time
         while self._vLastTime >= self._vCookedTime[-1]:
             self._vLastTime -= self._vCookedTime[-1]
 
-        assert simIds
-        self._vSimulator.cancelTask(simIds)
+#         assert simIds
+#         self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
 
 #=============================================
     def _rDownloadStatus(self):
@@ -223,7 +227,7 @@ class SimpleEnvironment():
             return (0,0,0)
         assert self._vWorking
         now = self.getNow()
-        startedAt, dur, segId, clen, downloadData, simIds = self._vWorkingStatus
+        startedAt, dur, segId, clen, downloadData, simIds, dlId = self._vWorkingStatus
         timeElapsed = now - startedAt
         downLoadedTillNow = 0
         for i,x in enumerate(downloadData):

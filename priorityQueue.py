@@ -28,7 +28,7 @@ class PriorityQueue:
 
     def swap(self, i, j):
         self.heap[i], self.heap[j] = self.heap[j], self.heap[i]
-        self.index[self.heap[i][1]] = i 
+        self.index[self.heap[i][1]] = i
         self.index[self.heap[j][1]] = j
 
     def insert(self, k, val = None):
@@ -88,7 +88,7 @@ class PriorityQueue:
 
             self.swap(smallest, i)
             i = smallest
-        
+
     def isEmpty(self):
         return len(self.heap) == 0
 
@@ -99,17 +99,17 @@ class PriorityQueue:
 
 if __name__ == "__main__":
     h = PriorityQueue()
-    h.insert(3); 
+    h.insert(3);
     print(h.heap, h.index)
-    h.insert(2); 
+    h.insert(2);
     print(h.heap, h.index)
-    h.delete(1); 
+    h.delete(1);
     print(h.heap, h.index)
-    h.insert(15); 
+    h.insert(15);
     print(h.heap, h.index)
-    h.insert(5); 
+    h.insert(5);
     print(h.heap, h.index)
-    h.insert(4); 
+    h.insert(4);
     print(h.heap, h.index)
     h.insert(45);
     print(h.heap, h.index)

@@ -304,7 +304,7 @@ class Agent():
 
         if self._vSyncSegment == req.segId:
             skip = playbackTime - self._vPlaybacktime
-            self._vTotalStallTime += skip
+#             self._vTotalStallTime += skip
             playbackTime = self._vBufferUpto = self._vVideoInfo.segmentDuration * req.segId
 
 
