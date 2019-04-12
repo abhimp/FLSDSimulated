@@ -167,7 +167,7 @@ class Agent():
 #=============================================
     @property
     def QoE(self):
-        return self._rCalculateQoE()
+        return self.avgBitrate/1000000 - 4.3*self.totalStallTime/10 - self.avgBitrateVariation/1000000
 
 #=============================================
     def addStartupCB(self, func):

@@ -98,7 +98,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
+        if name not in ["GrpDeter", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
             continue
         for ag in res:
             if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
@@ -171,6 +171,39 @@ def plotCDNData(cdns):
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
+
+def measureBenefit(results, net):
+    if "GrpDeter" not in results:
+        return
+    dags = {n.networkId:n for n in results["GrpDeter"]}
+    RES_PATH = "./results/benefit/"
+    for name, res in results.items():
+        if name == "GrpDeter":
+            continue
+        ags = {n.networkId:n for n in res}
+        benQoE = []
+        benQ = []
+        for n in ags:
+            assert n in dags
+            qoep = ags[n]._vAgent.QoE
+            qoed = dags[n]._vAgent.QoE
+            benQoE.append((qoed - qoep)/qoep)
+            avqp = ags[n]._vAgent.avgBitrate
+            avqd = dags[n]._vAgent.avgBitrate
+            benQ.append((avqd - avqp)/avqp)
+
+        benQoEDir = os.path.join(RES_PATH, "QoE")
+        if not os.path.isdir(benQoEDir):
+            os.makedirs(benQoEDir)
+        benQDir = os.path.join(RES_PATH, "bitrate")
+        if not os.path.isdir(benQDir):
+            os.makedirs(benQDir)
+
+        with open(os.path.join(benQoEDir, name + ".dat"), "w") as fp:
+            print(*benQoE, sep="\n", file = fp)
+        with open(os.path.join(benQDir, name + ".dat"), "w") as fp:
+            print(*benQ, sep="\n", file = fp)
+
 
 GLOBAL_STARTS_AT = 5
 
@@ -274,6 +307,7 @@ def main():
 
     plotCDNData(cdns)
 
+    measureBenefit(results, None)
 #     plt.show()
 
 #     plotBufferLens(results)

@@ -66,6 +66,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._vNextGroupDownloader = -1
         self._vNextGroupDLSegId = -1
         self._vWeightedThroughput = 0
+        self._vDownloadQl = []
 #         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
 #         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
 #                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
@@ -174,7 +175,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         _, lastPlayerId, lastQl = list(zip(*([(0,0,0), (0,0,0)] + self._vGroupSegDetails[-5:])))
 
         lastPlayerId = [0]*5 + list(lastPlayerId)
-        lastQl = [0]*5 + list(lastQl)
+        lastQl = [0]*5 + [x[1] for x in self._vDownloadQl[-5:]]
 
         deadLine = segId*self._vVideoInfo.segmentDuration - max([n._vAgent.playbackTime for n in self._vGroupNodes])
         curProg = self._rDownloadStatus()
@@ -317,8 +318,6 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1, syncSeg = False):
         nextDownloader, rnnkey = self._rGetNextDownloader(segId)
-        ql = self._rGetMyQuality(ql, segId, rnnkey)
-        assert ql < len(self._vVideoInfo.fileSizes)
         self._rAddToDownloadQueue(segId, ql, rnnkey=rnnkey, syncSeg=syncSeg)
         self.gossipSend(self._rSetNextDownloader, nextDownloader, segId+1, rnnkey, segId, self._vPlayerIdInGrp, ql)
         self._rSetNextDownloader(nextDownloader, segId + 1, rnnkey, segId, self._vPlayerIdInGrp, ql)
@@ -346,6 +345,11 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         self._rDownloadFromDownloadQueue()
 
 #=============================================
+    def _rDownloadingUsing(self, segId, ql):
+        self._vDownloadQl.append((segId, ql))
+        self._vDownloadQl.sort(key = lambda x : x[0])
+
+#=============================================
     def _rDownloadFromDownloadQueue(self):
         if self._vDownloadPending:
             return
@@ -353,6 +357,12 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             segId, ql, rnnkey, syncSeg = self._vDownloadQueue.pop(0)
             if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
                 continue
+            if segId >= self._vGroupStartedFromSegId and self._vGroupStarted:
+                ql = self._rGetMyQuality(ql, segId, rnnkey)
+                assert ql < len(self._vVideoInfo.fileSizes)
+                self.gossipSend(self._rDownloadingUsing, segId, ql)
+                self._rDownloadingUsing(segId, ql)
+
             self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg})
             self._vDownloadPending = True
             self._vDownloadPendingRnnkey = rnnkey
@@ -360,10 +370,16 @@ class GroupP2PEnvDeter(SimpleEnvironment):
 
 #=============================================
     def _rDeadlineReached(self, segId):
-        if segId in self._vCatched or segId < self._vAgent.nextSegmentIndex:
+        if segId in self._vCatched or segId < self._vAgent.nextSegmentIndex or segId < self._vLastSyncSeg:
             return
+        _, lastPlayerId, lastQl = list(zip(*([(0,0,0), (0,0,0)] + self._vGroupSegDetails[-5:])))
+
+        lastPlayerId = list(lastPlayerId)
+        lastQl = list(lastQl)
+
         syncSeg = self._vLastSyncSeg == segId
-        self._rAddToDownloadQueue(segId, 0, syncSeg=syncSeg)
+        ql = max(min(lastQl), lastQl[-1])
+        self._rAddToDownloadQueue(segId, ql, position=0, syncSeg=syncSeg)
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
@@ -383,15 +399,18 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             self._rAddToDownloadQueue(nextSegId, nextQuality, sleepTime=sleepTime)
             return
 
-        deadLine = nextSegId * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
-        self.runAfter(deadLine, self._rDeadlineReached, nextSegId)
-
         if self._vImStarter:
             self._vImStarter = False
             self._vGroupStarted = True
             self._vGroupStartedFromSegId = nextSegId
             self._rDownloadAsTeamPlayer(nextSegId, ql = nextQuality)
             return
+
+        deadLine = (nextSegId-1) * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
+        if deadLine > 0:
+            self.runAfter(deadLine, self._rDeadlineReached, nextSegId)
+        else:
+            self._rDeadlineReached(nextSegId)
 
 #=============================================
     def _rAddToAgentBuffer(self, req, simIds=None):
