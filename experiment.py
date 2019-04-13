@@ -172,7 +172,7 @@ def plotCDNData(cdns):
     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
 
-def measureBenefit(results, net):
+def measureBenefit(results, lonePeers):
     if "GrpDeter" not in results:
         return
     dags = {n.networkId:n for n in results["GrpDeter"]}
@@ -185,12 +185,14 @@ def measureBenefit(results, net):
         benQ = []
         for n in ags:
             assert n in dags
+            if n in lonePeers:
+                continue
             qoep = ags[n]._vAgent.QoE
             qoed = dags[n]._vAgent.QoE
-            benQoE.append((qoed - qoep)/qoep)
+            benQoE.append((qoed - qoep)/abs(qoep))
             avqp = ags[n]._vAgent.avgBitrate
             avqd = dags[n]._vAgent.avgBitrate
-            benQ.append((avqd - avqp)/avqp)
+            benQ.append((avqd - avqp)/abs(avqp))
 
         benQoEDir = os.path.join(RES_PATH, "QoE")
         if not os.path.isdir(benQoEDir):
@@ -307,7 +309,7 @@ def main():
 
     plotCDNData(cdns)
 
-    measureBenefit(results, None)
+    measureBenefit(results, lonePeers)
 #     plt.show()
 
 #     plotBufferLens(results)

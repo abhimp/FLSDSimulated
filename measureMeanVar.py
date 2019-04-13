@@ -36,3 +36,4 @@ for i, col in enumerate(columns):
 # python3 measureMeanVar.py results/GroupSize/upload_inc.dat,results/GroupSize/download_inc.dat 1,2 results/GroupSizePlot/upload_download/GroupP2PTimeoutInc_{3..10}.dat
 # python3 measureMeanVar.py results/GroupSize/qoe_inc.dat 1 results/GroupSizePlot/QoE/GroupP2PTimeoutInc_{3..10}.dat
 # python3 measureMeanVar.py results/GroupSize/qoe_rnn.dat 1 results/GroupSizePlot/QoE/GroupP2PEnvTimeoutIncRNN_{3..10}.dat
+# python3 measureMeanVar.py results/fairness/intra,results/fairness/inter 0,1 results/GenPlots/fairness/GrpDeter.dat

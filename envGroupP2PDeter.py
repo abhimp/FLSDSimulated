@@ -461,6 +461,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
             func(*arg, **kwarg)
 
         syncSeg = req.syncSeg
+        self._vTotalDownloaded += req.clen #i.e. peer download
         if req.segId in self._vCatched:
             syncSeg = syncSeg or self._vCatched[req.segId].syncSeg
         if req.segId not in self._vCatched \
@@ -501,7 +502,6 @@ class GroupP2PEnvDeter(SimpleEnvironment):
                 or req.qualityIndex > self._vCatched[req.segId].qualityIndex:
             node._vTotalUploaded += req.clen
             node._vTotalUploadedSegs += 1
-            self._vTotalDownloaded += req.clen #i.e. peer download
             self._vCatched[req.segId] = req
         self._vCatched[req.segId].syncSeg = syncSeg
 
