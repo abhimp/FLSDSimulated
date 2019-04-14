@@ -62,6 +62,17 @@ class CDN():
         return self._vUploaded
 
 
+    @property
+    def uploadRequests(self):
+        upReqOverTime = [(0,0)]
+        upReqCnt = 0
+        for t, bw, start in self.points:
+            if start:
+                upReqCnt += 1
+                upReqOverTime.append((t, upReqCnt))
+        return upReqOverTime
+
+
     def addMili(self, fromTime, toTime, bandwidthBps):
         self.points.append((fromTime, bandwidthBps, True))
         self.points.append((toTime, bandwidthBps, False))

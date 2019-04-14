@@ -166,6 +166,9 @@ def plotCDNData(cdns):
         savePlotData(Xs, Ys, name, pltTitle)
         plt.plot(Xs, Ys, label=name)
 
+        Xs, Ys = list(zip(*res.uploadRequests))
+        savePlotData(Xs, Ys, name + "_cnt", pltTitle)
+
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
