@@ -24,11 +24,11 @@ class GlobalSingleToneTracker():
     @staticmethod
     def clean():
         GlobalSingleToneTracker.__INSTANT = None
-    
+
     def __init__(self, simulator):
         assert not GlobalSingleToneTracker.__INSTANT
         GlobalSingleToneTracker.__INSTANT = self
-        self.fingerTable = {} 
+        self.fingerTable = {}
         self.nodes = {}
         self.nodeIdSet = set()
         self.nodeIds = []
@@ -42,7 +42,7 @@ class GlobalSingleToneTracker():
         self.nodeIds.sort()
         self.fingerTable = {}
         m = int(math.ceil(math.log(self.nodeIds[-1], 2)))
-        M = 2**m        
+        M = 2**m
         for nd in self.nodeIds:
             curNodeId = nd
             finger = []
@@ -53,7 +53,7 @@ class GlobalSingleToneTracker():
                 finger.append(self.nodes[nid])
             self.fingerTable[curNodeId] = finger
         self.M = M
-    
+
     def getNode(self, networkId):
         return self.nodes[networkId]
 
@@ -83,7 +83,7 @@ class GlobalSingleToneTracker():
     def addKey(self, key, ownersId):
         if key not in self.dhtcache:
             self.dhtcache[key] = ownersId
-        
+
 
 class DHTEnvironment(SimpleEnvironment):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
@@ -153,7 +153,7 @@ class DHTEnvironment(SimpleEnvironment):
             return
 
         assert self.networkId != ownersId
-            
+
         node = self.tracker.getNode(ownersId)
         delay = self.grp.getRtt(self, node)
         self.runAfter(delay, node.reqDHT, self, key, ql, segId)
@@ -165,13 +165,13 @@ class DHTEnvironment(SimpleEnvironment):
 
     def reqDHT(self, node, key, ql, segId):
         assert self.networkId != node.networkId
-        if len(self._vOngoingUploads) < 4 and (node.networkId, ql, segId) not in self._vOngoingUploads:
+        if len(self._vOngoingUploads) < 4 and (node.networkId, ql, segId) not in self._vOngoingUploads and (self._vAgent.playbackTime <= (segId+1) * self._vVideoInfo.segmentDuration):
             clen = self._vVideoInfo.fileSizes[ql][segId]
             transmissionTime = self.grp.transmissionTime(self, node, clen)
             self.runAfter(transmissionTime, self.finishUploading, node._rAddToBuffer, node.networkId, ql, segId)
             self._vOngoingUploads[(node.networkId, ql, segId)] = True
             return
-        
+
         delay = self.grp.getRtt(self, node)
         self.runAfter(delay, node.runFailSafe, ql, segId, 0, self.now)
 

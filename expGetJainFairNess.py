@@ -10,6 +10,7 @@ from simulator import Simulator
 from p2pnetwork import P2PNetwork
 import randStateInit as randstate
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
+from envGroupP2PDeter import GroupP2PEnvDeter
 from group import GroupManager
 # from envSimpleP2P import experimentSimpleP2P
 from abrFastMPC import AbrFastMPC
@@ -130,9 +131,9 @@ def savePlotData(Xs, Ys, legend, pltTitle):
 
 GLOBAL_STARTS_AT = 5
 
-def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
+def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
     simulator = Simulator()
-    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+    grp = GroupManager(grpSz, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
     deadAgents = []
     ags = []
@@ -154,7 +155,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN", "GroupP2PEnvRNN"] 
+    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN", "GroupP2PEnvRNN", "GrpDeter"]
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -172,45 +173,47 @@ def main():
     traces = list(zip(*traces))
     network = P2PNetwork()
 
-    testCB = {}
-    testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
-    testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GroupP2PEnvRNN"] = (GroupP2PEnvRNN, traces, vi, network, BOLA, None, "./ResModelPathRNN/")
+    for grpSz in [3, 4, 5, 6, 7, 8, 9, 10]:
+        testCB = {}
+        testCB["GroupP2PTimeoutInc"] = (grpSz, GroupP2PEnvTimeoutInc, traces, vi, network)
+        testCB["GroupP2PEnvTimeoutIncRNN"] = (grpSz, GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
+        testCB["GroupP2PEnvRNN"] = (grpSz, GroupP2PEnvRNN, traces, vi, network, BOLA, None, "./ResModelPathRNN/")
+        testCB["GrpDeter"] = (grpSz, GroupP2PEnvDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
 
-    results = {}
-    cdns = {}
+        results = {}
+        cdns = {}
 
-#     for name, cb in testCB.items():
-    for name in allowed:
-        fis = []
-        QoEVar = []
-        for vfp in VIDEO_FILES:
-            vi = video.loadVideoTime(vfp)
-            assert name in testCB
-            cb = testCB[name]
-            randstate.loadCurrentState()
-            grp = runExperiments(*cb)
-            gp, igp = grp.getGroupFairness(), grp.getInterGroupFairness()
-            QoEVar += grp.getQoEVariation()
-            fis.append((gp, igp))
+    #     for name, cb in testCB.items():
+        for name in allowed:
+            fis = []
+            QoEVar = []
+            for vfp in VIDEO_FILES:
+                vi = video.loadVideoTime(vfp)
+                assert name in testCB
+                cb = testCB[name]
+                randstate.loadCurrentState()
+                grp = runExperiments(*cb)
+                gp, igp = grp.getGroupFairness(), grp.getInterGroupFairness()
+                QoEVar += grp.getQoEVariation()
+                fis.append((gp, igp))
 
-        fpath = os.path.join(RESULT_DIR, "fairness")
-        if not os.path.isdir(fpath):
-            os.makedirs(fpath)
-        fpath = os.path.join(fpath, name+".dat")
-        with open(fpath, "w") as fp:
-            print("#gp igp", file=fp)
-            for x in fis:
-                print(*x, file=fp)
+            fpath = os.path.join(RESULT_DIR, "fairness")
+            if not os.path.isdir(fpath):
+                os.makedirs(fpath)
+            fpath = os.path.join(fpath, name+"_%s.dat"%(grpSz))
+            with open(fpath, "w") as fp:
+                print("#gp igp", file=fp)
+                for x in fis:
+                    print(*x, file=fp)
 
-        fpath = os.path.join(RESULT_DIR, "QoEVarInGroup")
-        if not os.path.isdir(fpath):
-            os.makedirs(fpath)
-        fpath = os.path.join(fpath, name+".dat")
-        with open(fpath, "w") as fp:
-            print("#", file=fp)
-            for x in QoEVar:
-                print(x, file=fp)
+            fpath = os.path.join(RESULT_DIR, "QoEVarInGroup")
+            if not os.path.isdir(fpath):
+                os.makedirs(fpath)
+            fpath = os.path.join(fpath, name+"_%s.dat"%(grpSz))
+            with open(fpath, "w") as fp:
+                print("#", file=fp)
+                for x in QoEVar:
+                    print(x, file=fp)
 
 
 

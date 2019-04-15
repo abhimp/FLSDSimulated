@@ -1,6 +1,6 @@
 
 class SegmentRequest():
-    def __init__(self, qualityIndex, downloadStarted, downloadFinished, segmentDuration, segId, clen, downloader):
+    def __init__(self, qualityIndex, downloadStarted, downloadFinished, segmentDuration, segId, clen, downloader, extraData = None):
         self._qualityIndex = qualityIndex
         self._downloadStarted = downloadStarted
         self._downloadFinished = downloadFinished
@@ -8,6 +8,20 @@ class SegmentRequest():
         self._segId = segId
         self._clen = clen
         self._downloader = downloader
+        self._extraData = extraData
+        self._syncSeg = False
+
+    @property
+    def syncSeg(self):
+        return self._syncSeg
+
+    @syncSeg.setter
+    def syncSeg(self, p):
+        self._syncSeg = p
+
+    @property
+    def extraData(self):
+        return self._extraData
 
     @property
     def qualityIndex(self):

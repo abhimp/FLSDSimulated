@@ -167,7 +167,7 @@ class Agent():
 #=============================================
     @property
     def QoE(self):
-        return self._rCalculateQoE()
+        return self.avgBitrate/1000000 - 4.3*self.totalStallTime/10 - self.avgBitrateVariation/1000000
 
 #=============================================
     def addStartupCB(self, func):
@@ -181,7 +181,7 @@ class Agent():
     def _rNextQuality(self, req):
         if self._vDead: return
 
-        assert req.segId == self._vNextSegmentIndex
+        assert req.segId == self._vNextSegmentIndex or (req.syncSeg and req.segId > self._vNextSegmentIndex)
         self._vRequests.append(req)
 
 #=============================================
@@ -213,7 +213,7 @@ class Agent():
         delay = int(curPlaybackTime)
         if delay < self._vVideoInfo.segmentDuration * 0.8: #just a random thaught
             curSegId += 1
-        
+
         if self._vNextSegmentIndex < curSegId:
             self._vNextSegmentIndex = curSegId
             self._vSyncSegment = curSegId
@@ -224,6 +224,11 @@ class Agent():
         if self._vDead: return
 
         self._rNextQuality(req)
+        if self._vNextSegmentIndex <= req.segId and req.syncSeg:
+            self._vNextSegmentIndex =  self._vSyncSegment = req.segId
+
+        assert (req.segId * self._vVideoInfo.segmentDuration + self._vGlobalStartedAt - (self.bufferLeft * ( 1 - req.syncSeg)) <= self._vEnv.now)
+
         ql, timetaken, segDur, segId, clen = req.qualityIndex, req.timetaken, req.segmentDuration, req.segId, req.clen
 
         now = self._vEnv.getNow()
@@ -247,16 +252,16 @@ class Agent():
             if self._vGlobalStartedAt != self._vStartedAt:
                 expectedPlaybackTime = now - self._vGlobalStartedAt
 
-            if  self._vCanSkip and expectedPlaybackTime - PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
-                #need to skip this segment
-                expectedSegId = int(expectedPlaybackTime / self._vVideoInfo.segmentDuration) + 1
-                self._vSegmentSkiped += expectedSegId - self._vNextSegmentIndex
-                self._vNextSegmentIndex = expectedSegId
-                if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
-                    self._vEnv.finishedAfter(1)
-                    return
-                self._rDownloadNextData(0)
-                return
+#             if  self._vCanSkip and expectedPlaybackTime - PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
+#                 #need to skip this segment
+#                 expectedSegId = int(expectedPlaybackTime / self._vVideoInfo.segmentDuration) + 1
+#                 self._vSegmentSkiped += expectedSegId - self._vNextSegmentIndex
+#                 self._vNextSegmentIndex = expectedSegId
+#                 if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
+#                     self._vEnv.finishedAfter(1)
+#                     return
+#                 self._rDownloadNextData(0)
+#                 return
 
             if expectedPlaybackTime < segPlaybackStartTime:
                 after = segPlaybackStartTime - expectedPlaybackTime
@@ -264,14 +269,14 @@ class Agent():
                 self._vEnv.runAfter(after, self._rAddToBufferInternal, req, simIds)
                 return
 
-            found = False
-            for x in range(PLAYBACK_DELAY_THRESHOLD + 1):
-                if segPlaybackStartTime <= expectedPlaybackTime - x <= segPlaybackEndTime:
-                    playbackTime = expectedPlaybackTime - x
-                    found = True
-                    break
-
-            assert found
+#             found = False
+#             for x in range(PLAYBACK_DELAY_THRESHOLD + 1):
+#                 if segPlaybackStartTime <= expectedPlaybackTime - x <= segPlaybackEndTime:
+#                     playbackTime = expectedPlaybackTime - x
+#                     found = True
+#                     break
+#
+#             assert found
 
             self._vIsStarted = True
             self._vStartingPlaybackTime = playbackTime
@@ -288,6 +293,7 @@ class Agent():
             self._vTimeSlipage.append((now - stallTime, self._vTotalStallTime, self._vNextSegmentIndex-1))
             self._vTotalStallTime += stallTime
             self._vTimeSlipage.append((now, self._vTotalStallTime, self._vNextSegmentIndex))
+            assert stallTime < (req.timetaken + 100)
             self._vBufferLenOverTime.append((now - stallTime, 0))
             self._vBufferLenOverTime.append((now - 0.001, 0))
         else:
@@ -295,10 +301,10 @@ class Agent():
             if buflen <= 0:
                 buflen = 0
             self._vBufferLenOverTime.append((now - 0.001, buflen))
-        
+
         if self._vSyncSegment == req.segId:
             skip = playbackTime - self._vPlaybacktime
-            self._vTotalStallTime += skip
+#             self._vTotalStallTime += skip
             playbackTime = self._vBufferUpto = self._vVideoInfo.segmentDuration * req.segId
 
 
@@ -315,6 +321,10 @@ class Agent():
             return
         self._vLastBitrateIndex = self._vCurrentBitrateIndex
         self._rDownloadNextData(buflen)
+
+    def _rSkipToSegId(self, segId):
+        self._vPlaybacktime = self._vBufferUpto = self._vVideoInfo.segmentDuration * segId
+        self._vNextSegmentIndex = segId
 
 #=============================================
     def _rDownloadNextData(self, buflen):
@@ -393,10 +403,10 @@ class Agent():
         self._vStartedAt = self._vGlobalStartedAt = now
         if startedAt >= 0:
             playbackTime = now - startedAt
-            self._vNextSegmentIndex = int(playbackTime*1./self._vVideoInfo.segmentDuration)
-            while (self._vNextSegmentIndex + 1) * self._vVideoInfo.segmentDuration < playbackTime - PLAYBACK_DELAY_THRESHOLD:
-                self._vNextSegmentIndex += 1
-            self._vNextSegmentIndex += 1
+            self._vNextSegmentIndex = int((playbackTime)/self._vVideoInfo.segmentDuration)
+#             while (self._vNextSegmentIndex + 1) * self._vVideoInfo.segmentDuratio`n < playbackTime + PLAYBACK_DELAY_THRESHOLD:
+#                 self._vNextSegmentIndex += 1
+#             self._vNextSegmentIndex += 1
             self._vCanSkip = True
             self._vGlobalStartedAt = startedAt
         self._vLastEventTime = now

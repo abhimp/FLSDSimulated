@@ -13,7 +13,7 @@ import itertools
 import tensorflow as tf
 import a3c
 
-from calculateMetric import measureQoE 
+from calculateMetric import measureQoE
 from multiprocessing import Process, Pipe
 
 ######################## FAST MPC #######################
@@ -43,13 +43,22 @@ LOG_FILE = './results/log'
 NN_MODEL = None
 NN_MODEL = './model/nn_model_ep_116300.ckpt'
 NN_MODEL = './model/pretrain_linear_reward.ckpt'
-NN_MODEL = './model/nn_model_ep_529500.ckpt'
+# NN_MODEL = './model/nn_model_ep_529500.ckpt'
 
 class AbrPensieve:
     def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):
         self.video = videoInfo
         self.agent = agent
         self.abr = AbrPensieveClass.getInstance(videoInfo, agent, log_file_path, *kw, **kws)
+
+        last_bit_rate = videoInfo.bitratesKbps[DEFAULT_QUALITY]
+        last_total_rebuf = 0
+        video_chunk_count = 0
+        self.input_dict = {
+                  'last_bit_rate': last_bit_rate,
+                  'last_total_rebuf': last_total_rebuf,
+                  'video_chunk_coount': video_chunk_count,
+                }
 
     def stopAbr(self):
         if self.abr:
@@ -83,6 +92,7 @@ class AbrPensieve:
                 'tot_chunks' : self.video.segmentCount,
                 'bitrate_reward' : self.video.bitrateReward,
                 'video' : self.video,
+                'input' : self.input_dict,
                 }
         return self.getSleepTime(bufferLeft), self.abr.do_POST(post_data)
 
@@ -135,20 +145,15 @@ class AbrPensieveClass:
 
         train_counter = 0
 
-        last_bit_rate = DEFAULT_QUALITY
-        last_total_rebuf = 0
         # need this storage, because observation only contains total rebuffering time
         # we compute the difference to get
 
-        video_chunk_count = 0
 
         input_dict = {'sess': sess, 'log_file': log_file,
                       'actor': actor, 'critic': critic,
                       'saver': saver, 'train_counter': train_counter,
-                      'last_bit_rate': last_bit_rate,
-                      'last_total_rebuf': last_total_rebuf,
-                      'video_chunk_coount': video_chunk_count,
-                      's_batch': s_batch, 'a_batch': a_batch, 'r_batch': r_batch}
+                      's_batch': s_batch, 'a_batch': a_batch, 'r_batch': r_batch,
+                      }
 
         #=====================================
         # INIT
@@ -163,7 +168,7 @@ class AbrPensieveClass:
         self.s_batch = input_dict['s_batch']
         self.a_batch = input_dict['a_batch']
         self.r_batch = input_dict['r_batch']
-        
+
 
     def get_chunk_size(self, quality, index):
         if index >= self.video.segmentCount: return 0
@@ -190,16 +195,16 @@ class AbrPensieveClass:
         # reward = post_data['lastquality'] - 10 * ((post_data['RebufferTime'] - self.input_dict['last_total_rebuf']) > 0)
 
         # option 4. use the metric in SIGCOMM MPC paper
-        rebuffer_time = float(post_data['RebufferTime'] -self.input_dict['last_total_rebuf'])
+        rebuffer_time = float(post_data['RebufferTime'] - post_data['input']['last_total_rebuf'])
 
         # --linear reward--
         reward = VIDEO_BIT_RATE[post_data['lastquality']] / M_IN_K \
                 - REBUF_PENALTY * rebuffer_time / M_IN_K \
                 - SMOOTH_PENALTY * np.abs(VIDEO_BIT_RATE[post_data['lastquality']] -
-                                          self.input_dict['last_bit_rate']) / M_IN_K
+                                          post_data['input']['last_bit_rate']) / M_IN_K
 
         # --log reward--
-        # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))   
+        # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))
         # log_last_bit_rate = np.log(self.input_dict['last_bit_rate'] / float(VIDEO_BIT_RATE[0]))
 
         # reward = log_bit_rate \
@@ -210,8 +215,8 @@ class AbrPensieveClass:
         # reward = BITRATE_REWARD[post_data['lastquality']] \
         #         - 8 * rebuffer_time / M_IN_K - np.abs(BITRATE_REWARD[post_data['lastquality']] - BITRATE_REWARD_MAP[self.input_dict['last_bit_rate']])
 
-        self.input_dict['last_bit_rate'] = VIDEO_BIT_RATE[post_data['lastquality']]
-        self.input_dict['last_total_rebuf'] = post_data['RebufferTime']
+        post_data['input']['last_bit_rate'] = VIDEO_BIT_RATE[post_data['lastquality']]
+        post_data['input']['last_total_rebuf'] = post_data['RebufferTime']
 
         # retrieve previous state
         if len(self.s_batch) == 0:
@@ -224,15 +229,15 @@ class AbrPensieveClass:
         video_chunk_size = post_data['lastChunkSize']
 
         # compute number of video chunks left
-        video_chunk_remain = TOTAL_VIDEO_CHUNKS - self.input_dict['video_chunk_coount']
-        self.input_dict['video_chunk_coount'] += 1
+        video_chunk_remain = TOTAL_VIDEO_CHUNKS - post_data['input']['video_chunk_coount']
+        post_data['input']['video_chunk_coount'] += 1
 
         # dequeue history record
         state = np.roll(state, -1, axis=1)
 
         next_video_chunk_sizes = []
         for i in range(A_DIM):
-            next_video_chunk_sizes.append(self.get_chunk_size(i, self.input_dict['video_chunk_coount']))
+            next_video_chunk_sizes.append(self.get_chunk_size(i, post_data['input']['video_chunk_coount']))
 
         # this should be S_INFO number of terms
         try:

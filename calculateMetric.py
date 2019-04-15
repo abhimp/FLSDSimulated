@@ -13,7 +13,7 @@ def measureQoE(bitrates, qualityLevels, stallTimes, startUpDelay, reward=True):
         avgQualityVariation = 0 if len(qualityPlayed) == 1 else sum([abs(bt - qualityPlayed[x - 1]) for x,bt in enumerate(qualityPlayed) if x > 0])/(len(qualityPlayed) - 1)
 
     reward = avgQl \
-            - REBUF_PENALTY * stallTimes \
+            - REBUF_PENALTY * stallTimes/10 \
              - SMOOTH_PENALTY * avgQualityVariation
 
     return reward

@@ -2,7 +2,10 @@
 SPEED_TOLARANCE_PERCENT = 100
 
 class Group():
+    GROUP_ID = 0
     def __init__(s, ql, network, lonePeer = False):
+        s.id = Group.GROUP_ID
+        Group.GROUP_ID += 1
         s.nodes = []
         s._schedules = {}
         s.segMents = 0
@@ -89,7 +92,7 @@ class Group():
         qls = list(zip(*qls))
         assert len(qls) == len(s.nodes)
         avgs = [sum(x)/len(x) for x in qls]
-        
+
         jfi = sum(avgs)**2 / (sum([x**2 for x in avgs]))/len(avgs)
         return jfi
 
@@ -102,6 +105,12 @@ class GroupManager():
         self.defaultQL = defaultQL
         self.videoInfo = videoInfo
         self.network = network
+
+    def getId(s, node):
+        if node not in s.peers:
+            raise Exception("node not found")
+        return s.peers[node].id
+
 
     def getQoEVariation(self, saturated = True):
         QoEVar = []
@@ -137,11 +146,11 @@ class GroupManager():
             qls = list(zip(*qls))
             assert len(qls) == len(nodes)
             avgs = [sum(x)/len(x) for x in qls]
-            
+
             jfi = sum(avgs)**2 / (sum([x**2 for x in avgs])) / len(avgs)
             fairnessIndeces.append(jfi)
         return sum(fairnessIndeces)/len(fairnessIndeces)
-        
+
 
     def add(s, node, segId = 0, ql = -1):
         ql = s.defaultQL if ql < 0 else ql
@@ -149,7 +158,7 @@ class GroupManager():
         conn = node.connectionSpeedBPS
 
         lonePeer = False
-        
+
         if s.videoInfo:
             connQl = ql
             connTol = conn * (1 + SPEED_TOLARANCE_PERCENT/100.0)
@@ -160,7 +169,7 @@ class GroupManager():
 #             if ql != connQl:
 #                 print("assiging ql:", connQl, "instead of", ql)
             ql = connQl
-            
+
             if ql == 0 and connTol < s.videoInfo.bitrates[ql]:
                 lonePeer = True  #there will be no other group for this peer
 
@@ -189,7 +198,7 @@ class GroupManager():
                 lastCount = c
                 bucket[c].remove(grp)
                 break
-        
+
         cnt = grp.numNodes()
 
         grpSet = bucket.setdefault(cnt, set())
