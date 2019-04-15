@@ -16,6 +16,7 @@ from p2pnetwork import P2PNetwork
 #from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
 import rnnAgent, rnnQuality
 import multiprocessing as mp
+import graphs
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
@@ -122,7 +123,7 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *
     deadAgents = []
     ags = []
     for x, nodeId in enumerate(network.nodes()):
-        idx = np.random.randint(len(traces))
+        idx = x%len(traces)
         trace = traces[idx]
         startsAt = np.random.randint(vi.duration/2)
         env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, resultpath = result_dir, *kw, **kws)
@@ -158,7 +159,7 @@ if __name__ == "__main__":
     slaveProcs = {}
 
     subjects = subjects.split(",")
-    networks = glob.glob("./graph/*.txt")
+    networks = graphs.networks #glob.glob("./graph/*.txt")
     videos = VIDEO_FILES[:35] #glob.glob("./videofilesizes/*.py")
     traces = load_trace.load_trace()
     traces = list(zip(*traces))
@@ -201,21 +202,16 @@ if __name__ == "__main__":
             with open(RESULT_DIR+"/progress", "w") as fp:
                 print("finished: ", finished, "of", total, file=fp)
         slvId = slaveIds.pop()
-#         if slvId in slaveProcs:
-#             sq = slvQs[slvId]
-#             p = mp.Process(target=runSlave, args = (procQueue, sq, slvId))
-#             p.start()
-#             slaveProcs[slvId] = p
+
         print("Starting", started)
-#         slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
-        rnnAgent.setSlaveId(slvId)
-        rnnQuality.setSlaveId(slvId)
-        runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+        slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+#         rnnAgent.setSlaveId(slvId)
+#         rnnQuality.setSlaveId(slvId)
+#         runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+#         finished += 1
+
         print("Started", started)
         started += 1
-#         p = mp.Process(target=runExperiments, args=(procQueue, slvId, GroupP2PEnvTimeoutIncRNN, traces, vi, p2p, None, result_dir), kwargs={"modelPath" : modelPath})
-#         p.start()
-#         slaveProcs[slvId] = p
         if finished >= 1:
             break
 

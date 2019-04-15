@@ -12,6 +12,7 @@ from envGroupP2PBasic import GroupP2PEnvBasic
 from envGroupP2PTimeout import GroupP2PEnvTimeout
 from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
 from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
+from envGroupP2PDeter import GroupP2PEnvDeter
 from envSimple import SimpleEnvironment
 from envDHT import DHTEnvironment
 from simulator import Simulator
@@ -96,7 +97,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
+        if name not in ["GrpDeter", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
             continue
 #         x = []
         for ag in res:
@@ -111,11 +112,14 @@ def findIgnorablePeers(results):
 #     if len(p): print(p)
 #     return set(p[-1]) if len(p) else []
 
+
 def saveAgentsDataMulitAttrib(grpSz, results, attribs, pltTitle, lonePeers = []):
     for name, res in results.items():
         Xs, Ys = [], []
         for x, ag in enumerate(res):
             if ag.networkId in lonePeers:
+                continue
+            if not ag._vGroup or len(ag._vGroupNodes) != grpSz:
                 continue
             y = []
             for at in attribs:
@@ -140,7 +144,7 @@ def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
     for name, res in results.items():
         Xs, Ys = [], []
         for x, ag in enumerate(res):
-            if ag.networkId in lonePeers:
+            if not ag._vGroup or len(ag._vGroupNodes) != grpSz:
                 continue
             y = eval("ag." + attrib)
             Xs.append(x)
@@ -202,7 +206,7 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
     deadAgents = []
     ags = []
     players = len(list(network.nodes()))
-    idxs = np.random.randint(len(traces), size=players)
+    idxs = [x%len(traces) for x in range(players)] #np.random.randint(len(traces), size=players)
     startsAts = np.random.randint(GLOBAL_STARTS_AT + 1, vi.duration/2, size=players)
     CDN.clear()
     for x, nodeId in enumerate(network.nodes()):
@@ -219,7 +223,7 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
 
 def main():
     global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN"] 
+    allowed = ["GrpDeter", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN"]
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
@@ -232,6 +236,7 @@ def main():
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
 #     vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
 #     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
@@ -242,6 +247,7 @@ def main():
     testCB = {}
     testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
     testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GrpDeter"] = (GroupP2PEnvDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
 
     results = {}
     cdns = {}

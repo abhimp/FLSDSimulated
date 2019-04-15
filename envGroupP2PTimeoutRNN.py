@@ -225,7 +225,7 @@ class GroupP2PEnvTimeoutRNN(SimpleEnvironment):
 
 #=============================================
 # exit point from this class to envSimple
-    def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0):
+    def _rFetchSegment(self, nextSegId, nextQuality, sleepTime = 0.0, extraData=None):
         if self._vDead: return
         assert sleepTime == 0
         if nextSegId > self._vAgent.nextSegmentIndex:
