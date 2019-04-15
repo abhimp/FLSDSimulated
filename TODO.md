@@ -3,8 +3,10 @@
 1. Rewrite the node distance part - make it distinct
  - modify the RTT part
 
-2. ABR decision for each peer
+Main changes:
 
-3. Reinforcement learning for peer fetching 
-	* multi agent 
-	* deep reinforcement learning
+Add a MADDPG based algorithm to select the peer. If the chosen peer is the Super Peer, fall back to the Pensieve model to choose the best quality.
+
+Step 1: Add the fallback ABR for super peer fetching 
+
+Step 2: Peer prediction network 
