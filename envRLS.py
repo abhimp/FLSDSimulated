@@ -143,7 +143,10 @@ class SingleAgentEnv():
         print("Peer %s has finished playback\n" % self.nodeId)
         self.agent._rFinish()
         self.hasFinished = True
-
+    
+    @property
+    def now(self):
+        return self.simulator.getNow()
 
     '''
     Get the corresponding timestep in the trace data to the current time in the simulator
