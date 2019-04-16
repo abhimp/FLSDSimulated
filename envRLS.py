@@ -8,6 +8,8 @@ from simulator import Simulator
 from agent import Agent
 from segmentRequest import SegmentRequest
 from bisect import bisect_left
+from abrBOLA import BOLA
+from abrPensiev import AbrPensieve
 
 import numpy as np
 import load_trace
@@ -378,7 +380,7 @@ def setupEnv(traces, vi, network, abr=None):
             idx = np.random.randint(len(traces))
             link_traces[SUPERPEER_ID] = traces[idx]
 
-        env = SingleAgentEnv(vi, link_traces, simulator, nodeId)
+        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr=AbrPensieve)
         envs[nodeId] = env
         print("Starting node %d" % nodeId)
 
@@ -395,12 +397,32 @@ def setupEnv(traces, vi, network, abr=None):
 
     # get the average QoE
     qoes = []
+    startups = []
+    qualities = []
+    qls = []
+    total_stall_times = []
     for node in envs:
         if node == SUPERPEER_ID:
             continue
         qoes.append(envs[node].agent._rCalculateQoE())
+        startupDelay, qualityPlayed, stall, totalStallTime = envs[node].agent.getState()
+        startups.append(startupDelay)
+        qualities.append(np.sum(qualityPlayed))
+        avgQualityVariation = 0 if len(qualityPlayed) == 1 else sum([abs(bt - qualityPlayed[x - 1]) for x,bt in enumerate(qualityPlayed) if x > 0])/(len(qualityPlayed) - 1)
+        qls.append(avgQualityVariation)
+        total_stall_times.append(totalStallTime)
+        
     system_average_qoe = np.mean(qoes)
+    system_startupDelay = np.mean(startups)
+    system_qualities = np.mean(qualities)
+    system_qls = np.mean(qls)
+    system_total_stall_times = np.mean(total_stall_times)
+
     print("System average QoE: ", system_average_qoe)
+    print("System average startup delay: ", system_startupDelay)
+    print("System average qualities: ", system_qualities)
+    print("System average ql variations: ", system_qls)
+    print("System average stall times: ", system_total_stall_times) 
 
     # Get the penalty
     # bits to MB
@@ -408,10 +430,10 @@ def setupEnv(traces, vi, network, abr=None):
     print("Penalty: ", superpeer_penalty)
     reward = ALPHA * system_average_qoe - BETA * superpeer_penalty
     print("Reward: ", reward)
-    return system_average_qoe, superpeer_penalty, reward, envs[SUPERPEER_ID].sentChunks
+    return system_average_qoe, superpeer_penalty, reward, envs[SUPERPEER_ID].sentChunks, system_startupDelay, system_qualities, system_qls, system_total_stall_times
 
 
-def simulate_system(n_peers=10, flag='pos'):
+def simulate_system(flag, n_peers=100):
     print("Flag: ", flag)
     if flag == 'pos':
         network = P2PRandomNetwork(num_nodes=n_peers)  # partially observable
@@ -432,31 +454,51 @@ def run_for_network(n_iter, flag):
     qoes = []
     penalties = []
     rewards = []
+    startups = []
+    qualities = []
+    qls = []
+    total_stall_times = []
+
     for i in range(n_iter):
-        qoe, penalty, reward, chunks = simulate_system(flag=flag)
+        qoe, penalty, reward, chunks, startupDelay, quality, ql, total_stall_time = simulate_system(flag=flag)
         qoes.append(qoe)
         penalties.append(penalty)
         rewards.append(reward)
-    return np.mean(qoes), np.mean(penalties), np.mean(rewards), chunks
+        startups.append(startupDelay)
+        qualities.append(quality)
+        qls.append(ql)
+        total_stall_times.append(total_stall_time)
+    return np.mean(qoes), np.mean(penalties), np.mean(rewards), chunks, np.mean(startups), np.mean(qualities), np.mean(qls), np.mean(total_stall_times)
 
 
-def compare_POS_global_state(n_iter=1):
-    pos_qoe, pos_penalty,pos_reward, pos_sent_chunks = run_for_network(n_iter, flag='pos')
-    star_qoe, star_penalty, star_reward, star_sent_chunks = run_for_network(n_iter, flag='star')
-    glob_qoe, glob_penalty, glob_reward, glob_sent_chunks = run_for_network(n_iter, flag='fully')
+'''Helper function to print the simulation results for a given topology
+'''
+def print_evaluation(topology, qoe, penalty, reward, chunks, startupDelay, qualities, ql, total_stall_time , flag, n_iter):
+    print("\n",topology, ": ", qoe, penalty, reward)
+    print("Startup delay: ", startupDelay)
+    print("Quality sum: ", qualities)
+    print("Quality variations: ", ql)
+    print("Total stall time: ", total_stall_time,"\n")
+
+
+def compare_POS_global_state(n_iter):
     
-    print("Star: ", star_qoe, star_penalty, star_reward)
-    print("Chunks: ", len(star_sent_chunks), star_sent_chunks)
+    pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualities, pos_ql, pos_total_stall_time  = run_for_network(n_iter, flag='pos')
+    star_qoe, star_penalty, star_reward, star_sent_chunks, star_startupDelay, star_qualities, star_ql, star_total_stall_time   = run_for_network(n_iter, flag='star')
+    glob_qoe, glob_penalty, glob_reward, glob_sent_chunks,  glob_startupDelay, glob_qualities, glob_ql, glob_total_stall_time   = run_for_network(n_iter, flag='fully')
+    
+    print_evaluation('Partially observable', 
+pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualities, pos_ql, pos_total_stall_time, 'pos', n_iter)
+   
+    print_evaluation('Star', star_qoe, star_penalty, star_reward, star_sent_chunks, star_startupDelay, star_qualities, star_ql, star_total_stall_time, 'star', n_iter)
 
-    print("POS: ", pos_qoe, pos_penalty, pos_reward)
-    print("Chunks: ", len(pos_sent_chunks), pos_sent_chunks)
+    print_evaluation('Global',glob_qoe, glob_penalty, glob_reward, glob_sent_chunks,  glob_startupDelay, glob_qualities, glob_ql, glob_total_stall_time, 'fully', n_iter)
 
-    print("Global state: ", glob_qoe, glob_penalty, glob_reward)
-    print("Chunks: ", len(glob_sent_chunks), glob_sent_chunks)
+
 def main():
     #simulate_system(flag='star')
     
-    compare_POS_global_state()
+    compare_POS_global_state(n_iter=10)
 
 if __name__ == '__main__':
     main()
