@@ -60,6 +60,16 @@ class Agent():
         self._vSyncSegment = -1
 
 
+    def getState(self):
+        '''Gets the state of the agent
+        Returns:
+            Startup delay
+            Qualities played
+            Stalls
+            Total Stall Time
+        '''
+        return self._vStartUpDelay, self._vQualitiesPlayed, self._vStallsAt, self._vTotalStallTime
+
     @property
     def bufferUpto(self):
         return self._vBufferUpto
