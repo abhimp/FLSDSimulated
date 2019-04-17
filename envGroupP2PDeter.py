@@ -245,7 +245,7 @@ class GroupP2PEnvDeter(SimpleEnvironment):
         qlen = np.array(qlen) * 100
 
         prog = [n._rDownloadStatus() for n in self._vGroupNodes]
-        prog = [0 if x[2] == 0 else float(x[1])*100/float(x[2]) for x in prog]
+        prog = [0 if x[2] == 0 else 100 - float(x[1])*100/float(x[2]) for x in prog]
         prog = np.array(prog)
 
         deadLinePenalty = np.array([0 if len(n._vDeadLineMissed)==0 else self._rPenaltyDegradeTime(*n._vDeadLineMissed[-1]) for n in self._vGroupNodes])
