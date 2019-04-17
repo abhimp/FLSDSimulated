@@ -1,6 +1,6 @@
 
 class SegmentRequest():
-    def __init__(self, qualityIndex, downloadStarted, downloadFinished, segmentDuration, segId, clen, downloader, extraData = None):
+    def __init__(self, qualityIndex, downloadStarted, downloadFinished, segmentDuration, segId, clen, downloader, segmentDownloadedFrom=None, extraData = None):
         self._qualityIndex = qualityIndex
         self._downloadStarted = downloadStarted
         self._downloadFinished = downloadFinished
@@ -10,6 +10,9 @@ class SegmentRequest():
         self._downloader = downloader
         self._extraData = extraData
         self._syncSeg = False
+        
+        # Only set for for P2P systems
+        self.segmentDownloadedFrom = segmentDownloadedFrom
 
     @property
     def syncSeg(self):

@@ -10,6 +10,7 @@ from segmentRequest import SegmentRequest
 from bisect import bisect_left
 from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
+from abrMultiPensieve import AbrMultiPensieve
 
 import numpy as np
 import load_trace
@@ -106,7 +107,7 @@ class SingleAgentEnv():
                 duration = self.getDuration(segid, quality) 
                 if segid not in self.collectedChunks:
                     self.collectedChunks[segid] = {}
-                self.collectedChunks[segid][quality] = SegmentRequest(quality, 0, 0, duration, segid, self.videoInfo.fileSizes[quality][segid], self)
+                self.collectedChunks[segid][quality] = SegmentRequest(quality, 0, 0, duration, segid, self.videoInfo.fileSizes[quality][segid], self, segmentDownloadedFrom=0)
 
     
     def setNeighbors(self, neighbor_envs):
@@ -287,7 +288,7 @@ class SingleAgentEnv():
         self.neighbor_envs[neighbor].sentData += chunk_len
         if neighbor == SUPERPEER_ID:
             self.neighbor_envs[SUPERPEER_ID].sentChunks.append((data._segId, chunk_len))
-            print("Node ", self.nodeId, "SP chunk total: ", self.neighbor_envs[neighbor].sentData)
+            #print("Node ", self.nodeId, "SP chunk total: ", self.neighbor_envs[neighbor].sentData)
         # update the first chunk size data
         if data._segId not in self.neighbor_envs[neighbor].first_chunk:
             if neighbor == SUPERPEER_ID:
@@ -306,7 +307,7 @@ class SingleAgentEnv():
             # TODO: use pensieve fetch here
             
             # the super peer is used to receive the segment
-            #print("Node %d : Fetching from superpeer %s %s" % (self.nodeId, str(nextSegId), str(nextQuality)))
+            print("Node %d : Fetching from superpeer %s %s" % (self.nodeId, str(nextSegId), str(nextQuality)))
             data = self.neighbor_envs[neighbor].getData(nextSegId, nextQuality)
         else:
             #print("Node %d : Fetching from peer %d %s %s" % (self.nodeId, neighbor, str(nextSegId), str(nextQuality)))
@@ -319,13 +320,13 @@ class SingleAgentEnv():
         now = self.simulator.getNow()
         segment_duration = self.getDuration(nextSegId, nextQuality) 
 
-        self.simulator.runAfter(timeneeded, self.postFetchSegment, nextQuality, now, segment_duration, nextSegId, chsize)
+        self.simulator.runAfter(timeneeded, self.postFetchSegment, neighbor, nextQuality, now, segment_duration, nextSegId, chsize)
 
     
     '''Event to perform post fetching essentials like adding to the playback buffer'''
-    def postFetchSegment(self, quality, start_time, segment_duration, segid, chsize):
+    def postFetchSegment(self, neighbor, quality, start_time, segment_duration, segid, chsize):
         now = self.simulator.getNow()
-        req = SegmentRequest(quality, start_time, now, segment_duration, segid, chsize, self)
+        req = SegmentRequest(quality, start_time, now, segment_duration, segid, chsize, self, segmentDownloadedFrom=neighbor)
         # add to collected chunks
         if segid not in self.collectedChunks:
             self.collectedChunks[segid] = {}
@@ -380,7 +381,7 @@ def setupEnv(traces, vi, network, abr=None):
             idx = np.random.randint(len(traces))
             link_traces[SUPERPEER_ID] = traces[idx]
 
-        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr=AbrPensieve)
+        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr=AbrMultiPensieve)
         envs[nodeId] = env
         print("Starting node %d" % nodeId)
 
@@ -433,7 +434,7 @@ def setupEnv(traces, vi, network, abr=None):
     return system_average_qoe, superpeer_penalty, reward, envs[SUPERPEER_ID].sentChunks, system_startupDelay, system_qualities, system_qls, system_total_stall_times
 
 
-def simulate_system(flag, n_peers=100):
+def simulate_system(flag, n_peers=10):
     print("Flag: ", flag)
     if flag == 'pos':
         network = P2PRandomNetwork(num_nodes=n_peers)  # partially observable
@@ -496,9 +497,9 @@ pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualitie
 
 
 def main():
-    #simulate_system(flag='star')
+    simulate_system(flag='global')
     
-    compare_POS_global_state(n_iter=10)
+    #compare_POS_global_state(n_iter=10)
 
 if __name__ == '__main__':
     main()
