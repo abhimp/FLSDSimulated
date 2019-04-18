@@ -408,6 +408,8 @@ def setupEnv(traces, vi, network, abr=None):
     qls = []
     total_stall_times = []
     fraction_superpeer_fetches = []
+    bitratesKbps = np.array(vi.bitratesKbps)
+    bitrates = np.array(vi.bitrates)
 
     for node in envs:
         if node == SUPERPEER_ID:
@@ -415,7 +417,9 @@ def setupEnv(traces, vi, network, abr=None):
         qoes.append(envs[node].agent._rCalculateQoE())
         startupDelay, qualityPlayed, stall, totalStallTime = envs[node].agent.getState()
         startups.append(startupDelay)
-        qualities.append(np.sum(qualityPlayed))
+        print("Quality played", qualityPlayed)
+        print("Quality sum: ", np.sum(qualityPlayed))
+        qualities.append(np.mean(bitrates[qualityPlayed]))
         avgQualityVariation = 0 if len(qualityPlayed) == 1 else sum([abs(bt - qualityPlayed[x - 1]) for x,bt in enumerate(qualityPlayed) if x > 0])/(len(qualityPlayed) - 1)
         qls.append(avgQualityVariation)
         total_stall_times.append(totalStallTime)
@@ -445,7 +449,7 @@ def setupEnv(traces, vi, network, abr=None):
     return system_average_qoe, superpeer_penalty, reward, envs[SUPERPEER_ID].sentChunks, system_startupDelay, system_qualities, system_qls, system_total_stall_times, system_avg_sp_fetches
 
 
-def simulate_system(flag, n_peers=10):
+def simulate_system(flag, n_peers):
     print("Flag: ", flag)
     if flag == 'pos':
         network = P2PRandomNetwork(num_nodes=n_peers)  # partially observable
@@ -462,7 +466,7 @@ def simulate_system(flag, n_peers=10):
     return setupEnv(traces, vi, network)
 
 
-def run_for_network(n_iter, flag):
+def run_for_network(n_iter, flag, n_peers):
     qoes = []
     penalties = []
     rewards = []
@@ -473,7 +477,7 @@ def run_for_network(n_iter, flag):
     sp_fetches = []
 
     for i in range(n_iter):
-        qoe, penalty, reward, chunks, startupDelay, quality, ql, total_stall_time, sp_fetch = simulate_system(flag=flag)
+        qoe, penalty, reward, chunks, startupDelay, quality, ql, total_stall_time, sp_fetch = simulate_system(flag=flag, n_peers=n_peers)
         qoes.append(qoe)
         penalties.append(penalty)
         rewards.append(reward)
@@ -496,11 +500,11 @@ def print_evaluation(topology, qoe, penalty, reward, chunks, startupDelay, quali
     print("Total stall time: ", total_stall_time)
     print("Average super peer fetches: ", sp_fetch, "\n")
 
-def compare_POS_global_state(n_iter):
+def compare_POS_global_state(n_iter, n_peers):
     
-    pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualities, pos_ql, pos_total_stall_time, pos_sp_fetches  = run_for_network(n_iter, flag='pos')
-    star_qoe, star_penalty, star_reward, star_sent_chunks, star_startupDelay, star_qualities, star_ql, star_total_stall_time, star_sp_fetches   = run_for_network(n_iter, flag='star')
-    glob_qoe, glob_penalty, glob_reward, glob_sent_chunks,  glob_startupDelay, glob_qualities, glob_ql, glob_total_stall_time, glob_sp_fetches   = run_for_network(n_iter, flag='fully')
+    pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualities, pos_ql, pos_total_stall_time, pos_sp_fetches  = run_for_network(n_iter, flag='pos', n_peers=n_peers)
+    star_qoe, star_penalty, star_reward, star_sent_chunks, star_startupDelay, star_qualities, star_ql, star_total_stall_time, star_sp_fetches   = run_for_network(n_iter, flag='star', n_peers=n_peers)
+    glob_qoe, glob_penalty, glob_reward, glob_sent_chunks,  glob_startupDelay, glob_qualities, glob_ql, glob_total_stall_time, glob_sp_fetches   = run_for_network(n_iter, flag='fully', n_peers=n_peers)
     
     print_evaluation('Partially observable', 
 pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualities, pos_ql, pos_total_stall_time, pos_sp_fetches, 'pos', n_iter)
@@ -513,7 +517,7 @@ pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualitie
 def main():
     #simulate_system(flag='global')
     
-    compare_POS_global_state(n_iter=1)
+    compare_POS_global_state(n_iter=1, n_peers=10)
 
 if __name__ == '__main__':
     main()
