@@ -18,10 +18,8 @@ class AbrMultiPensieve(AbrPensieve):
         if len(superpeer_requests) == 0:
             # Tricky part now, what if the agent has never contacted the super peer before?
             # Fallback to the default ABR policy
-            print("Super peer not contacted before!")
             return self.agent._rWhenToDownload(kw)
         else:
-            print("Super peer CONTACT before!")
             req = superpeer_requests[-1]
             bufferLeft = self.agent._vBufferUpto - self.agent._vPlaybacktime
             if bufferLeft < 0:
