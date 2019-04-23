@@ -87,10 +87,12 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vNextGroupDownloader = -1
         self._vNextGroupDLSegId = -1
         self._vWeightedThroughput = 0
+        self._vDownloadQl = []
         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
         #Loop debug
+        self._vMaxSegDownloading = -1
         self._vSyncNow = False
         self._vLastSyncSeg = -1
         self._vSleepingSegs = {}
@@ -381,7 +383,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
             segId, ql, rnnkey, syncSeg = self._vDownloadQueue.pop(0)
             if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
                 continue
-            if segId >= self._vGroupStartedFromSegId and self._vGroupStarted:
+            if segId >= self._vGroupStartedFromSegId and self._vGroupStarted and rnnkey:
                 ql = self._rGetMyQuality(ql, segId, rnnkey)
                 assert ql < len(self._vVideoInfo.fileSizes)
                 self.gossipSend(self._rDownloadingUsing, segId, ql)

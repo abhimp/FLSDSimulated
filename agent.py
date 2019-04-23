@@ -293,7 +293,7 @@ class Agent():
             self._vTimeSlipage.append((now - stallTime, self._vTotalStallTime, self._vNextSegmentIndex-1))
             self._vTotalStallTime += stallTime
             self._vTimeSlipage.append((now, self._vTotalStallTime, self._vNextSegmentIndex))
-            assert stallTime < (req.timetaken + 100)
+#             assert stallTime < (req.timetaken + 100)
             self._vBufferLenOverTime.append((now - stallTime, 0))
             self._vBufferLenOverTime.append((now - 0.001, 0))
         else:
