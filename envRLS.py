@@ -11,6 +11,8 @@ from bisect import bisect_left
 from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
 from abrMultiPensieve import AbrMultiPensieve
+from plotrls import plot
+import matplotlib.pyplot as plt
 
 import numpy as np
 import load_trace
@@ -386,7 +388,7 @@ def setupEnv(traces, vi, network, abr=None):
             idx = np.random.randint(len(traces))
             link_traces[SUPERPEER_ID] = traces[idx]
 
-        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr=AbrMultiPensieve)
+        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr=BOLA)
         envs[nodeId] = env
         print("Starting node %d" % nodeId)
 
@@ -417,10 +419,15 @@ def setupEnv(traces, vi, network, abr=None):
         qoes.append(envs[node].agent._rCalculateQoE())
         startupDelay, qualityPlayed, stall, totalStallTime = envs[node].agent.getState()
         startups.append(startupDelay)
+        qualityPlayed = bitrates[qualityPlayed]
         print("Quality played", qualityPlayed)
-        print("Quality sum: ", np.sum(qualityPlayed))
-        qualities.append(np.mean(bitrates[qualityPlayed]))
+        print("Average bitrate: ", np.mean(qualityPlayed))
+        
+        qualities.append(np.mean(qualityPlayed))
+        
+
         avgQualityVariation = 0 if len(qualityPlayed) == 1 else sum([abs(bt - qualityPlayed[x - 1]) for x,bt in enumerate(qualityPlayed) if x > 0])/(len(qualityPlayed) - 1)
+        #avgQualityVariation = envs[node].agent.avgQualityVariation())
         qls.append(avgQualityVariation)
         total_stall_times.append(totalStallTime)
         fraction_superpeer_fetches.append(envs[node].superpeer_fetches * 1.0 / (envs[node].superpeer_fetches + envs[node].peer_fetches))
@@ -513,11 +520,49 @@ pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualitie
 
     print_evaluation('Global',glob_qoe, glob_penalty, glob_reward, glob_sent_chunks,  glob_startupDelay, glob_qualities, glob_ql, glob_total_stall_time, glob_sp_fetches, 'fully', n_iter)
 
+    # plot the graphs
+    fig, ax = plt.subplots(nrows=2, ncols=2)
+    #fig.suptitle('QoE components')
+    x = np.arange(3)
+   
+    x_ticks = ['Star', 'POS', 'Fully']
+    #plt.xticks(ax, xticks=np.arange(3), xticklabels=x_labels)
+
+    ax[0,0].set_title('Average bitrate(in Kbps)')
+    ax[0,0].set_xticks(x, minor=False)
+    ax[0,0].bar(x, [star_qualities/1000, pos_qualities/1000, glob_qualities/1000])
+    ax[0,0].set_xticklabels(x_ticks)
+
+    ax[0,1].set_title('Average quality_variations(in Kbps)')
+    ax[0,1].set_xticks(x, minor=False)
+    ax[0,1].bar(x, [star_ql/1000, pos_ql/1000, glob_ql/1000])
+    ax[0,1].set_xticklabels(x_ticks)
+    
+    ax[1,0].set_title('Average stall time')
+    ax[1,0].set_xticks(x, minor=False)
+    ax[1,0].bar(x, [star_total_stall_time, pos_total_stall_time, glob_total_stall_time])
+    ax[1,0].set_xticklabels(x_ticks)
+
+    ax[1,1].set_title('Average startup delay')
+    ax[1,1].set_xticks(x, minor=False)
+    ax[1,1].bar(x, [star_startupDelay, pos_startupDelay, glob_startupDelay])
+    ax[1,1].set_xticklabels(x_ticks)
+
+
+    fig.tight_layout() 
+    plt.show()
+
+    # Super peer fetches
+    fig = plt.figure()
+    plt.title("Fraction of Super Peer fetches")
+    plt.bar(x, [star_sp_fetches, pos_sp_fetches, glob_sp_fetches])
+    plt.show()
+
 
 def main():
     #simulate_system(flag='global')
     
-    compare_POS_global_state(n_iter=1, n_peers=10)
+    compare_POS_global_state(n_iter=10, n_peers=100)
 
 if __name__ == '__main__':
     main()
