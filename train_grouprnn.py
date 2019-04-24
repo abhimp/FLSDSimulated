@@ -17,6 +17,7 @@ from p2pnetwork import P2PNetwork
 import rnnAgent, rnnQuality
 import multiprocessing as mp
 import graphs
+import gc
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
@@ -146,10 +147,12 @@ def runSlave(pq, sq, slvId):
             rnnAgent.slavecleanup()
             break
         runExperiments(*q[0], **q[1])
+        print(slvId + ": garbageCollection:", gc.collect())
         pq.put(slvId)
 
 
-SINGLE_PROC = False
+MULTI_PROC = True
+NUM_EXP_PER_SLV = 2
 
 if __name__ == "__main__":
     subjects = "GroupP2PTimeoutRNN"
@@ -157,6 +160,7 @@ if __name__ == "__main__":
     numSlave = 2
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
+    slvExpCnt = {x:0 for x in slaveIds}
     procQueue = mp.Queue()
     slaveProcs = {}
 
@@ -170,7 +174,7 @@ if __name__ == "__main__":
     expParams = [(vidPath, netPath, tc) for netPath in networks[:40] for vidPath in videos for tc in ["tc1"]]
     total = len(expParams)
 
-    if not SINGLE_PROC:
+    if MULTI_PROC:
         if not centralLearnerQua and not centralLearnerAge:
             vi = video.loadVideoTime(videos[0])
             centralLearnerQua = rnnQuality.runCentralServer(slaveIds, list(range(len(vi.bitrates))), summary_dir = modelPath)
@@ -198,6 +202,19 @@ if __name__ == "__main__":
         if len(slaveIds) == 0:
             slvId = procQueue.get()
             slaveIds.append(slvId)
+            slvExpCnt[slvId] += 1
+            if slvExpCnt[slvId] >= NUM_EXP_PER_SLV:
+                print("Quting a slv")
+                slvQs[slvId].put("quit")
+                print("waiting to join")
+                slaveProcs[slvId].join()
+                print("joined")
+                with open("/tmp/testproc", "a") as fp:
+                    print("killed one child with id", slvId, "and respwaned", file=fp)
+                p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
+                p.start()
+                slaveProcs[slvId] = p
+
             finished += 1
             print("="*40)
             print("finished: ", finished, "of", total)
@@ -207,7 +224,7 @@ if __name__ == "__main__":
         slvId = slaveIds.pop()
 
         print("Starting", started)
-        if not SINGLE_PROC:
+        if MULTI_PROC:
             slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
         else:
 #             rnnAgent.setSlaveId(slvId)
@@ -217,10 +234,10 @@ if __name__ == "__main__":
 
         print("Started", started)
         started += 1
-        if finished >= 1:
+        if finished >= 5:
             break
 
-    while len(slaveIds) < numSlave and not SINGLE_PROC:
+    while len(slaveIds) < numSlave and MULTI_PROC:
         slvId = procQueue.get()
         slvQs[slvId].put("quit")
         slaveIds.append(slvId)
@@ -228,7 +245,7 @@ if __name__ == "__main__":
         with open(RESULT_DIR+"/progress", "w") as fp:
             print("finished: ", finished, "of", total, file=fp)
 
-    if not SINGLE_PROC:
+    if MULTI_PROC:
         print("Turning off central server")
         rnnAgent.quitCentralServer()
         rnnQuality.quitCentralServer()

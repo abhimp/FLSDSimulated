@@ -132,6 +132,7 @@ class PensiveLearner():
         self._vRunning = True
         p = mp.Process(target=self.handle, args= (self.send, self.recv, actionset, infoDept)+arg, kwargs=kwarg)
         p.start()
+        self.proc = p
         atexit.register(self.cleanup)
 
     def handle(self, recv, send, *arg, **kwarg):
@@ -157,6 +158,7 @@ class PensiveLearner():
             return
         self.send.put(("cleanup", arg, karg))
         self.recv.get()
+        self.proc.join()
         self._vRunning = False
 
     def getNextAction(self, *arg, **kwarg):
