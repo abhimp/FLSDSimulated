@@ -116,7 +116,7 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, result_dir):
 
         savePlotData(Xs, Ys, Zs, name, pltTitle, result_dir)
 
-def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *kw, **kws):
+def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, expId = 0, *kw, **kws):
     randStateInit.loadCurrentState()
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
@@ -137,6 +137,11 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, *
     rnnQuality.saveLearner()
     return ags
 
+def movecore(dest, slvId, pid, x):
+    if not os.path.isdir(dest):
+        os.makedirs(dest)
+    os.rename("core", os.path.join(dest, "core_%s_%s_%s"%(x, slvId, pid)))
+
 def runSlave(pq, sq, slvId):
     rnnAgent.setSlaveId(slvId)
     rnnQuality.setSlaveId(slvId)
@@ -146,15 +151,22 @@ def runSlave(pq, sq, slvId):
             rnnQuality.slavecleanup()
             rnnAgent.slavecleanup()
             break
-        runExperiments(*q[0], **q[1])
+        expId = q[1].get("expId", -1) 
+        try:
+            runExperiments(*q[0], **q[1])
+        except:
+            trace = sys.exc_info()
+            pq.put({"status":False, "slvId": slvId, "expId": expId})
+            grant = sq.get()
+            os.abort()
         print(slvId + ": garbageCollection:", gc.collect())
-        pq.put(slvId)
+        pq.put({"status":True, "slvId": slvId, "expId": expId})
 
 
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 2
 
-if __name__ == "__main__":
+def main():
     subjects = "GroupP2PTimeoutRNN"
     modelPath = "ResModelPathRNN"
     numSlave = 2
@@ -188,6 +200,8 @@ if __name__ == "__main__":
     started = 0
     with open(RESULT_DIR+"/progress", "w") as fp:
         print("finished: ", finished, "of", total, file=fp)
+
+
     for vidPath, netPath, tc in expParams:
         vi = video.loadVideoTime(vidPath)
         p2p = P2PNetwork(netPath)
@@ -200,9 +214,20 @@ if __name__ == "__main__":
 
         randstatefp = os.path.join(result_dir, "randstate")
         if len(slaveIds) == 0:
-            slvId = procQueue.get()
-            slaveIds.append(slvId)
+            status = procQueue.get()
+            slvId = status["slvId"]
+            expId = status.get("expId", -1)
             slvExpCnt[slvId] += 1
+            if not status["status"]:
+                slvQs[slvId].put(True)
+                slaveProcs[slvId].join()
+                with open("/tmp/testproc", "a") as fp:
+                    print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
+                movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
+                p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
+                p.start()
+                slaveProcs[slvId] = p
+                slvExpCnt[slvId] = 0
             if slvExpCnt[slvId] >= NUM_EXP_PER_SLV:
                 print("Quting a slv")
                 slvQs[slvId].put("quit")
@@ -214,6 +239,9 @@ if __name__ == "__main__":
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
+                slvExpCnt[slvId] = 0
+
+            slaveIds.append(slvId)
 
             finished += 1
             print("="*40)
@@ -225,7 +253,7 @@ if __name__ == "__main__":
 
         print("Starting", started)
         if MULTI_PROC:
-            slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath}])
+            slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath, "expId" :started}])
         else:
 #             rnnAgent.setSlaveId(slvId)
 #             rnnQuality.setSlaveId(slvId)
@@ -252,3 +280,12 @@ if __name__ == "__main__":
         centralLearnerAge.join()
         centralLearnerQua.join()
         print("finished")
+
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except:
+        trace = sys.exc_info()
+        os.abort()
