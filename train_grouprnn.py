@@ -151,7 +151,7 @@ def runSlave(pq, sq, slvId):
             rnnQuality.slavecleanup()
             rnnAgent.slavecleanup()
             break
-        expId = q[1].get("expId", -1) 
+        expId = q[1].get("expId", -1)
         try:
             runExperiments(*q[0], **q[1])
         except:
@@ -251,7 +251,7 @@ def main():
                 print("finished: ", finished, "of", total, file=fp)
         slvId = slaveIds.pop()
 
-        print("Starting", started)
+        print("Starting", started, "with", (vidPath, netPath, tc))
         if MULTI_PROC:
             slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath, "expId" :started}])
         else:
