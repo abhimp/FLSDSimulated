@@ -12,7 +12,7 @@ from simulator import Simulator
 from group import GroupManager
 from p2pnetwork import P2PNetwork
 from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
-import multiprocessing as mp
+import util.multiprocwrap as mp
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"

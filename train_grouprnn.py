@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import glob
 import randStateInit
+import pdb
 
 import videoInfo as video
 from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
@@ -15,7 +16,7 @@ from group import GroupManager
 from p2pnetwork import P2PNetwork
 #from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
 import rnnAgent, rnnQuality
-import multiprocessing as mp
+import util.multiprocwrap as mp
 import graphs
 import gc
 # from envSimpleP2P import experimentSimpleP2P
@@ -245,7 +246,7 @@ def main():
 
             finished += 1
             print("="*40)
-            print("finished: ", finished, "of", total)
+            print("finished: ", finished, "of", total, "expId:", expId)
             print("="*40)
             with open(RESULT_DIR+"/progress", "w") as fp:
                 print("finished: ", finished, "of", total, file=fp)
@@ -262,11 +263,13 @@ def main():
 
         print("Started", started)
         started += 1
-        if finished >= 5:
+        if finished >= 3:
             break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
-        slvId = procQueue.get()
+        status = procQueue.get()
+        slvId = status["slvId"]
+        expId = status.get("expId", -1)
         slvQs[slvId].put("quit")
         slaveIds.append(slvId)
         slaveProcs[slvId].join()
@@ -288,4 +291,5 @@ if __name__ == "__main__":
         main()
     except:
         trace = sys.exc_info()
+        pdb.set_trace()
         os.abort()

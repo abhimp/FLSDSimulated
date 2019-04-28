@@ -14,7 +14,7 @@ import tensorflow as tf
 import a3c
 
 from calculateMetric import measureQoE
-from multiprocessing import Process, Pipe
+from util.multiprocwrap import Process, Pipe
 
 ######################## FAST MPC #######################
 

@@ -4,7 +4,7 @@ import os
 import numpy as np
 import tensorflow as tf
 import a3c
-import multiprocessing as mp
+import util.multiprocwrap as mp
 import atexit
 
 
