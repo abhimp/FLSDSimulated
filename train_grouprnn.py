@@ -165,12 +165,12 @@ def runSlave(pq, sq, slvId):
 
 
 MULTI_PROC = True
-NUM_EXP_PER_SLV = 1
+NUM_EXP_PER_SLV = 5
 
 def main():
     subjects = "GroupP2PTimeoutRNN"
     modelPath = "ResModelPathRNN"
-    numSlave = 2
+    numSlave = 16
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
     slvExpCnt = {x:0 for x in slaveIds}
@@ -263,8 +263,8 @@ def main():
 
         print("Started", started)
         started += 1
-        if finished >= 1:
-            break
+#         if finished >= 1:
+#             break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
         status = procQueue.get()
