@@ -151,7 +151,7 @@ def runSlave(pq, sq, slvId):
         if q == "quit":
             rnnQuality.slavecleanup()
             rnnAgent.slavecleanup()
-            break
+            exit(0)
         expId = q[1].get("expId", -1)
         try:
             runExperiments(*q[0], **q[1])
@@ -165,7 +165,7 @@ def runSlave(pq, sq, slvId):
 
 
 MULTI_PROC = True
-NUM_EXP_PER_SLV = 2
+NUM_EXP_PER_SLV = 1
 
 def main():
     subjects = "GroupP2PTimeoutRNN"
@@ -263,16 +263,23 @@ def main():
 
         print("Started", started)
         started += 1
-        if finished >= 3:
+        if finished >= 1:
             break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
         status = procQueue.get()
         slvId = status["slvId"]
         expId = status.get("expId", -1)
-        slvQs[slvId].put("quit")
+        if not status["status"]:
+            slvQs[slvId].put(True)
+            slaveProcs[slvId].join()
+            with open("/tmp/testproc", "a") as fp:
+                print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
+            movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
+        else:
+            slvQs[slvId].put("quit")
+            slaveProcs[slvId].join()
         slaveIds.append(slvId)
-        slaveProcs[slvId].join()
         with open(RESULT_DIR+"/progress", "w") as fp:
             print("finished: ", finished, "of", total, file=fp)
 

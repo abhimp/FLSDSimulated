@@ -150,7 +150,7 @@ class PensiveLearner():
                 res = orig.finish(*arg, **karg)
             elif fun == "cleanup":
                 send.put("exit")
-                return
+                exit(0)
             send.put(res)
 
     def cleanup(self, *arg, **karg):
