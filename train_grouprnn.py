@@ -6,6 +6,8 @@ import numpy as np
 import glob
 import randStateInit
 import pdb
+import time
+import traceback as tb
 
 import videoInfo as video
 from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
@@ -19,6 +21,7 @@ import rnnAgent, rnnQuality
 import util.multiprocwrap as mp
 import graphs
 import gc
+from util.email import sendErrorMail
 # from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
@@ -141,7 +144,15 @@ def runExperiments(envCls, traces, vi, network, abr = None, result_dir = None, e
 def movecore(dest, slvId, pid, x):
     if not os.path.isdir(dest):
         os.makedirs(dest)
-    os.rename("core", os.path.join(dest, "core_%s_%s_%s"%(x, slvId, pid)))
+    count = 10
+    while not os.path.isfile("core") and count:
+        count -= 1
+        time.sleep(1)
+    try:
+        os.rename("core", os.path.join(dest, "core_%s_%s_%s"%(x, slvId, pid)))
+    except:
+        print("not core found", file=sys.stderr)
+        pass
 
 def runSlave(pq, sq, slvId):
     rnnAgent.setSlaveId(slvId)
@@ -157,7 +168,8 @@ def runSlave(pq, sq, slvId):
             runExperiments(*q[0], **q[1])
         except:
             trace = sys.exc_info()
-            pq.put({"status":False, "slvId": slvId, "expId": expId})
+            simpTrace = "<br>\n".join(tb.format_tb(trace[2]))
+            pq.put({"status":False, "slvId": slvId, "expId": expId, "tb": simpTrace})
             grant = sq.get()
             os.abort()
         print(slvId + ": garbageCollection:", gc.collect())
@@ -167,7 +179,13 @@ def runSlave(pq, sq, slvId):
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 5
 
+EMAIL_PASS = None
+
 def main():
+    global EMAIL_PASS
+    if os.path.isfile("emailpass.txt"):
+        EMAIL_PASS = open("emailpass.txt").read().strip()
+
     subjects = "GroupP2PTimeoutRNN"
     modelPath = "ResModelPathRNN"
     numSlave = 16
@@ -222,8 +240,11 @@ def main():
             if not status["status"]:
                 slvQs[slvId].put(True)
                 slaveProcs[slvId].join()
+                if EMAIL_PASS:
+                    sendErrorMail("Slave crashed expId:" + str(expId) + ", slaveIds:" + str(slvId) + "", "it crashed expId:" + str(expId) + ", slaveIds:" + str(slvId) + "<br>\n" + str(status.get("tb", "")), EMAIL_PASS)
                 with open("/tmp/testproc", "a") as fp:
                     print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
+                    print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
                 movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
@@ -298,5 +319,9 @@ if __name__ == "__main__":
         main()
     except:
         trace = sys.exc_info()
+        if EMAIL_PASS:
+            trace = sys.exc_info()
+            simpTrace = "<br>\n".join(tb.format_tb(trace[2]))
+            sendErrorMail("Master crashed", simpTrace, EMAIL_PASS)
         pdb.set_trace()
         os.abort()
