@@ -96,6 +96,12 @@ class Group():
         jfi = sum(avgs)**2 / (sum([x**2 for x in avgs]))/len(avgs)
         return jfi
 
+    def jainsFairnessDownloadTime(s):
+        dlTimes = [n._vTotalWorkingTime for n in s.nodes]
+
+        jfi = sum(dlTimes)**2 / (sum([x**2 for x in dlTimes]))/len(dlTimes)
+        return jfi
+
 class GroupManager():
     def __init__(self, peersPerGroup = 3, defaultQL = 3, videoInfo = None, network = None):
         self.groups = {}
@@ -128,6 +134,14 @@ class GroupManager():
                     fairnessIndeces.append(grp.jainsFairnessQoEIndex())
         return sum(fairnessIndeces)/len(fairnessIndeces)
 
+    def getGroupFairnessDownloadTime(self, saturated = True):
+        fairnessIndeces = []
+        for x, grps in self.groups.items():
+            for grp in grps:
+                if not saturated or grp.numNodes() == self.peersPerGroup:
+                    fairnessIndeces.append(grp.jainsFairnessDownloadTime())
+        return sum(fairnessIndeces)/len(fairnessIndeces)
+
     def getInterGroupFairness(self, saturated = True):
         fairnessIndeces = []
         for x, grps in self.groups.items():
@@ -148,6 +162,22 @@ class GroupManager():
             avgs = [sum(x)/len(x) for x in qls]
 
             jfi = sum(avgs)**2 / (sum([x**2 for x in avgs])) / len(avgs)
+            fairnessIndeces.append(jfi)
+        return sum(fairnessIndeces)/len(fairnessIndeces)
+
+    def getInterGroupFairnessDownloadTime(self, saturated = True):
+        fairnessIndeces = []
+        for x, grps in self.groups.items():
+            nodes = []
+            for grp in grps:
+                if not saturated or grp.numNodes() == self.peersPerGroup:
+                    nodes += grp.getAllNode()
+            if len(nodes) == 0:
+                continue
+
+            dlTimes = [n._vTotalWorkingTime for n in nodes]
+
+            jfi = sum(dlTimes)**2 / (sum([x**2 for x in dlTimes])) / len(dlTimes)
             fairnessIndeces.append(jfi)
         return sum(fairnessIndeces)/len(fairnessIndeces)
 
