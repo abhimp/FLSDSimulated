@@ -388,7 +388,7 @@ def setupEnv(traces, vi, network, abr=None):
             idx = np.random.randint(len(traces))
             link_traces[SUPERPEER_ID] = traces[idx]
 
-        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr=BOLA)
+        env = SingleAgentEnv(vi, link_traces, simulator, nodeId, abr = BOLA)
         envs[nodeId] = env
         print("Starting node %d" % nodeId)
 
@@ -530,22 +530,22 @@ pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualitie
 
     ax[0,0].set_title('Average bitrate(in Kbps)')
     ax[0,0].set_xticks(x, minor=False)
-    ax[0,0].bar(x, [star_qualities/1000, pos_qualities/1000, glob_qualities/1000])
+    ax[0,0].bar(x, [star_qualities/1000, pos_qualities/1000, glob_qualities/1000], color=['red', 'yellow', 'black'], edgecolor='black')
     ax[0,0].set_xticklabels(x_ticks)
 
     ax[0,1].set_title('Average quality_variations(in Kbps)')
     ax[0,1].set_xticks(x, minor=False)
-    ax[0,1].bar(x, [star_ql/1000, pos_ql/1000, glob_ql/1000])
+    ax[0,1].bar(x, [star_ql/1000, pos_ql/1000, glob_ql/1000], color=['red', 'yellow', 'black'], edgecolor='black')
     ax[0,1].set_xticklabels(x_ticks)
     
     ax[1,0].set_title('Average stall time')
     ax[1,0].set_xticks(x, minor=False)
-    ax[1,0].bar(x, [star_total_stall_time, pos_total_stall_time, glob_total_stall_time])
+    ax[1,0].bar(x, [star_total_stall_time, pos_total_stall_time, glob_total_stall_time], color=['red', 'yellow', 'black'], edgecolor='black')
     ax[1,0].set_xticklabels(x_ticks)
 
     ax[1,1].set_title('Average startup delay')
     ax[1,1].set_xticks(x, minor=False)
-    ax[1,1].bar(x, [star_startupDelay, pos_startupDelay, glob_startupDelay])
+    ax[1,1].bar(x, [star_startupDelay, pos_startupDelay, glob_startupDelay], color=['red', 'yellow', 'black'], edgecolor='black')
     ax[1,1].set_xticklabels(x_ticks)
 
 
@@ -555,7 +555,8 @@ pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualitie
     # Super peer fetches
     fig = plt.figure()
     plt.title("Fraction of Super Peer fetches")
-    plt.bar(x, [star_sp_fetches, pos_sp_fetches, glob_sp_fetches])
+    plt.bar(x, [star_sp_fetches, pos_sp_fetches, glob_sp_fetches], color=['red', 'yellow', 'black'], edgecolor='black')
+    plt.xticks(x, x_ticks)
     plt.show()
 
 
