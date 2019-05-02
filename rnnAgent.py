@@ -165,6 +165,11 @@ class PensiveLearner():
     def cleanup(*arg, **kwarg):
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
+        if not PensiveLearner.__instance.proc:
+            return
+        if not PensiveLearner.__instance.proc.is_alive():
+            PensiveLearner.__instance.proc.join()
+            return
         PensiveLearner.__instance.cleanupInstance(*arg, **kwarg)
 
     @staticmethod
@@ -183,6 +188,7 @@ class PensiveLearner():
         self._rSend(("cleanup", arg, kwarg))
         self._rRecv()
         self.proc.join()
+        self.proc = None
         self._vRunning = False
 
     def getNextAction(self, *arg, **kwarg):

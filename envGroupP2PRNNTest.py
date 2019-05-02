@@ -285,7 +285,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 
         penalty = 0
         if nextPlayer >= len(self._vGroupNodes):
-            penalty = 100
+            penalty = -nextPlayer
             nextPlayer, _ = self._rGetNextDownloaderFailSafe(segId)
 
         return nextPlayer, (rnnkey, penalty)
@@ -342,7 +342,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vNextGroupDLSegId = segId
         self._vGroupSegDetails.append((lastSegId, lastPlayerId, lastQl))
 
-        self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey, syncSeg = syncSeg)
+        self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey, syncSeg = syncSeg, ql=lastQl)
 
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1, syncSeg = False):
