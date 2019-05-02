@@ -11,7 +11,6 @@ from bisect import bisect_left
 from abrBOLA import BOLA
 from abrPensiev import AbrPensieve
 from abrMultiPensieve import AbrMultiPensieve
-from plotrls import plot
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -563,7 +562,7 @@ pos_qoe, pos_penalty,pos_reward, pos_sent_chunks, pos_startupDelay, pos_qualitie
 def main():
     #simulate_system(flag='global')
     
-    compare_POS_global_state(n_iter=10, n_peers=100)
+    compare_POS_global_state(n_iter=1, n_peers=10)
 
 if __name__ == '__main__':
     main()
