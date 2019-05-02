@@ -186,6 +186,7 @@ def main():
     #     for name, cb in testCB.items():
         for name in allowed:
             fis = []
+            fisDlT = []
             QoEVar = []
             for vfp in VIDEO_FILES:
                 vi = video.loadVideoTime(vfp)
@@ -194,8 +195,10 @@ def main():
                 randstate.loadCurrentState()
                 grp = runExperiments(*cb)
                 gp, igp = grp.getGroupFairness(), grp.getInterGroupFairness()
+                gpdl, igpdl = grp.getGroupFairnessDownloadTime(), grp.getInterGroupFairnessDownloadTime()
                 QoEVar += grp.getQoEVariation()
                 fis.append((gp, igp))
+                fisDlT.append((gpdl, igpdl))
 
             fpath = os.path.join(RESULT_DIR, "fairness")
             if not os.path.isdir(fpath):
@@ -204,6 +207,15 @@ def main():
             with open(fpath, "w") as fp:
                 print("#gp igp", file=fp)
                 for x in fis:
+                    print(*x, file=fp)
+
+            fpath = os.path.join(RESULT_DIR, "fairnessdltime")
+            if not os.path.isdir(fpath):
+                os.makedirs(fpath)
+            fpath = os.path.join(fpath, name+"_%s.dat"%(grpSz))
+            with open(fpath, "w") as fp:
+                print("#gp igp", file=fp)
+                for x in fisDlT:
                     print(*x, file=fp)
 
             fpath = os.path.join(RESULT_DIR, "QoEVarInGroup")

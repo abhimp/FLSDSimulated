@@ -125,7 +125,16 @@ class PensiveLearnerCentralAgent():
 
 
 class PensiveLearner():
+    __instance = None
+    @staticmethod
+    def getInstance(*arg, **karg):
+        if PensiveLearner.__instance == None:
+            PensiveLearner(*arg, **karg)
+        return PensiveLearner.__instance
+
     def __init__(self, actionset = [], infoDept=S_LEN, *arg, **kwarg):
+        assert PensiveLearner.__instance == None
+        PensiveLearner.__instance = self
         self.recv, self.send = mp.Queue(), mp.Queue()
         self._vActionset = actionset
         self._vInfoDept = infoDept
@@ -152,32 +161,52 @@ class PensiveLearner():
                 send.put("exit")
                 exit(0)
             send.put(res)
-
-    def cleanup(self, *arg, **karg):
-        if not self._vRunning:
+    @staticmethod
+    def cleanup(*arg, **kwarg):
+        if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
-        self.send.put(("cleanup", arg, karg))
-        self.recv.get()
+        if not PensiveLearner.__instance.proc:
+            return
+        if not PensiveLearner.__instance.proc.is_alive():
+            PensiveLearner.__instance.proc.join()
+            return
+        PensiveLearner.__instance.cleanupInstance(*arg, **kwarg)
+
+    @staticmethod
+    def finish(*arg, **kwarg):
+        if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
+            return
+        PensiveLearner.__instance.finishInstance(*arg, **kwarg)
+
+    def _rSend(self, dt):
+        self.send.put(dt)
+    def _rRecv(self):
+        dt = self.recv.get(timeout=60)
+        return dt
+
+    def cleanupInstance(self, *arg, **kwarg):
+        self._rSend(("cleanup", arg, kwarg))
+        self._rRecv()
         self.proc.join()
+        self.proc = None
         self._vRunning = False
 
     def getNextAction(self, *arg, **kwarg):
-        self.send.put(("getNextAction", arg, kwarg))
-        return self.recv.get()
+        self._rSend(("getNextAction", arg, kwarg))
+        return self._rRecv()
 
     def addReward(self, *arg, **kwarg):
-        self.send.put(("addReward", arg, kwarg))
-        return self.recv.get()
+        self._rSend(("addReward", arg, kwarg))
+        return self._rRecv()
 
 
     def saveModel(self, *arg, **kwarg):
-        self.send.put(("saveModel", arg, kwarg))
-        return self.recv.get()
+        self._rSend(("saveModel", arg, kwarg))
+        return self._rRecv()
 
-
-    def finish(self, *arg, **kwarg):
-        self.send.put(("finish", arg, kwarg))
-        return self.recv.get()
+    def finishInstance(self, *arg, **kwarg):
+        self._rSend(("finish", arg, kwarg))
+        return self._rRecv()
 
 
 
@@ -189,6 +218,7 @@ class PensiveLearnerProc():
         assert (not ipcQueue and not ipcId) or (ipcQueue and ipcId)
 
         self.ipcQueue = ipcQueue
+        self.pid = os.getpid()
         self.ipcId = ipcId
         self.summary_dir = os.path.join(summary_dir, "rnnAgent")
         self.nn_model = None if not nn_model else os.path.join(self.summary_dir, nn_model)
@@ -230,11 +260,18 @@ class PensiveLearnerProc():
         self.epoch = 0
 
         if self.ipcQueue:
-            self.ipcQueue[0].put({"id":self.ipcId, "cmd":IPC_CMD_PARAM})
+            self.ipcQueue[0].put({"id":self.ipcId, "pid": self.pid, "cmd":IPC_CMD_PARAM})
             myprint("="*50)
             myprint(self.ipcId , ": waiting for ipc")
             myprint("="*50)
-            actor_net_params, critic_net_params = self.ipcQueue[1].get()
+            res = None
+            while True:
+                res = self.ipcQueue[1].get()
+                pid = res["pid"]
+                res = res["res"]
+                if pid == self.pid:
+                    break
+            actor_net_params, critic_net_params = res
             self.actor.set_network_params(actor_net_params)
             self.critic.set_network_params(critic_net_params)
             myprint("="*50)
@@ -321,8 +358,15 @@ class PensiveLearnerProc():
 
     def saveModel(self, end_of_video=False):
         if self.ipcQueue:
-            self.ipcQueue[0].put({"id":self.ipcId, "cmd": IPC_CMD_UPDATE, "data": [self.s_batch, self.a_batch, self.r_batch, self.entropy_record, end_of_video]})
-            actor_net_params, critic_net_params = self.ipcQueue[1].get()
+            self.ipcQueue[0].put({"id":self.ipcId, "cmd": IPC_CMD_UPDATE, "pid": self.pid, "data": [self.s_batch, self.a_batch, self.r_batch, self.entropy_record, end_of_video]})
+            res = None
+            while True:
+                res = self.ipcQueue[1].get()
+                pid = res["pid"]
+                res = res["res"]
+                if pid == self.pid:
+                    break
+            actor_net_params, critic_net_params = res
             self.actor.set_network_params(actor_net_params)
             self.critic.set_network_params(critic_net_params)
 
@@ -387,10 +431,7 @@ class PensiveLearnerProc():
         self.saveModel(True)
 
 
-
-PENSIEVE_LEARNER_INSTANT=None
 CENTRAL_ACTION_SET = None
-
 
 PENSIEVE_SLAVE_QUEUE = None
 PENSIEVE_SLAVE_ID = None
@@ -405,29 +446,17 @@ def setSlaveId(slaveId):
     atexit.register(slavecleanup)
 
 def slavecleanup():
-    global PENSIEVE_LEARNER_INSTANT
-    if PENSIEVE_LEARNER_INSTANT:
-        PENSIEVE_LEARNER_INSTANT.cleanup()
-        PENSIEVE_LEARNER_INSTANT = None
-
-
+    PensiveLearner.cleanup()
 
 
 def getPensiveLearner(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
-    global PENSIEVE_LEARNER_INSTANT
     assert not CENTRAL_ACTION_SET or CENTRAL_ACTION_SET == actionset
-    if PENSIEVE_LEARNER_INSTANT:
-        p = PENSIEVE_LEARNER_INSTANT
-        assert p._vActionset == actionset and p._vInfoDept == infoDept
-        return p
-
-    PENSIEVE_LEARNER_INSTANT = PensiveLearner(actionset, infoDept, log_path, summary_dir, *kw, ipcQueue=PENSIEVE_SLAVE_QUEUE, ipcId=PENSIEVE_SLAVE_ID, **kws)
-    return PENSIEVE_LEARNER_INSTANT
-
+    p = PensiveLearner.getInstance(actionset, infoDept, log_path, summary_dir, *kw, ipcQueue=PENSIEVE_SLAVE_QUEUE, ipcId=PENSIEVE_SLAVE_ID, **kws)
+    assert p._vActionset == actionset and p._vInfoDept == infoDept
+    return p
 
 def saveLearner():
-    if PENSIEVE_LEARNER_INSTANT:
-        PENSIEVE_LEARNER_INSTANT.finish()
+        PensiveLearner.finish()
 
 def _runCentralServer(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
     centralLearner = PensiveLearnerCentralAgent(actionset, infoDept, log_path, summary_dir)
@@ -440,13 +469,15 @@ def _runCentralServer(actionset = [], infoDept=S_LEN, log_path=None, summary_dir
             continue
         if req["cmd"] == IPC_CMD_UPDATE:
             slvId = req["id"]
+            slvPid = req["pid"]
             dt = req["data"]
             res = centralLearner.saveModel(*dt)
-            slaveQueues[slvId].put(res)
+            slaveQueues[slvId].put({"res":res, "pid": slvPid})
         elif req["cmd"] == IPC_CMD_PARAM:
             slvId = req["id"]
+            slvPid = req["pid"]
             res = centralLearner.getParams()
-            slaveQueues[slvId].put(res)
+            slaveQueues[slvId].put({"res":res, "pid": slvPid})
         elif req["cmd"] == IPC_CMD_QUIT:
             exit(0)
             break

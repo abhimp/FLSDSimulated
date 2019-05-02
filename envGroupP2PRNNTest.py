@@ -26,8 +26,8 @@ BYTES_IN_MB = 1000000.0
 LOG_LOCATION = "./results/"
 NN_MODEL_QUA = None
 NN_MODEL_AGE = None
-NN_MODEL_QUA = "nn_model_ep_27200.ckpt"
-NN_MODEL_AGE = "nn_model_ep_27200.ckpt"
+NN_MODEL_QUA = "nn_model_ep_24900.ckpt"
+NN_MODEL_AGE = "nn_model_ep_24900.ckpt"
 
 def default(o):
     if isinstance(o, np.int64): return int(o)
@@ -285,7 +285,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
 
         penalty = 0
         if nextPlayer >= len(self._vGroupNodes):
-            penalty = 100
+            penalty = -nextPlayer
             nextPlayer, _ = self._rGetNextDownloaderFailSafe(segId)
 
         return nextPlayer, (rnnkey, penalty)
@@ -342,7 +342,7 @@ class GroupP2PEnvRNN(SimpleEnvironment):
         self._vNextGroupDLSegId = segId
         self._vGroupSegDetails.append((lastSegId, lastPlayerId, lastQl))
 
-        self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey, syncSeg = syncSeg)
+        self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey, syncSeg = syncSeg, ql=lastQl)
 
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1, syncSeg = False):

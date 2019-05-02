@@ -171,6 +171,8 @@ def runSlave(pq, sq, slvId):
             simpTrace = "<br>\n".join(tb.format_tb(trace[2]))
             pq.put({"status":False, "slvId": slvId, "expId": expId, "tb": simpTrace})
             grant = sq.get()
+            rnnQuality.slavecleanup()
+            rnnAgent.slavecleanup()
             os.abort()
         print(slvId + ": garbageCollection:", gc.collect())
         pq.put({"status":True, "slvId": slvId, "expId": expId})
