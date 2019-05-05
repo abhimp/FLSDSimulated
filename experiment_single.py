@@ -8,24 +8,24 @@ import load_trace
 import videoInfo as video
 from p2pnetwork import P2PNetwork
 import randStateInit as randstate
-from envGroupP2PBasic import GroupP2PEnvBasic
-from envGroupP2PTimeout import GroupP2PEnvTimeout
-from envGroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
-from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from envGroupP2PRNN import GroupP2PEnvRNN
-from envSimple import SimpleEnvironment
-from envDHT import DHTEnvironment
+from simenv.GroupP2PBasic import GroupP2PEnvBasic
+from simenv.GroupP2PTimeout import GroupP2PEnvTimeout
+from simenv.GroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
+from simenv.GroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
+from simenv.GroupP2PRNN import GroupP2PEnvRNN
+from simenv.Simple import SimpleEnvironment
+from simenv.DHT import DHTEnvironment
 from simulator import Simulator
 from group import GroupManager
-# from envSimpleP2P import experimentSimpleP2P
+# from simenv.SimpleP2P import experimentSimpleP2P
 from abrFastMPC import AbrFastMPC
 from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
 from cdnUsages import CDN
 
-# from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
+# from simenv.GroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 # from abrPensiev import AbrPensieve
-# from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
+# from simenv.GroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
 GroupP2PEnvTimeoutRNN = None
 GroupP2PEnvTimeoutIncRNN = None
 AbrPensieve = None
@@ -207,11 +207,11 @@ def main():
         AbrPensieve = abp
 
     if "GroupP2PEnvTimeoutRNN" in allowed and GroupP2PEnvTimeoutRNN is None:
-        from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN as gpe
+        from simenv.GroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN as gpe
         GroupP2PEnvTimeoutRNN = gpe
 
     if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
-        from envGroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
+        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
         GroupP2PEnvTimeoutIncRNN = gpe
 
 #     randstate.storeCurrentState() #comment this line to use same state as before

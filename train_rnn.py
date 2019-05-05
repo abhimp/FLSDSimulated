@@ -6,14 +6,14 @@ import numpy as np
 import glob
 
 import videoInfo as video
-from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
-from envSimple import SimpleEnvironment
+from simenv.GroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
+from simenv.Simple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
 from p2pnetwork import P2PNetwork
 from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
 import util.multiprocwrap as mp
-# from envSimpleP2P import experimentSimpleP2P
+# from simenv.SimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
 VIDEO_FILES = [

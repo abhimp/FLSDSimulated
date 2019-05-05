@@ -4,26 +4,26 @@ import matplotlib.pyplot as plt
 import collections as cl
 import sys
 
-import load_trace
-import videoInfo as video
-from simulator import Simulator
-from p2pnetwork import P2PNetwork
-import randStateInit as randstate
-from envGroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from envGroupP2PDeter import GroupP2PEnvDeter
-from group import GroupManager
-# from envSimpleP2P import experimentSimpleP2P
-from abrFastMPC import AbrFastMPC
-from abrRobustMPC import AbrRobustMPC
-from abrBOLA import BOLA
-from cdnUsages import CDN
-from envGroupP2PRNNTest import GroupP2PEnvRNN
+from util import load_trace
+from util import videoInfo as video
+from simulator.simulator import Simulator
+from util.p2pnetwork import P2PNetwork
+import util.randStateInit as randstate
+from simenv.GroupP2PTimeoutInc import GroupP2PTimeoutInc
+from simenv.GroupP2PDeter import GroupP2PDeter
+from util.group import GroupManager
+# from simenv.SimpleP2P import experimentSimpleP2P
+from abr.FastMPC import AbrFastMPC
+from abr.RobustMPC import AbrRobustMPC
+from abr.BOLA import BOLA
+from util.cdnUsages import CDN
+from simenv.GroupP2PRNNTest import GroupP2PRNN
 
-# from envGroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
+# from simenv.GroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
 # from abrPensiev import AbrPensieve
-# from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
-GroupP2PEnvTimeoutRNN = None
-GroupP2PEnvTimeoutIncRNN = None
+# from simenv.GroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
+GroupP2PTimeoutRNN = None
+GroupP2PTimeoutIncRNN = None
 AbrPensieve = None
 
 
@@ -154,14 +154,14 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
     return grp
 
 def main():
-    global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
+    global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN
     allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN", "GroupP2PEnvRNN", "GrpDeter"]
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
     allowed = sys.argv[1:]
     if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
-        from envGroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
+        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PTimeoutIncRNN as gpe
         GroupP2PEnvTimeoutIncRNN = gpe
 
     randstate.loadCurrentState()
@@ -175,10 +175,10 @@ def main():
 
     for grpSz in [3, 4, 5, 6, 7, 8, 9, 10]:
         testCB = {}
-        testCB["GroupP2PTimeoutInc"] = (grpSz, GroupP2PEnvTimeoutInc, traces, vi, network)
-        testCB["GroupP2PEnvTimeoutIncRNN"] = (grpSz, GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-        testCB["GroupP2PEnvRNN"] = (grpSz, GroupP2PEnvRNN, traces, vi, network, BOLA, None, "./ResModelPathRNN/")
-        testCB["GrpDeter"] = (grpSz, GroupP2PEnvDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
+        testCB["GroupP2PTimeoutInc"] = (grpSz, GroupP2PTimeoutInc, traces, vi, network)
+        testCB["GroupP2PEnvTimeoutIncRNN"] = (grpSz, GroupP2PTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
+        testCB["GroupP2PEnvRNN"] = (grpSz, GroupP2PRNN, traces, vi, network, BOLA, None, "./ResModelPathRNN/")
+        testCB["GrpDeter"] = (grpSz, GroupP2PDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
 
         results = {}
         cdns = {}

@@ -7,12 +7,12 @@ import numpy as np
 import videoInfo as video
 from p2pnetwork import P2PNetwork
 import randStateInit as randstate
-from envGroupP2PBasic import GroupP2PEnvBasic
-from envGroupP2PTimeout import GroupP2PEnvTimeout
-from envSimple import SimpleEnvironment
+from simenv.GroupP2PBasic import GroupP2PEnvBasic
+from simenv.GroupP2PTimeout import GroupP2PEnvTimeout
+from simenv.Simple import SimpleEnvironment
 from simulator import Simulator
 from group import GroupManager
-# from envSimpleP2P import experimentSimpleP2P
+# from simenv.SimpleP2P import experimentSimpleP2P
 from abrFastMPC import AbrFastMPC
 from abrRobustMPC import AbrRobustMPC
 from abrBOLA import BOLA
