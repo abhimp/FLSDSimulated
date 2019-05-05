@@ -16,8 +16,8 @@ import util.randStateInit as randstate
 from util.easyPlotViewer import EasyPlot
 from util.calculateMetric import measureQoE
 # from rnnTimeout import getPensiveLearner, saveLearner
-import rnn.Agent
-import rnn.Quality
+import rnn.Agent as rnnAgent
+import rnn.Quality as rnnQuality
 
 
 GROUP_JOIN_THRESHOLD = 10
