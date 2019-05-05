@@ -3,7 +3,7 @@ from util.myprint import myprint
 import os
 import numpy as np
 import tensorflow as tf
-import a3c
+from util import a3c
 import util.multiprocwrap as mp
 import atexit
 
