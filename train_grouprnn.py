@@ -244,7 +244,7 @@ def main():
                 with open("/tmp/testproc", "a") as fp:
                     print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
                     print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
-                movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
+#                 movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
