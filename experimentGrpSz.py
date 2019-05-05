@@ -4,30 +4,30 @@ import matplotlib.pyplot as plt
 import collections as cl
 import sys
 
-import load_trace
-import videoInfo as video
-from p2pnetwork import P2PNetwork
-import randStateInit as randstate
-from simenv.GroupP2PBasic import GroupP2PEnvBasic
-from simenv.GroupP2PTimeout import GroupP2PEnvTimeout
-from simenv.GroupP2PTimeoutSkip import GroupP2PEnvTimeoutSkip
-from simenv.GroupP2PTimeoutInc import GroupP2PEnvTimeoutInc
-from simenv.GroupP2PDeter import GroupP2PEnvDeter
-from simenv.Simple import SimpleEnvironment
-from simenv.DHT import DHTEnvironment
-from simulator import Simulator
-from group import GroupManager
+from util import load_trace
+from util import videoInfo as video
+from util.p2pnetwork import P2PNetwork
+from util import randStateInit as randstate
+from simenv.GroupP2PBasic import GroupP2PBasic
+from simenv.GroupP2PTimeout import GroupP2PTimeout
+from simenv.GroupP2PTimeoutSkip import GroupP2PTimeoutSkip
+from simenv.GroupP2PTimeoutInc import GroupP2PTimeoutInc
+from simenv.GroupP2PDeter import GroupP2PDeter
+from simenv.Simple import Simple
+from simenv.DHT import DHT
+from simulator.simulator import Simulator
+from util.group import GroupManager
 # from simenv.SimpleP2P import experimentSimpleP2P
-from abrFastMPC import AbrFastMPC
-from abrRobustMPC import AbrRobustMPC
-from abrBOLA import BOLA
-from cdnUsages import CDN
+from abr.FastMPC import AbrFastMPC
+from abr.RobustMPC import AbrRobustMPC
+from abr.BOLA import BOLA
+from util.cdnUsages import CDN
 
-# from simenv.GroupP2PTimeoutRNNTest import GroupP2PEnvTimeoutRNN
+# from simenv.GroupP2PTimeoutRNNTest import GroupP2PTimeoutRNN
 # from abrPensiev import AbrPensieve
-# from simenv.GroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
-GroupP2PEnvTimeoutRNN = None
-GroupP2PEnvTimeoutIncRNN = None
+# from simenv.GroupP2PTimeoutIncRNN import GroupP2PTimeoutIncRNN
+GroupP2PTimeoutRNN = None
+GroupP2PTimeoutIncRNN = None
 AbrPensieve = None
 
 
@@ -97,7 +97,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GrpDeter", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PEnvTimeoutRNN", "GroupP2PEnvTimeoutIncRNN"]:
+        if name not in ["GrpDeter", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutRNN", "GroupP2PTimeoutIncRNN"]:
             continue
 #         x = []
         for ag in res:
@@ -222,15 +222,15 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def main():
-    global GroupP2PEnvTimeoutRNN, AbrPensieve, GroupP2PEnvTimeoutIncRNN
-    allowed = ["GrpDeter", "GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN"]
+    global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN
+    allowed = ["GrpDeter", "GroupP2PTimeoutInc", "GroupP2PTimeoutIncRNN"]
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
     allowed = sys.argv[1:]
-    if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
-        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PEnvTimeoutIncRNN as gpe
-        GroupP2PEnvTimeoutIncRNN = gpe
+    if "GroupP2PTimeoutIncRNN" in allowed and GroupP2PTimeoutIncRNN is None:
+        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PTimeoutIncRNN as gpe
+        GroupP2PTimeoutIncRNN = gpe
 
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
@@ -245,9 +245,9 @@ def main():
 #     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
 
     testCB = {}
-    testCB["GroupP2PTimeoutInc"] = (GroupP2PEnvTimeoutInc, traces, vi, network)
-    testCB["GroupP2PEnvTimeoutIncRNN"] = (GroupP2PEnvTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GrpDeter"] = (GroupP2PEnvDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
+    testCB["GroupP2PTimeoutInc"] = (GroupP2PTimeoutInc, traces, vi, network)
+    testCB["GroupP2PTimeoutIncRNN"] = (GroupP2PTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
+    testCB["GrpDeter"] = (GroupP2PDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
 
     results = {}
     cdns = {}

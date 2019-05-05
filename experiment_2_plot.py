@@ -1,6 +1,6 @@
 import os
 import sys
-import load_trace
+from util import load_trace
 import pickle
 import numpy as np
 import glob

@@ -1,22 +1,22 @@
 import os
 import sys
-import load_trace
+from util import load_trace
 import pickle
 import numpy as np
 
-import videoInfo as video
-from p2pnetwork import P2PNetwork
-import randStateInit as randstate
-from simenv.GroupP2PBasic import GroupP2PEnvBasic
-from simenv.GroupP2PTimeout import GroupP2PEnvTimeout
-from simenv.Simple import SimpleEnvironment
-from simulator import Simulator
-from group import GroupManager
+from util import videoInfo as video
+from util.p2pnetwork import P2PNetwork
+from util import randStateInit as randstate
+from simenv.GroupP2PBasic import GroupP2PBasic
+from simenv.GroupP2PTimeout import GroupP2PTimeout
+from simenv.Simple import Simple
+from simulator.simulator import Simulator
+from util.group import GroupManager
 # from simenv.SimpleP2P import experimentSimpleP2P
-from abrFastMPC import AbrFastMPC
-from abrRobustMPC import AbrRobustMPC
-from abrBOLA import BOLA
-from abrPensiev import AbrPensieve
+from abr.FastMPC import AbrFastMPC
+from abr.RobustMPC import AbrRobustMPC
+from abr.BOLA import BOLA
+from abr.Pensiev import AbrPensieve
 
 RESULT_DIR = "./plotData/"
 
@@ -86,12 +86,12 @@ def main(videofile, randstatefp, result_dir, subjects = None):
     network = P2PNetwork()
 
     testCB = {}
-    testCB["BOLA"] = (SimpleEnvironment, traces, vi, network, BOLA, result_dir)
-    testCB["FastMPC"] = (SimpleEnvironment, traces, vi, network, AbrFastMPC, result_dir)
-    testCB["RobustMPC"] = (SimpleEnvironment, traces, vi, network, AbrRobustMPC, result_dir)
-    testCB["Penseiv"] = (SimpleEnvironment, traces, vi, network, AbrPensieve, result_dir)
-    testCB["GroupP2PBasic"] = (GroupP2PEnvBasic, traces, vi, network, BOLA, result_dir)
-    testCB["GroupP2PTimeout"] = (GroupP2PEnvTimeout, traces, vi, network, BOLA, result_dir)
+    testCB["BOLA"] = (Simple, traces, vi, network, BOLA, result_dir)
+    testCB["FastMPC"] = (Simple, traces, vi, network, AbrFastMPC, result_dir)
+    testCB["RobustMPC"] = (Simple, traces, vi, network, AbrRobustMPC, result_dir)
+    testCB["Penseiv"] = (Simple, traces, vi, network, AbrPensieve, result_dir)
+    testCB["GroupP2PBasic"] = (GroupP2PBasic, traces, vi, network, BOLA, result_dir)
+    testCB["GroupP2PTimeout"] = (GroupP2PTimeout, traces, vi, network, BOLA, result_dir)
 
     results = {}
 
