@@ -469,9 +469,9 @@ class GroupP2PRNN(Simple):
             reward = -rebuf
             rnnkey, outofbound = rnnkey
             reward -= outofbound
-            uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
-            contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
-            reward -= contri
+#             uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
+#             contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
+#             reward -= contri
 
             reward = 0.7 * qoe + 0.3 * reward
             #call rnn obj for working

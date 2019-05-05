@@ -316,6 +316,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+        if EMAIL_PASS:
+            sendErrorMail("Experiment completed successfully<EOM>", "", EMAIL_PASS)
     except:
         trace = sys.exc_info()
         if EMAIL_PASS:
