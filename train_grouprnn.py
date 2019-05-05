@@ -256,7 +256,7 @@ def main():
                 slaveProcs[slvId].join()
                 print("joined")
                 with open("/tmp/testproc", "a") as fp:
-                    print("killed one child with id", slvId, "and respwaned", file=fp)
+                    print("killed one child with id", slvId, "ExpId:", expId, "and respwaned", file=fp)
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
