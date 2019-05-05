@@ -1,9 +1,9 @@
 import random
-from myprint import myprint
+from util.myprint import myprint
 import math
 import numpy as np
-from group import Group, GroupManager
-from calculateMetric import measureQoE
+from util.group import Group, GroupManager
+from util.calculateMetric import measureQoE
 
 PLAYBACK_DELAY_THRESHOLD = 4
 M_IN_K = 1000

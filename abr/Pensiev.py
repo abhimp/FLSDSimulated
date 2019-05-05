@@ -13,7 +13,7 @@ import itertools
 import tensorflow as tf
 import a3c
 
-from calculateMetric import measureQoE
+from util.calculateMetric import measureQoE
 from util.multiprocwrap import Process, Pipe
 
 ######################## FAST MPC #######################

@@ -1,11 +1,11 @@
-from envSimple import SimpleEnvironment
-from myprint import myprint
+from simenv.Simple import Simple
+from util.myprint import myprint
 import math
 import numpy as np
-from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
-from group import GroupManager
-import randStateInit as randstate
-from easyPlotViewer import EasyPlot
+from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
+from util.group import GroupManager
+import util.randStateInit as randstate
+from util.easyPlotViewer import EasyPlot
 import os
 
 LOG_LOCATION="/tmp/"
@@ -85,7 +85,7 @@ class GlobalSingleToneTracker():
             self.dhtcache[key] = ownersId
 
 
-class DHTEnvironment(SimpleEnvironment):
+class DHT(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
         self.grp = grp
@@ -211,7 +211,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
         trace = traces[idx]
         np.random.shuffle(deadAgents)
         nodeId, trace = deadAgents.pop()
-        env = DHTEnvironment(vi, trace, simulator, None, grp, nodeId)
+        env = DHT(vi, trace, simulator, None, grp, nodeId)
         simulator.runAfter(10, env.start, 5)
     ranwait = np.random.uniform(0, 1000)
     for x in agents:
@@ -312,7 +312,7 @@ def experimentGroupP2PTimeout(traces, vi, network):
         idx = np.random.randint(len(traces))
         startsAt = np.random.randint(vi.duration/2)
         trace = traces[idx]
-        env = DHTEnvironment(vi, trace, simulator, None, grp, nodeId)
+        env = DHT(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startsAt, env.start, 5)
         maxTime = 101.0 + x
         AGENT_TRACE_MAP[nodeId] = idx
@@ -337,7 +337,7 @@ def experimentGroupP2PSmall(traces, vi, network):
 
     for trx, nodeId, startedAt in [( 5, 267, 107), (36, 701, 111), (35, 1800, 124), (5, 2033, 127)]:
         trace = traces[trx]
-        env = DHTEnvironment(vi, trace, simulator, None, grp, nodeId)
+        env = DHT(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startedAt, env.start, 5)
         AGENT_TRACE_MAP[nodeId] = trx
         ags.append(env)

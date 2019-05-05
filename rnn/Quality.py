@@ -1,5 +1,5 @@
 
-from myprint import myprint
+from util.myprint import myprint
 import os
 import numpy as np
 import tensorflow as tf
@@ -29,7 +29,7 @@ class PensiveLearnerCentralAgent():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None):
 
         assert summary_dir
-        self.summary_dir = os.path.join(summary_dir, "rnnAgent")
+        self.summary_dir = os.path.join(summary_dir, "rnnQuality")
         self.nn_model = nn_model
 
         self.a_dim = len(actionset)
@@ -85,7 +85,7 @@ class PensiveLearnerCentralAgent():
         self.critic_gradient_batch.append(critic_gradient)
 
         myprint("====")
-        myprint("Master: Agent: Epoch", self.epoch)
+        myprint("Master: Quality: Epoch", self.epoch)
         myprint("TD_loss", td_loss, "Avg_reward", np.mean(r_batch), "Avg_entropy", np.mean(entropy_record))
         myprint("====")
 
@@ -220,7 +220,7 @@ class PensiveLearnerProc():
         self.ipcQueue = ipcQueue
         self.pid = os.getpid()
         self.ipcId = ipcId
-        self.summary_dir = os.path.join(summary_dir, "rnnAgent")
+        self.summary_dir = os.path.join(summary_dir, "rnnQuality")
         self.nn_model = None if not nn_model else os.path.join(self.summary_dir, nn_model)
 
         self.a_dim = len(actionset)
@@ -292,10 +292,11 @@ class PensiveLearnerProc():
 
     def getNextAction(self, rnnkey, state): #peerId and segId are Identifier
 
-#         pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, estThrput_, deadline = state
-        uploaded_, players_, idleTimes_, thrpt_, prog_, clens_, deadline = state
+        #pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, deadline = state
+#         lastPlayerId_, lastQl_, lastClens_, lastStartsAt_, lastFinishAt_, pendings_, deadline = state
+        thrpt_, lastQl_, lastClens_, clens_, wthrghpt, buf, deadline = state
 
-        v_dim = len(uploaded_)
+        v_dim = len(thrpt_)
 
         # reward is video quality - rebuffer penalty - smooth penalty
         # retrieve previous state
@@ -307,13 +308,14 @@ class PensiveLearnerProc():
         # dequeue history record
         state = np.roll(state, -1, axis=1)
 
-        state[ 0, :v_dim]       = uploaded_
-        state[ 1, :v_dim]       = players_
-        state[ 2, :v_dim]       = idleTimes_
-        state[ 3, :v_dim]       = thrpt_
-        state[ 4, :v_dim]       = prog_
-        state[ 5, :len(clens_)] = clens_
-        state[ 6, -1]           = deadline
+        state[ 0, :len(thrpt_)]         = thrpt_
+        state[ 1, :len(lastQl_)]        = lastQl_
+        state[ 2, :len(lastClens_)]     = lastClens_
+        state[ 3, :len(clens_)]         = clens_
+        state[ 4, :-1]                  = wthrghpt
+        state[ 5, :-1]                  = buf
+        state[ 6, :-1]                  = deadline
+
 
 
         action_prob = self.actor.predict(np.reshape(state, (1, self._vInfoDim, self._vInfoDept)))
@@ -388,7 +390,7 @@ class PensiveLearnerProc():
         self.critic_gradient_batch.append(critic_gradient)
 
         myprint("====")
-        myprint("Agent: Epoch", self.epoch)
+        myprint("Quality: Epoch", self.epoch)
         myprint("TD_loss", td_loss, "Avg_reward", np.mean(self.r_batch), "Avg_entropy", np.mean(self.entropy_record))
         myprint("====")
 

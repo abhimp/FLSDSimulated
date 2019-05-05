@@ -1,5 +1,5 @@
-from envSimple import *
-from myprint import myprint
+from simenv.Simple import *
+from util.myprint import myprint
 
 class P2PGroup():
     def __init__(self, network):
@@ -23,7 +23,7 @@ class P2PGroup():
     def isClose(self, node1, node2):
         return self._vNetwork.isClose(node1._vPeerId, node2._vPeerId)
 
-class SimpleP2PEnv(SimpleEnvironment):
+class SimpleP2P(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, nodeId = -1, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, *kw, **kws)
         self._vCatched = {}
@@ -87,7 +87,7 @@ def experimentSimpleP2P(traces, vi, network):
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = SimpleP2PEnv(vi, trace, simulator, BOLA, grp, nodeId)
+        env = SimpleP2P(vi, trace, simulator, BOLA, grp, nodeId)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)
     simulator.run()

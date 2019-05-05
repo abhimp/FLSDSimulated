@@ -1,19 +1,19 @@
 import numpy as np
-from myprint import myprint
+from util.myprint import myprint
 
-from agent import Agent
-from simulator import Simulator
-import load_trace
-import videoInfo as video
-from abrBOLA import BOLA
-from p2pnetwork import P2PNetwork
-from segmentRequest import SegmentRequest
-from cdnUsages import CDN
+from util.agent import Agent
+from simulator.simulator import Simulator
+from util import load_trace
+import util.videoInfo as video
+from abr.BOLA import BOLA
+from util.p2pnetwork import P2PNetwork
+from util.segmentRequest import SegmentRequest
+from util.cdnUsages import CDN
 
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
-class SimpleEnvironment():
+class Simple():
     def __init__(self, vi, traces, simulator, abr = None, peerId = -1, logpath=None, resultpath=None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
 #         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
@@ -247,13 +247,13 @@ class SimpleEnvironment():
         return round(timeElapsed, 3), round(downLoadedTillNow), clen
 
 #=============================================
-def experimentSimpleEnv(traces, vi, network, abr = None):
+def experimentSimple(traces, vi, network, abr = None):
     simulator = Simulator()
     ags = []
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = SimpleEnvironment(vi, trace, simulator, abr)
+        env = Simple(vi, trace, simulator, abr)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)
     simulator.run()
@@ -270,7 +270,7 @@ def main():
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     network = P2PNetwork()
-    experimentSimpleEnv(traces, vi, network)
+    experimentSimple(traces, vi, network)
 
 if __name__ == "__main__":
     for x in range(1):
