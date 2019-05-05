@@ -13,7 +13,7 @@ import traceback as tb
 from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
 from util.group import GroupManager
 import util.randStateInit as randstate
-from easyPlotViewer import EasyPlot
+from util.easyPlotViewer import EasyPlot
 from util.calculateMetric import measureQoE
 # from rnnTimeout import getPensiveLearner, saveLearner
 import rnn.Agent

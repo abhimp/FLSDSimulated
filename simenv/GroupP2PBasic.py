@@ -4,7 +4,7 @@ from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
 from util.group import GroupManager
 import math
 import util.randStateInit as randstate
-from easyPlotViewer import EasyPlot
+from util.easyPlotViewer import EasyPlot
 
 LOG_LOCATION = "./results/"
 
