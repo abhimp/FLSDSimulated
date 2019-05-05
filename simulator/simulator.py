@@ -1,4 +1,4 @@
-from priorityQueue import PriorityQueue
+from simulator.priorityQueue import PriorityQueue
 import random
 
 class Simulator():

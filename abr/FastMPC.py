@@ -10,7 +10,7 @@ import numpy as np
 import time
 import itertools
 
-from calculateMetric import measureQoE 
+from util.calculateMetric import measureQoE
 
 ######################## FAST MPC #######################
 
@@ -62,7 +62,7 @@ class AbrFastMPC():
         self.CHUNK_COMBO_OPTIONS = [combo for combo in itertools.product([0,1,2,3,4,5], repeat=5)]
         self.video = videoInfo
         self.agent = agent
-        
+
         self.input_dict = input_dict
         self.log_file = input_dict['log_file']
         #self.saver = input_dict['saver']
@@ -101,7 +101,7 @@ class AbrFastMPC():
                 'lastRequest': self.agent.nextSegmentIndex,
                 }
         return self.getSleepTime(bufferLeft), self.do_POST(post_data)
-        
+
     def do_POST(self, post_data):
         VIDEO_BIT_RATE = self.video.bitratesKbps
         TOTAL_VIDEO_CHUNKS = self.video.segmentCount
@@ -126,7 +126,7 @@ class AbrFastMPC():
                                           self.input_dict['last_bit_rate']) / M_IN_K
 
         # --log reward--
-        # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))   
+        # log_bit_rate = np.log(VIDEO_BIT_RATE[post_data['lastquality']] / float(VIDEO_BIT_RATE[0]))
         # log_last_bit_rate = np.log(self.input_dict['last_bit_rate'] / float(VIDEO_BIT_RATE[0]))
 
         # reward = log_bit_rate \
@@ -183,7 +183,7 @@ class AbrFastMPC():
                             str(reward) + '\n')
             self.log_file.flush()
 
-        # pick bitrate according to MPC           
+        # pick bitrate according to MPC
         # first get harmonic mean of last 5 bandwidths
         past_bandwidths = state[3,-5:]
         while past_bandwidths[0] == 0.0:
@@ -228,7 +228,7 @@ class AbrFastMPC():
                 else:
                     curr_buffer -= download_time
                 curr_buffer += 4
-                
+
                 # linear reward
                 #bitrate_sum += VIDEO_BIT_RATE[chunk_quality]
                 #smoothness_diffs += abs(VIDEO_BIT_RATE[chunk_quality] - VIDEO_BIT_RATE[last_quality])
@@ -247,7 +247,7 @@ class AbrFastMPC():
             # compute reward for this combination (one reward per 5-chunk combo)
             # bitrates are in Mbits/s, rebuffer in seconds, and smoothness_diffs in Mbits/s
 
-            # linear reward 
+            # linear reward
             #reward = (bitrate_sum/1000.) - (4.3*curr_rebuffer_time) - (smoothness_diffs/1000.)
 
             # log reward

@@ -1,5 +1,5 @@
 import os
-from myprint import myprint
+from util.myprint import myprint
 import math
 import json
 import matplotlib.pyplot as plt
@@ -10,14 +10,14 @@ from email.mime.text import MIMEText
 import sys
 import traceback as tb
 
-from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
-from group import GroupManager
-import randStateInit as randstate
+from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
+from util.group import GroupManager
+import util.randStateInit as randstate
 from easyPlotViewer import EasyPlot
-from calculateMetric import measureQoE
+from util.calculateMetric import measureQoE
 # from rnnTimeout import getPensiveLearner, saveLearner
-import rnnAgent
-import rnnQuality
+import rnn.Agent
+import rnn.Quality
 
 
 GROUP_JOIN_THRESHOLD = 10
@@ -26,9 +26,6 @@ BYTES_IN_MB = 1000000.0
 LOG_LOCATION = "./results/"
 NN_MODEL_QUA = None
 NN_MODEL_AGE = None
-NN_MODEL_QUA = "nn_model_ep_156300.ckpt"
-NN_MODEL_AGE = "nn_model_ep_156300.ckpt"
-
 def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError
@@ -51,7 +48,7 @@ def sendErrorMail(sub, msg, pss):
     s.sendmail(me, to.split(","), msg.as_string())
     s.quit()
 
-class GroupP2PEnvRNN(SimpleEnvironment):
+class GroupP2PRNN(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
 #         self._vAgent = Agent(vi, self, abr)
@@ -626,7 +623,7 @@ def experimentGroupP2PBig(traces, vi, network):
         idx = trx[x]
         startsAt = startsAts[x]
         trace = traces[idx]
-        env = GroupP2PEnvDeter(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2PDeter(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startsAt, env.start, 5)
         maxTime = 101.0 + x
         AGENT_TRACE_MAP[nodeId] = idx
@@ -648,7 +645,7 @@ def experimentGroupP2PSmall(traces, vi, network):
 
     for trx, nodeId, startedAt in [( 5, 267, 107), (36, 701, 111), (35, 1800, 124), (5, 2033, 127)]:
         trace = traces[trx]
-        env = GroupP2PEnvRNN(vi, trace, simulator, None, grp, nodeId, modelPath="/tmp/tmpmodel")
+        env = GroupP2PRNN(vi, trace, simulator, None, grp, nodeId, modelPath="/tmp/tmpmodel")
         simulator.runAt(startedAt, env.start, 5)
         AGENT_TRACE_MAP[nodeId] = trx
         ags.append(env)

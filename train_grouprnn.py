@@ -1,28 +1,25 @@
 import os
 import sys
-import load_trace
+from util import load_trace
 import pickle
 import numpy as np
 import glob
-import randStateInit
+from util import randStateInit
 import pdb
 import time
 import traceback as tb
 
-import videoInfo as video
-from envGroupP2PTimeoutIncRNN import GroupP2PEnvTimeoutIncRNN
-from envGroupP2PRNN import GroupP2PEnvRNN
-from envSimple import SimpleEnvironment
-from simulator import Simulator
-from group import GroupManager
-from p2pnetwork import P2PNetwork
-#from rnnTimeout import saveLearner, setSlaveId, quitCentralServer, runCentralServer, slavecleanup
-import rnnAgent, rnnQuality
+import util.videoInfo as video
+from simenv.GroupP2PRNN import GroupP2PRNN
+from simulator.simulator import Simulator
+from util.group import GroupManager
+from util.p2pnetwork import P2PNetwork
+import rnn.Agent as rnnAgent
+import rnn.Quality as rnnQuality
 import util.multiprocwrap as mp
-import graphs
+from util import graphs
 import gc
 from util.email import sendErrorMail
-# from envSimpleP2P import experimentSimpleP2P
 
 RESULT_DIR = "results"
 VIDEO_FILES = [
@@ -277,11 +274,11 @@ def main():
 
         print("Starting", started, "with", (vidPath, netPath, tc))
         if MULTI_PROC:
-            slvQs[slvId].put([(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath, "expId" :started}])
+            slvQs[slvId].put([(GroupP2PRNN, traces, vi, p2p, None, result_dir), {"modelPath" : modelPath, "expId" :started}])
         else:
 #             rnnAgent.setSlaveId(slvId)
 #             rnnQuality.setSlaveId(slvId)
-            runExperiments(GroupP2PEnvRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
+            runExperiments(GroupP2PRNN, traces, vi, p2p, None, result_dir, modelPath=modelPath)
             finished += 1
 
         print("Started", started)

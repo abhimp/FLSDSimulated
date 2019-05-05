@@ -1,8 +1,8 @@
-from envSimple import SimpleEnvironment, np, Simulator, load_trace, video, P2PNetwork
-from myprint import myprint
-from group import GroupManager
+from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
+from util.myprint import myprint
+from util.group import GroupManager
 import math
-import randStateInit as randstate
+import util.randStateInit as randstate
 
 SEGMENT_NOT_WORKING = 0
 SEGMENT_WORKING = 1
@@ -28,7 +28,7 @@ class SegmentDlStat:
             assert st == SEGMENT_CACHED
         s._status = st
 
-class GroupP2PEnv(SimpleEnvironment):
+class GroupP2P(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
 #         self._vAgent = Agent(vi, self, abr)
@@ -328,7 +328,7 @@ def randomDead(vi, traces, grp, simulator, agents, deadAgents):
         trace = traces[idx]
         np.random.shuffle(deadAgents)
         nodeId, trace = deadAgents.pop()
-        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
+        env = GroupP2P(vi, trace, simulator, None, grp, nodeId)
         simulator.runAfter(10, env.start, 5)
     ranwait = np.random.uniform(0, 1000)
     for x in agents:
@@ -346,8 +346,8 @@ def experimentGroupP2P(traces, vi, network):
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = GroupP2PEnv(vi, trace, simulator, None, grp, nodeId)
-#         env = SimpleEnvironment(vi, trace, simulator, BOLA)
+        env = GroupP2P(vi, trace, simulator, None, grp, nodeId)
+#         env = Simple(vi, trace, simulator, BOLA)
         simulator.runAt(101.0 + x, env.start, 5)
         maxTime = 101.0 + x
         ags.append(env)

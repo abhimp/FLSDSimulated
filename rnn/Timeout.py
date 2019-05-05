@@ -1,5 +1,5 @@
 
-from myprint import myprint
+from util.myprint import myprint
 import os
 import numpy as np
 import tensorflow as tf
