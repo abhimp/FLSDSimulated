@@ -151,6 +151,12 @@ def movecore(dest, slvId, pid, x):
         print("not core found", file=sys.stderr)
         pass
 
+def getTraceBack(exc_info):
+    error = str(exc_info[0]) + "\n"
+    error += str(exc_info[1]) + "\n\n"
+    error += "\n".join(tb.format_tb(exc_info[2]))
+    return error
+
 def runSlave(pq, sq, slvId):
     rnnAgent.setSlaveId(slvId)
     rnnQuality.setSlaveId(slvId)
@@ -165,7 +171,7 @@ def runSlave(pq, sq, slvId):
             runExperiments(*q[0], **q[1])
         except:
             trace = sys.exc_info()
-            simpTrace = "<br>\n".join(tb.format_tb(trace[2]))
+            simpTrace = getTraceBack(trace)
             pq.put({"status":False, "slvId": slvId, "expId": expId, "tb": simpTrace})
             grant = sq.get()
             rnnQuality.slavecleanup()
@@ -322,7 +328,7 @@ if __name__ == "__main__":
         trace = sys.exc_info()
         if EMAIL_PASS:
             trace = sys.exc_info()
-            simpTrace = "<br>\n".join(tb.format_tb(trace[2]))
+            simpTrace = getTraceBack(trace)
             sendErrorMail("Master crashed", simpTrace, EMAIL_PASS)
         pdb.set_trace()
         os.abort()
