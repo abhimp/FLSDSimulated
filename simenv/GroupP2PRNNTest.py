@@ -26,8 +26,8 @@ BYTES_IN_MB = 1000000.0
 LOG_LOCATION = "./results/"
 NN_MODEL_QUA = None
 NN_MODEL_AGE = None
-NN_MODEL_QUA = "nn_model_ep_156300.ckpt"
-NN_MODEL_AGE = "nn_model_ep_156300.ckpt"
+NN_MODEL_QUA = "nn_model_ep_74700.ckpt"
+NN_MODEL_AGE = "nn_model_ep_74700.ckpt"
 
 def default(o):
     if isinstance(o, np.int64): return int(o)
