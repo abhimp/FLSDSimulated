@@ -11,7 +11,7 @@ class Group():
         s.segMents = 0
         s.nodeAddedWithSegId = {}
         s.qualityLevel = ql
-        s.network = None
+        s.network = network
         s.lonePeer = lonePeer
 
     def __schedule(s, segId):
