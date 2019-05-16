@@ -71,7 +71,7 @@ class ProxyP2PNetwork(p2pnetwork.P2PNetwork):
         for i, cmb in enumerate(combs):
             for x, ed in enumerate(edges):
                 a,b = ed
-                self.grp.add_edge(a + i*grpSize, b+i*grpSize, attr_dict={"rtt" : cmb[x]})
+                self.grp.add_edge(a + i*grpSize, b+i*grpSize, rtt = cmb[x])
 
     def getDistance(self, n1, n2):
         dt = self.grp.get_edge_data(n1, n2)
