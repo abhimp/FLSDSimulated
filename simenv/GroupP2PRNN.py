@@ -330,7 +330,7 @@ class GroupP2PRNN(Simple):
             curPlaybackTime = self._vAgent.playbackTime
             waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
             if waitTime > 0:
-                assert waitTime < 100
+#                 assert waitTime < 100
                 tmp = self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc2"))
                 self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
                 return
