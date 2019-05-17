@@ -188,7 +188,7 @@ class GroupP2PDeter(Simple):
         thrpt = self._vThroughPutData[-5:]
         if curProg[1] > 0 and curProg[0] > 0:
             thrpt += [(self.now, curProg[1] * 8 / curProg[0])]
-        cur = [1/x for t, x in thrpt]
+        cur = [1/x for t, x in thrpt]  #harmonic average
         cur = len(cur)/sum(cur)
 
         thrpt = min(cur, thrpt[-1][1], self._vWeightedThroughput)
