@@ -11,7 +11,7 @@ import numpy as np
 import time
 import itertools
 import tensorflow as tf
-import a3c
+from util import a3c
 
 from util.calculateMetric import measureQoE
 from util.multiprocwrap import Process, Pipe
