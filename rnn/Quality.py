@@ -6,6 +6,8 @@ import tensorflow as tf
 from util import a3c
 import util.multiprocwrap as mp
 import atexit
+import glob
+import re
 
 
 S_INFO = 14  # bit_rate, buffer_size, next_chunk_size, bandwidth_measurement(throughput and time), chunk_til_video_end
@@ -24,6 +26,21 @@ DEFAULT_ACTION = 0
 IPC_CMD_UPDATE = "update"
 IPC_CMD_PARAM = "param"
 IPC_CMD_QUIT = "quit"
+
+def guessSavedSession(summary_dir):
+    files = glob.glob(summary_dir + "/nn_model_ep*.ckpt.index")
+    if len(files) > 0:
+        files.sort()
+        nn_model = files[-1][:-6]
+        epoch = re.findall("nn_model_ep_(\d+)", nn_model)
+        if len(epoch) == 1:
+            epoch = int(epoch[0])
+        else:
+            epoch = 0
+
+        return nn_model, epoch
+    return None, 0
+
 
 class PensiveLearnerCentralAgent():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None):
@@ -60,13 +77,20 @@ class PensiveLearnerCentralAgent():
         self.writer = tf.summary.FileWriter(self.summary_dir, self.sess.graph)  # training monitor
         self.saver = tf.train.Saver()  # save neural net parameters
 
+        self.epoch = 0
+
         # restore neural net parameters
+        if self.nn_model is None:
+            nn_model, epoch = guessSavedSession(self.summary_dir)
+            if nn_model:
+                self.nn_model = nn_model
+                self.epoch = epoch
+
 #         nn_model = NN_MODEL
         if self.nn_model is not None:  # nn_model is the path to file
             self.saver.restore(self.sess, self.nn_model)
             myprint("Model restored.")
 
-        self.epoch = 0
 
 
         self.actor_gradient_batch = []
@@ -252,12 +276,17 @@ class PensiveLearnerProc():
         self.saver = tf.train.Saver()  # save neural net parameters
 
         # restore neural net parameters
+        self.epoch = 0
+        if self.nn_model is None and not self.ipcQueue:
+            nn_model, epoch = guessSavedSession(self.summary_dir)
+            if nn_model:
+                self.nn_model = nn_model
+                self.epoch = epoch
 #         nn_model = NN_MODEL
         if self.nn_model is not None and not self.ipcQueue:  # nn_model is the path to file
             self.saver.restore(self.sess, self.nn_model)
             myprint("Model restored.")
 
-        self.epoch = 0
 
         if self.ipcQueue:
             self.ipcQueue[0].put({"id":self.ipcId, "pid": self.pid, "cmd":IPC_CMD_PARAM})
