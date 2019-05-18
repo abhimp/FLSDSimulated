@@ -236,8 +236,8 @@ def main():
         vi = video.loadVideoTime(vidPath)
 #         p2p = P2PNetwork(netPath)
         p2p = ProxyP2PNetwork(grpSize)
-        if p2p.numNodes() < 10:
-            continue
+#         if p2p.numNodes() < 10:
+#             continue
 
         result_dir = os.path.join(RESULT_DIR, tc)
         if not os.path.isdir(result_dir):
