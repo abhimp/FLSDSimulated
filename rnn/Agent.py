@@ -8,6 +8,8 @@ import util.multiprocwrap as mp
 import atexit
 import glob
 import re
+import sys
+import traceback as tb
 
 
 S_INFO = 14  # bit_rate, buffer_size, next_chunk_size, bandwidth_measurement(throughput and time), chunk_til_video_end
@@ -148,6 +150,12 @@ class PensiveLearnerCentralAgent():
         return self.actor.get_network_params(), self.critic.get_network_params()
 
 
+def getTraceBack(exc_info):
+    error = str(exc_info[0]) + "\n"
+    error += str(exc_info[1]) + "\n\n"
+    error += "\n".join(tb.format_tb(exc_info[2]))
+    return error
+
 class PensiveLearner():
     __instance = None
     @staticmethod
@@ -173,18 +181,23 @@ class PensiveLearner():
         while True:
             fun, arg, karg = recv.get()
             res = None
-            if fun == "getNextAction":
-                res = orig.getNextAction(*arg, **karg)
-            elif fun == "addReward":
-                res = orig.addReward(*arg, **karg)
-            elif fun == "saveModel":
-                res = orig.saveModel(*arg, **karg)
-            elif fun == "finish":
-                res = orig.finish(*arg, **karg)
-            elif fun == "cleanup":
-                send.put("exit")
-                exit(0)
-            send.put(res)
+            try:
+                if fun == "getNextAction":
+                    res = orig.getNextAction(*arg, **karg)
+                elif fun == "addReward":
+                    res = orig.addReward(*arg, **karg)
+                elif fun == "saveModel":
+                    res = orig.saveModel(*arg, **karg)
+                elif fun == "finish":
+                    res = orig.finish(*arg, **karg)
+                elif fun == "cleanup":
+                    send.put({"st": True, "res": "exit"})
+                    return
+                send.put({"st": True, "res": res})
+            except:
+                trace = sys.exc_info()
+                simpTrace = getTraceBack(trace)
+                send.put({"st": False, "trace": simpTrace})
     @staticmethod
     def cleanup(*arg, **kwarg):
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
@@ -206,7 +219,10 @@ class PensiveLearner():
         self.send.put(dt)
     def _rRecv(self):
         dt = self.recv.get(timeout=60)
-        return dt
+        if not dt.get("st", False):
+            myprint(dt.get("trace", ""))
+            raise Exception()
+        return dt["res"]
 
     def cleanupInstance(self, *arg, **kwarg):
         self._rSend(("cleanup", arg, kwarg))
