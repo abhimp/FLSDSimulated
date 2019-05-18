@@ -29,7 +29,7 @@ def default(o):
 
 class GroupP2PDeter(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
-        super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
+        super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, peerId=peerId, *kw, **kws)
 #         self._vAgent = Agent(vi, self, abr)
         self._vDownloadPending = False
         self._vDownloadPendingRnnkey = None
