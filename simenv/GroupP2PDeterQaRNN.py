@@ -86,6 +86,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 #=============================================
     def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1, syncSeg = False):
         nextDownloader, rnnkeynew = self._rGetNextDownloader(segId)
+        if not rnnkeynew:
+            rnnkeynew = ((self.networkId, segId), 0)
         self._rAddToDownloadQueue(segId, ql, rnnkey=rnnkey, syncSeg=syncSeg)
         self.gossipSend(self._rSetNextDownloader, nextDownloader, segId+1, rnnkeynew, segId, self._vPlayerIdInGrp, ql)
         self._rSetNextDownloader(nextDownloader, segId + 1, rnnkeynew, segId, self._vPlayerIdInGrp, ql)
