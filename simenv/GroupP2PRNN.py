@@ -5,12 +5,13 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 import glob
-import smtplib
-from email.mime.text import MIMEText
 import sys
 import traceback as tb
 
+
 from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
+from simenv.GroupP2PDeter import GroupP2PDeter
+from util.email import sendErrorMail
 from util.group import GroupManager
 import util.randStateInit as randstate
 from util.easyPlotViewer import EasyPlot
@@ -30,166 +31,12 @@ def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError
 
-def sendErrorMail(sub, msg, pss):
-
-    frm = "abhimondal@iitkgpmail.iitkgp.ac.in"
-    to = "abhijitmanpur@gmail.com,abhimondal@iitkgp.ac.in"
-    body = msg
-
-
-    s = smtplib.SMTP("iitkgpmail.iitkgp.ac.in")
-    s.login("abhimondal", pss)
-    me="abhimondal@iitkgp.ac.in"
-
-    msg = MIMEText(msg)
-    msg['From'] = me
-    msg['To'] = to
-    msg['Subject'] = sub
-    s.sendmail(me, to.split(","), msg.as_string())
-    s.quit()
-
-class GroupP2PRNN(Simple):
+class GroupP2PRNN(GroupP2PDeter):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
-#         self._vAgent = Agent(vi, self, abr)
-        self._vDownloadPending = False
-        self._vDownloadPendingRnnkey = None
-        self._vSegIdRNNKeyMap = {}
-        self._vSegmentDownloading = -1
-        self._vGroup = grp
-        self._vCatched = {}
-        self._vOtherPeerRequest = {}
-        self._vTotalDownloaded = 0
-        self._vTotalUploaded = 0
-        self._vTotalUploadedSegs = 0
-        self._vStarted = False
-        self._vFinished = False
-        self._vModelPath = modelPath
-        self._vRunWhenDownloadCompeltes = []
-        self._vEmailPass = open("emailpass.txt").read().strip()
-
-        self._vGroupNodes = None
-
-        self._vGroupSegDetails = []
-
-        self._vEarlyDownloaded = 0
-        self._vNormalDownloaded = 0
-        self._vThroughPutData = []
-        self._vDownloadQueue = []
-        self._vServingPeers = {}
-        self._vDownloadedReqByItSelf = []
-        self._vTimeoutDataAndDecision = {} # segId -> data
-        self._vPlayBackDlCnt = 0
-        self._vPlayerIdInGrp = -1
-        self._vGroupStartedFromSegId = -1
-        self._vImStarter = False
-        self._vGroupStarted = False
-        self._vNextGroupDownloader = -1
-        self._vNextGroupDLSegId = -1
-        self._vWeightedThroughput = 0
-        self._vDownloadQl = []
         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
-        #Loop debug
-        self._vMaxSegDownloading = -1
-        self._vSyncNow = False
-        self._vLastSyncSeg = -1
-        self._vSleepingSegs = {}
-
-        self._vDeadLines = {}
-        self._vDeadLineMissed = []
-        #Loop debug
-        self._vWaitedFor = {}
-        self._vGrpIds = []
-
-
-    @property
-    def groupId(self):
-        return self._vGroup.getId(self)
-
-#=============================================
-    def start(self, startedAt = -1):
-        super().start(startedAt)
-        self._vAgent.addStartupCB(self.playerStartedCB)
-
-#=============================================
-    def playerStartedCB(self, *kw, **kwa):
-        self._vStarted = True
-
-#=============================================
-    def die(self):
-        self._vDead = True
-        self._vGroup.remove(self, self._vAgent.nextSegmentIndex)
-
-#=============================================
-    def schedulesChanged(self, changedFrom, nodes, sched):
-#         self._vGroupNodes = nodes
-        newNodes = [x for x in nodes if x._vPlayerIdInGrp == -1]
-        assert len(newNodes) == 1 #anything else is a disaster
-        if newNodes[0] == self:
-            self._vPlayerIdInGrp = len(nodes) - 1
-        if newNodes[0] != self:
-            if len(nodes) == 2:
-                self.requestRpc(newNodes[0]._rGroupStarted)
-        self._vGroupNodes = nodes
-        self._vGrpIds = [n.networkId for n in nodes]
-        syncTime = self.now + 1
-        self._vSimulator.runAt(syncTime, self._rSyncNow)
-
-#=============================================
-    def _rGroupStarted(self):
-        assert len(set([x._vPlayerIdInGrp for x in self._vGroupNodes])) == len(self._vGroupNodes)
-        if len(self._vGroupNodes) == 2 and not self._vGroupStarted:
-            self._vGroupStarted = self._vImStarter = True
-
-#=============================================
-    def _rGetRtt(self, node):
-        return self._vGroup.getRtt(self, node)
-
-#=============================================
-    def _rTransmissionTime(self, *kw):
-        return self._vGroup.transmissionTime(self, *kw)
-
-#=============================================
-    def _rSyncNow(self):
-        self._vSyncNow = True
-
-#=============================================
-    def _rSyncComplete(self, segId):
-        self._vSyncNow = False
-        self._vLastSyncSeg = segId
-
-#=============================================
-    def requestRpc(self, func, *argv, **kargv):
-        node = func.__self__
-        assert node != self
-        delay = self._rGetRtt(node)
-        self.runAfter(delay, node.recvRPC, func, self, *argv, **kargv)
-
-#=============================================
-    def requestLongRpc(self, func, clen, *argv, **kargv):
-        node = func.__self__
-        assert node != self
-        delay = self._rTransmissionTime(node, clen)
-        self.runAfter(delay, node.recvRPC, func, self, *argv, **kargv)
-
-#=============================================
-    def recvRPC(self, func, node, *argv, **kargv):
-        s = func.__self__
-        assert s == self and node.__class__ == self.__class__
-        func(*argv, **kargv)
-
-    def gossipSend(self, func, *argv, **kargv):
-        strfunc = func.__name__
-        for node in self._vGroupNodes:
-            if node == self:
-                continue
-            self.requestRpc(node.gossipRcv, strfunc, *argv, **kargv)
-
-    def gossipRcv(self, strfunc, *argv, **kargv):
-        func = self.__getattribute__(strfunc)
-        func(*argv, **kargv)
 
 #=============================================
     def _rGetMyQuality(self, nextQl, segId, rnnkey):
@@ -286,95 +133,6 @@ class GroupP2PRNN(Simple):
             nextPlayer, _ = self._rGetNextDownloaderFailSafe(segId)
 
         return nextPlayer, (rnnkey, penalty)
-
-#=============================================
-    def _rSetNextDownloader(self, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl):
-        infKey = (self.networkId, playerId, segId, rnnkey, lastPlayerId, lastQl)
-        if not self._vGroupStarted:
-            self._vGroupStarted = True
-            self._vGroupStartedFromSegId = segId
-
-        if playerId != self._vPlayerIdInGrp:
-            self._vNextGroupDownloader = playerId
-            self._vNextGroupDLSegId = segId
-            self._vGroupSegDetails.append((lastSegId, lastPlayerId, lastQl))
-
-            return #ignore the msg
-
-        if segId >= self._vVideoInfo.segmentCount: #endof video
-            return
-
-        waitTime = self._vAgent._rIsAvailable(segId)
-        if waitTime > 0:
-            self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc1"))
-            self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
-            return
-        if self._vDownloadPending:
-            self._vRunWhenDownloadCompeltes.append((self._rSetNextDownloader, [playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl], {}))
-            assert len(self._vRunWhenDownloadCompeltes) < 10
-            return
-
-        syncSeg = False
-        if self._vSyncNow:
-            segId = max([n._vMaxSegDownloading + 1 for n in self._vGroupNodes] + [segId])
-            self.gossipSend(self._rSyncComplete, segId)
-            self._rSyncComplete(segId)
-            syncSeg = True
-            self._rSetNextDownloader(playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
-            return
-        elif segId == self._vLastSyncSeg:
-            syncSeg = True
-        elif self._vAgent.nextSegmentIndex > self._vLastSyncSeg:
-            #check if there are bufferAvailable in player
-            segPlaybackTime = self._vVideoInfo.segmentDuration*segId
-            curPlaybackTime = self._vAgent.playbackTime
-            waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
-            if waitTime > 0:
-#                 assert waitTime < 100
-                tmp = self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc2"))
-                self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
-                return
-
-        self._vNextGroupDownloader = playerId
-        self._vNextGroupDLSegId = segId
-        self._vGroupSegDetails.append((lastSegId, lastPlayerId, lastQl))
-
-        self._rDownloadAsTeamPlayer(segId, rnnkey = rnnkey, syncSeg = syncSeg, ql=lastQl)
-
-#=============================================
-    def _rDownloadAsTeamPlayer(self, segId, rnnkey = None, ql = -1, syncSeg = False):
-        nextDownloader, rnnkey = self._rGetNextDownloader(segId)
-        self._rAddToDownloadQueue(segId, ql, rnnkey=rnnkey, syncSeg=syncSeg)
-        self.gossipSend(self._rSetNextDownloader, nextDownloader, segId+1, rnnkey, segId, self._vPlayerIdInGrp, ql)
-        self._rSetNextDownloader(nextDownloader, segId + 1, rnnkey, segId, self._vPlayerIdInGrp, ql)
-
-#=============================================
-    def _rPredictedThroughput(self):
-        #as per rate based algo
-        thrpt = [1/x for t, x in self._vThroughPutData[-5:]]
-        return len(thrpt)/sum(thrpt)
-
-#=============================================
-    def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf"), sleepTime = 0, rnnkey = None, syncSeg = False):
-        if sleepTime > 0:
-            self.runAfter(sleepTime, self._rAddToDownloadQueue, nextSegId, nextQuality, position, 0, rnnkey, syncSeg)
-            return
-        found = False
-        for s, q, k, _ in self._vDownloadQueue:
-            if s == nextSegId and q == nextQuality:
-                found = True
-        position = min(position, len(self._vDownloadQueue))
-        if not found:
-            if self._vMaxSegDownloading < nextSegId:
-                self._vMaxSegDownloading = nextSegId
-            self._vDownloadQueue.insert(position, (nextSegId, nextQuality, rnnkey, syncSeg))
-        self._rDownloadFromDownloadQueue()
-
-#=============================================
-    def _rDownloadingUsing(self, segId, ql):
-        self._vDownloadQl.append((segId, ql))
-        self._vDownloadQl.sort(key = lambda x : x[0])
-
 #=============================================
     def _rDownloadFromDownloadQueue(self):
         if self._vDownloadPending:
@@ -393,50 +151,6 @@ class GroupP2PRNN(Simple):
             self._vDownloadPending = True
             self._vDownloadPendingRnnkey = rnnkey
             break
-
-#=============================================
-    def _rDeadlineReached(self, segId):
-        if segId in self._vCatched or segId < self._vAgent.nextSegmentIndex or segId < self._vLastSyncSeg:
-            return
-        _, lastPlayerId, lastQl = list(zip(*([(0,0,0), (0,0,0)] + self._vGroupSegDetails[-5:])))
-
-        lastPlayerId = list(lastPlayerId)
-        lastQl = list(lastQl)
-
-        syncSeg = self._vLastSyncSeg == segId
-        ql = max(min(lastQl), lastQl[-1])
-        self._rAddToDownloadQueue(segId, ql, position=0, syncSeg=syncSeg)
-
-#=============================================
-    def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
-        if sleepTime > 0:
-            self._vSleepingSegs[nextSegId] = self.now
-            self.runAfter(sleepTime, self._rDownloadNextData, nextSegId, nextQuality, 0)
-            return
-
-        if nextSegId in self._vSleepingSegs:
-            del self._vSleepingSegs[nextSegId]
-
-        if nextSegId in self._vCatched:
-            self._rAddToAgentBuffer(self._vCatched[nextSegId])
-            return
-
-        if not self._vGroupStarted or self._vGroupStartedFromSegId > nextSegId:
-            self._rAddToDownloadQueue(nextSegId, nextQuality, sleepTime=sleepTime)
-            return
-
-        if self._vImStarter:
-            self._vImStarter = False
-            self._vGroupStarted = True
-            self._vGroupStartedFromSegId = nextSegId
-            self._rDownloadAsTeamPlayer(nextSegId, ql = nextQuality)
-            return
-
-        deadLine = (nextSegId-1) * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
-        if deadLine > 0:
-            self.runAfter(deadLine, self._rDeadlineReached, nextSegId)
-        else:
-            self._rDeadlineReached(nextSegId)
 
 #=============================================
     def _rAddToAgentBuffer(self, req, simIds=None):
@@ -479,77 +193,6 @@ class GroupP2PRNN(Simple):
 
             self._vPensieveQualityLearner.addReward(rnnkey, reward)
             #add reward
-
-#=============================================
-    def _rAddToBuffer(self, req, simIds = None):
-        self._vDownloadPending = False
-        rnnkey = self._vDownloadPendingRnnkey
-        self._rDownloadFromDownloadQueue()
-        req.syncSeg = req.extraData.get("syncSeg", False)
-        if self._vStarted:
-            self._vPlayBackDlCnt += 1
-        self._vThroughPutData += [(self.now, req.throughput)]
-        self._vWeightedThroughput = 0.8*self._vWeightedThroughput + 0.2*req.throughput if self._vWeightedThroughput else req.throughput
-        self._vDownloadedReqByItSelf += [req]
-
-        if req.segId in self._vDeadLines:
-            self._vDeadLineMissed.append((self.now, self._vDeadLines[req.segId]))
-            del self._vDeadLines[req.segId]
-        calls = self._vRunWhenDownloadCompeltes
-        self._vRunWhenDownloadCompeltes = []
-        for func, arg, kwarg in calls:
-            func(*arg, **kwarg)
-
-        syncSeg = req.syncSeg
-        self._vTotalDownloaded += req.clen #i.e. peer download
-        if req.segId in self._vCatched:
-            syncSeg = syncSeg or self._vCatched[req.segId].syncSeg
-        if req.segId not in self._vCatched \
-                or req.qualityIndex > self._vCatched[req.segId].qualityIndex:
-            self._vCatched[req.segId] = req
-        self._vCatched[req.segId].syncSeg = syncSeg
-        if (self._vAgent.nextSegmentIndex == req.segId and req.segId not in self._vSleepingSegs):
-            self._rAddToAgentBuffer(self._vCatched[req.segId])
-        elif syncSeg:
-            self._rPushSyncSegInTime(req)
-
-        if self._vPlayBackDlCnt == GROUP_JOIN_THRESHOLD:
-            self._vConnectionSpeed = self._rPredictedThroughput()/1000000
-            self._vGroup.add(self, self._vAgent.nextSegmentIndex+2)
-
-        if self._vGroupNodes:
-            self.gossipSend(self._rRecvReq, self, req)
-
-#=============================================
-    def _rPushSyncSegInTime(self, req):
-        startTime = self._vAgent._vGlobalStartedAt + self._vVideoInfo.segmentDuration * req.segId
-        waitTime = max(0, startTime - self.now)
-        if waitTime > 0:
-            self.runAfter(waitTime, self._rPushSyncSegInTime, req)
-            return
-        self._rAddToAgentBuffer(self._vCatched[req.segId])
-
-#=============================================
-    def _rRecvReq(self, node, req):
-        syncSeg = req.syncSeg
-        if self._vWorking:
-            _, _, dlSeg, _, downloadData, _, _ = self._vWorkingStatus
-            if dlSeg == req.segId:
-                self._rStopDownload()
-        if req.segId in self._vCatched:
-            syncSeg = syncSeg or self._vCatched[req.segId].syncSeg
-        if req.segId not in self._vCatched \
-                or req.qualityIndex > self._vCatched[req.segId].qualityIndex:
-            node._vTotalUploaded += req.clen
-            node._vTotalUploadedSegs += 1
-            self._vCatched[req.segId] = req
-        self._vCatched[req.segId].syncSeg = syncSeg
-
-        if (self._vAgent.nextSegmentIndex == req.segId and req.segId not in self._vSleepingSegs):
-            self._rAddToAgentBuffer(self._vCatched[req.segId])
-        elif syncSeg:
-            self._rPushSyncSegInTime(req)
-
 #=============================================
 #=============================================
 #=============================================

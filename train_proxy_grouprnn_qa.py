@@ -321,6 +321,7 @@ def main():
     if MULTI_PROC:
         print("Turning off central server")
 #         rnnAgent.quitCentralServer()
+        rnnQuality.quitCentralServer()
 #         centralLearnerAge.join()
         centralLearnerQua.join()
         print("finished")
