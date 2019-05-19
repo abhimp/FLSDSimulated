@@ -31,6 +31,7 @@ GroupP2PTimeoutRNN = None
 GroupP2PTimeoutIncRNN = None
 AbrPensieve = None
 GroupP2PRNN = None
+GroupP2PDeterQaRNN = None
 
 
 RESULT_DIR = "./results/GenPlots"
@@ -234,13 +235,8 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
         assert a._vFinished # or a._vDead
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
-def main():
-    global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN, GroupP2PRNN
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PTimeoutRNN", "GroupP2PTimeoutIncRNN", "DHTEnvironment", "GroupP2PRNN", "GrpDeter"]
-    if "-h" in sys.argv or len(sys.argv) <= 1:
-        print(" ".join(allowed))
-        return
-    allowed = sys.argv[1:]
+def importLearningModules(allowed):
+    global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN, GroupP2PRNN, GroupP2PDeterQaRNN
     if "Penseiv" in allowed and AbrPensieve is None:
         from abr.Pensiev import AbrPensieve as abp
         AbrPensieve = abp
@@ -257,17 +253,11 @@ def main():
         from simenv.GroupP2PRNNTest import GroupP2PRNN as obj
         GroupP2PRNN = obj
 
-#     randstate.storeCurrentState() #comment this line to use same state as before
-    randstate.loadCurrentState()
-    traces = load_trace.load_trace()
-    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
-    vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
-#     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
-    assert len(traces[0]) == len(traces[1]) == len(traces[2])
-    traces = list(zip(*traces))
-    network = P2PNetwork()
-#     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
+    if "GroupP2PDeterQaRNN" in allowed and GroupP2PDeterQaRNN is None:
+        from simenv.GroupP2PDeterQaRNN import GroupP2PDeterQaRNN as obj
+        GroupP2PDeterQaRNN = obj
 
+def getTestObj(traces, vi, network):
     testCB = {}
     testCB["BOLA"] = (Simple, traces, vi, network, BOLA)
     testCB["FastMPC"] = (Simple, traces, vi, network, AbrFastMPC)
@@ -282,7 +272,29 @@ def main():
     testCB["GroupP2PTimeoutIncRNN"] = (GroupP2PTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
     testCB["GroupP2PRNN"] = (GroupP2PRNN, traces, vi, network, BOLA, None, "ResModelPathRNN/")
     testCB["GrpDeter"] = (GroupP2PDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
+    testCB["GroupP2PDeterQaRNN"] = (GroupP2PDeterQaRNN, traces, vi, network, BOLA, None, "ResModelPathRNNQa/")
 
+    return testCB
+
+
+def main():
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PTimeoutRNN", "GroupP2PTimeoutIncRNN", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GroupP2PDeterQaRNN"]
+    if "-h" in sys.argv or len(sys.argv) <= 1:
+        print(" ".join(allowed))
+        return
+    allowed = sys.argv[1:]
+    importLearningModules(allowed)
+#     randstate.storeCurrentState() #comment this line to use same state as before
+    randstate.loadCurrentState()
+    traces = load_trace.load_trace()
+    vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
+    vi = video.loadVideoTime("./videofilesizes/sizes_qBVThFwdYTc.py")
+#     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
+    assert len(traces[0]) == len(traces[1]) == len(traces[2])
+    traces = list(zip(*traces))
+    network = P2PNetwork()
+#     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
+    testCB = getTestObj(traces, vi, network)
     results = {}
     cdns = {}
 

@@ -301,7 +301,7 @@ class PensiveLearnerProc():
 #         nn_model = NN_MODEL
         if self.nn_model is not None and not self.ipcQueue:  # nn_model is the path to file
             self.saver.restore(self.sess, self.nn_model)
-            myprint("Model restored.")
+            myprint("Model restored with `" + self.nn_model + "'")
 
 
         if self.ipcQueue:
@@ -340,6 +340,7 @@ class PensiveLearnerProc():
         #pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, deadline = state
 #         lastPlayerId_, lastQl_, lastClens_, lastStartsAt_, lastFinishAt_, pendings_, deadline = state
         thrpt_, lastQl_, lastClens_, clens_, wthrghpt, buf, deadline = state
+        myprint("thrpt_:", thrpt_, '\n'," lastQl_:",  lastQl_, '\n'," lastClens_:",  lastClens_, '\n'," clens_:",  clens_, '\n'," wthrghpt:",  wthrghpt, '\n'," buf:",  buf, '\n'," deadline:",  deadline, '\n')
 
         v_dim = len(thrpt_)
 
