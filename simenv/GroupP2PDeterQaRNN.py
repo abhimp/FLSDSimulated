@@ -73,6 +73,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         thrpt = [x for t, x in thrpt]
         thrpt = np.array([0]*5 + thrpt)/BYTES_IN_MB/8
 
+        lastQl = [self._vVideoInfo.bitrates[x]/BYTES_IN_MB for x in lastQl]
+
         state = (thrpt[-5:], lastQl[-5:], lastClens[-5:], clens, self._vWeightedThroughput/BYTES_IN_MB/8, self._vAgent.bufferLeft/self._vVideoInfo.segmentDuration, deadLine)
 
         self._vSegIdRNNKeyMap[segId] = rnnkey
