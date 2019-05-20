@@ -152,7 +152,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             #call rnn obj for working
 #             self._vPensieveAgentLearner.addReward(rnnkey, reward)
 
-            self._vPensieveQualityLearner.addReward(rnnkey, reward)
+            self._vPensieveQualityLearner.addReward(rnnkey, qoe)
             #add reward
 
 #=============================================
