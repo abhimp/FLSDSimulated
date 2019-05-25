@@ -186,7 +186,7 @@ def runSlave(pq, sq, slvId):
         pq.put({"status":True, "slvId": slvId, "expId": expId})
 
 
-MULTI_PROC = False
+MULTI_PROC = True
 NUM_EXP_PER_SLV = 1
 
 EMAIL_PASS = None
@@ -197,7 +197,7 @@ def main():
         EMAIL_PASS = open("emailpass.txt").read().strip()
 
     modelPath = "ResModelPathRNNQa"
-    numSlave = 2
+    numSlave = 10
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
     slvExpCnt = {x:0 for x in slaveIds}
@@ -298,8 +298,8 @@ def main():
 
         print("Started", started)
         started += 1
-        if finished >= 1:
-            break
+#         if finished >= 1:
+#             break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
         status = procQueue.get()
