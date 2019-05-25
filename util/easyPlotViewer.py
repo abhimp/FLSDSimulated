@@ -1,5 +1,5 @@
 import sys
-import json
+import util.myjson as json
 import gzip
 
 class EasyPlot():
