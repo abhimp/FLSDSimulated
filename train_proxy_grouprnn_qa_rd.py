@@ -11,7 +11,7 @@ import traceback as tb
 
 import util.videoInfo as video
 # from simenv.GroupP2PRNN import GroupP2PRNN
-from simenv.GroupP2PDeterQaRNN import GroupP2PDeterQaRNN
+from simenv.GroupP2PDeterQaRNNRd import GroupP2PDeterQaRNN
 from simulator.simulator import Simulator
 # from util.group import GroupManager
 # from util.p2pnetwork import P2PNetwork
