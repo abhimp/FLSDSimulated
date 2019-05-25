@@ -213,6 +213,9 @@ def measureBenefit(results, lonePeers):
 
 GLOBAL_STARTS_AT = 5
 
+def getDict(**kws):
+    return kws
+
 def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
     simulator = Simulator()
     grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
@@ -259,20 +262,21 @@ def importLearningModules(allowed):
 
 def getTestObj(traces, vi, network):
     testCB = {}
-    testCB["BOLA"] = (Simple, traces, vi, network, BOLA)
-    testCB["FastMPC"] = (Simple, traces, vi, network, AbrFastMPC)
-    testCB["RobustMPC"] = (Simple, traces, vi, network, AbrRobustMPC)
-    testCB["Penseiv"] = (Simple, traces, vi, network, AbrPensieve)
-    testCB["GroupP2PBasic"] = (GroupP2PBasic, traces, vi, network)
-    testCB["GroupP2PTimeout"] = (GroupP2PTimeout, traces, vi, network)
-    testCB["GroupP2PTimeoutSkip"] = (GroupP2PTimeoutSkip, traces, vi, network)
-    testCB["DHTEnvironment"] = (DHT, traces, vi, network)
-    testCB["GroupP2PTimeoutInc"] = (GroupP2PTimeoutInc, traces, vi, network)
-    testCB["GroupP2PTimeoutRNN"] = (GroupP2PTimeoutRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GroupP2PTimeoutIncRNN"] = (GroupP2PTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GroupP2PRNN"] = (GroupP2PRNN, traces, vi, network, BOLA, None, "ResModelPathRNN/")
-    testCB["GrpDeter"] = (GroupP2PDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
-    testCB["GroupP2PDeterQaRNN"] = (GroupP2PDeterQaRNN, traces, vi, network, BOLA, None, "ResModelPathRNNQa/")
+    #envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None, rnnAgentModule=None, rnnQualityModule=None
+    testCB["BOLA"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=BOLA)
+    testCB["FastMPC"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrFastMPC)
+    testCB["RobustMPC"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrRobustMPC)
+    testCB["Penseiv"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrPensieve)
+    testCB["GroupP2PBasic"] = getDict(envCls=GroupP2PBasic, traces=traces, vi=vi, network=network)
+    testCB["GroupP2PTimeout"] = getDict(envCls=GroupP2PTimeout, traces=traces, vi=vi, network=network)
+    testCB["GroupP2PTimeoutSkip"] = getDict(envCls=GroupP2PTimeoutSkip, traces=traces, vi=vi, network=network)
+    testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network)
+    testCB["GroupP2PTimeoutInc"] = getDict(envCls=GroupP2PTimeoutInc, traces=traces, vi=vi, network=network)
+    testCB["GroupP2PTimeoutRNN"] = getDict(envCls=GroupP2PTimeoutRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ModelPath")
+    testCB["GroupP2PTimeoutIncRNN"] = getDict(envCls=GroupP2PTimeoutIncRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ModelPath")
+    testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
+    testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
+    testCB["GroupP2PDeterQaRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNQa/")
 
     return testCB
 
@@ -303,7 +307,7 @@ def main():
         assert name in testCB
         cb = testCB[name]
         randstate.loadCurrentState()
-        ags, cdn = runExperiments(*cb)
+        ags, cdn = runExperiments(**cb)
         results[name] = ags
         cdns[name] = cdn
 

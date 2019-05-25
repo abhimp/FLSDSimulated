@@ -21,7 +21,7 @@ from abr.BOLA import BOLA
 
 # from rnnTimeout import getPensiveLearner, saveLearner
 import rnn.Agent as rnnAgent
-import rnn.Quality as rnnQuality
+import rnn.QualityRd as rnnQuality
 
 
 GROUP_JOIN_THRESHOLD = 10
@@ -49,34 +49,14 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
     def _rGetMyQuality(self, nextQl, segId, rnnkey):
         if not rnnkey:
             return nextQl #handle this
-        segIds = [x[0] for x in self._vGroupSegDetails[-5:]]
-        lastPlayerId = [x[1] for x in self._vGroupSegDetails[-5:]]
-        lastQl = [x[1] for x in self._vGroupSegDetails[-5:]]
-
-        lastClens = [0]*5 + [self._vVideoInfo.fileSizes[ql][s] for ql, s in zip(lastQl, segIds)]
-        _, lastPlayerId, lastQl = list(zip(*([(0,0,0), (0,0,0)] + self._vGroupSegDetails[-5:])))
-        lastClens = np.array(lastClens)/BYTES_IN_MB
-
-        lastPlayerId = [0]*5 + list(lastPlayerId)
-        lastQl = [0]*5 + [x[1] for x in self._vDownloadQl[-5:]]
 
         deadLine = segId*self._vVideoInfo.segmentDuration - max([n._vAgent.playbackTime for n in self._vGroupNodes])
-        curProg = self._rDownloadStatus()
-        prog = len(self._vDownloadQueue) * 100 + (curProg[1] / curProg[2] if curProg[2] else 0)
 
-        targetQl = lastQl[-1] if len(lastQl) > 1 else self._vAgent._vQualitiesPlayed[-1]
-
+        lastQl = [0]*5 + [x[1] for x in self._vDownloadQl[-5:]]
         clens = [ql[segId]/BYTES_IN_MB for ql in self._vVideoInfo.fileSizes]
-
-        thrpt = self._vThroughPutData[-5:]
-        if curProg[1] > 0 and curProg[0] > 0:
-            thrpt += [(self.now, curProg[1] * 8 / curProg[0])]
-        thrpt = [x for t, x in thrpt]
-        thrpt = np.array([0]*5 + thrpt)/BYTES_IN_MB/8
-
-        lastQl = [self._vVideoInfo.bitrates[x]/BYTES_IN_MB for x in lastQl]
-
-        state = (thrpt[-5:], lastQl[-5:], lastClens[-5:], clens, self._vWeightedThroughput/BYTES_IN_MB/8, self._vAgent.bufferLeft/self._vVideoInfo.segmentDuration, deadLine)
+        lastReq = self._vDownloadedReqByItSelf[-1]
+        ql = self._vVideoInfo.bitrates[lastQl[-1]] / self._vVideoInfo.bitrates[-1]
+        state = (deadLine, lastReq.timetaken, lastReq.throughput/BYTES_IN_MB, ql, clens, self._vAgent.bufferLeft/self._vVideoInfo.segmentDuration)
 
         self._vSegIdRNNKeyMap[segId] = rnnkey
 
