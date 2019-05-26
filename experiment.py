@@ -257,7 +257,7 @@ def importLearningModules(allowed):
         GroupP2PRNN = obj
 
     if "GroupP2PDeterQaRNN" in allowed and GroupP2PDeterQaRNN is None:
-        from simenv.GroupP2PDeterQaRNN import GroupP2PDeterQaRNN as obj
+        from simenv.GroupP2PDeterQaRNNRd import GroupP2PDeterQaRNN as obj
         GroupP2PDeterQaRNN = obj
 
 def getTestObj(traces, vi, network):
