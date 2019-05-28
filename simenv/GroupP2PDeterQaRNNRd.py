@@ -122,10 +122,10 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         lastSegPlaybackEndedAt = lastSegPlaybackStartedAt + self._vVideoInfo.segmentDuration
 
         stallTimes = [max(startedAt + dur - lastSegPlaybackEndedAt, 0) for dur in durations]
-        print(stallTimes)
+#         print(stallTimes)
 
         bitrates = self._vVideoInfo.bitrates
-        qoes = [bitrates[i]/BYTES_IN_MB - abs(bitrates[i] - bitrates[lastReq.qualityIndex])/BYTES_IN_MB - 4.3*st for i, st in enumerate(stallTimes)]
+        qoes = [1.1 * bitrates[i]/BYTES_IN_MB - abs(bitrates[i] - bitrates[lastReq.qualityIndex])/BYTES_IN_MB - 4.3*st for i, st in enumerate(stallTimes)]
         bestQl = np.argmax(qoes)
         return bestQl, qoes[bestQl]
 
@@ -155,7 +155,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             diff = abs(qls[0] - qls[1])/BYTES_IN_MB
             rebuf = (self._vAgent._vTotalStallTime - lastStalls)/10
-            qoe = qls[1] / BYTES_IN_MB - diff - 4.3 * rebuf
+            qoe = 1.1*qls[1] / BYTES_IN_MB - diff - 4.3 * rebuf
 
             ret = self._rFindOptimalQualityLevel(req)
             if ret == None:
@@ -165,7 +165,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             reward = qoe - bestQoE
 
-
+            rnnkey, outofbound = rnnkey
             self._vPensieveQualityLearner.addReward(rnnkey, reward)
             #add reward
 

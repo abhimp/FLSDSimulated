@@ -285,12 +285,6 @@ class Simple():
         req = SegmentRequest(0, startedAt, now, dur, segId, downloaded, self)
         self._vWorkingTimes += [(now, req.throughput, segId)]
         self._vCdn.add(startedAt, now, req.throughput)
-#         self._vLastTime += time
-#         while self._vLastTime >= self._vCookedTime[-1]:
-#             self._vLastTime -= self._vCookedTime[-1]
-
-#         assert simIds
-#         self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
 
 #=============================================
     def _rDownloadStatus(self):
@@ -330,7 +324,7 @@ def experimentSimple(traces, vi, network, abr = None):
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished
-        print(a._vAgent._vSegIdPlaybackTime, "="*35, sep="\n", end="\n\n")
+#         print(a._vAgent._vSegIdPlaybackTime, "="*35, sep="\n", end="\n\n")
     return ags
 
 
