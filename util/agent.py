@@ -59,6 +59,8 @@ class Agent():
         self._vTimeSlipage = [(0,0,0)]
         self._vSyncSegment = -1
 
+        self._vSegIdPlaybackTime = {}
+
 
     @property
     def bufferUpto(self):
@@ -220,6 +222,16 @@ class Agent():
             self._rDownloadNextData(0)
 
 #=============================================
+    def _rStoreSegmentPlaybackTime(self, req):
+        segId = req
+        curPlaybackTime = self._vPlaybacktime
+        segPlaybackStartTime = req.segId*self._vVideoInfo.segmentDuration
+        waitTime = segPlaybackStartTime - curPlaybackTime
+        assert waitTime >= 0
+
+        self._vSegIdPlaybackTime[req.segId] = (self._vEnv.now + waitTime, req)
+
+#=============================================
     def _rAddToBufferInternal(self, req, simIds = None):
         if self._vDead: return
 
@@ -310,6 +322,7 @@ class Agent():
 
         self._vPlaybacktime = playbackTime
         self.bufferUpto = segPlaybackEndTime
+        self._rStoreSegmentPlaybackTime(req)
 
         buflen = self.bufferUpto - self._vPlaybacktime
         self._vBufferLenOverTime.append((now, buflen))

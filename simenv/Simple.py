@@ -13,11 +13,73 @@ from util.cdnUsages import CDN
 TIMEOUT_SIMID_KEY = "to"
 REQUESTION_SIMID_KEY = "ri"
 
+class TraceComputation():
+    def __init__(self, startTime, bwtrace, tmtrace):
+        self.startedAt = startTime
+        self.bw = bwtrace
+        self.ttime = tmtrace
+        assert self.ttime[0] == 0
+        self.bw[0] = self.bw[-1]
+
+    def getDLTime(self, startingTime, clen):
+        ackStartTime = startingTime + self.startedAt
+        bwStartedAt = ackStartTime % self.ttime[-1]
+
+        i = 1
+        while True:
+            if self.ttime[i] > bwStartedAt:
+                break
+            i += 1
+
+        if i == len(self.ttime):
+            i = 1
+
+        now = bwStartedAt
+
+        totalDownload = 0
+        totalDuration = 0
+        dlStat = [(0,0)]
+        while True:
+            thp = self.bw[i]
+            dur = self.ttime[i] - now
+#             print(dur, self.ttime[i], now)
+
+            dl = thp * (1024 * 1024 / 8) * dur * 0.95
+            dl = round(dl, 3)
+            left = round(clen - totalDownload, 3)
+
+            if dl > left:
+                dur = dur * (left/dl)
+                totalDuration += dur
+                totalDownload += left
+                dlStat += [(totalDuration, totalDownload)]
+                break
+
+            totalDownload += dl
+            totalDuration += dur
+            dlStat += [(totalDuration, totalDownload)]
+            if dl == left:
+                break
+
+            i += 1
+            if i == len(self.ttime):
+                i = 1
+            now = self.ttime[i-1]
+
+        totalDuration += 0.08 #delay
+        totalDuration *= np.random.uniform(0.9, 1.1)
+        ratio = totalDuration/dlStat[-1][0]
+        dlStat = [(round(x*ratio, 3), y) for x,y in dlStat]
+        return totalDuration, dlStat
+
+
+
+
 class Simple():
     def __init__(self, vi, traces, simulator, abr = None, peerId = -1, logpath=None, resultpath=None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
 #         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
-        self._vLastTime = -1
+#         self._vLastTime = -1
 #         self._vLastBandwidthTime =
         self._vAgent = Agent(vi, self, abr, logpath=logpath, resultpath=resultpath)
         self._vLogPath = logpath
@@ -37,6 +99,7 @@ class Simple():
 
         self._vWorking = False
         self._vWorkingStatus = None
+        self._vTraceProc = None
         self._vCdn = CDN.getInstance()
 
     @property
@@ -90,8 +153,10 @@ class Simple():
     def start(self, startedAt = -1):
         if not self._vAgent:
             raise Exception("Node agent to start")
+
+        self._vTraceProc= TraceComputation(self.now, self._vCookedBW, self._vCookedTime)
         self._vLastDownloadedAt = self.getNow()
-        self._vLastTime = (self._vCookedTime[1] + self.now) % int(self._vCookedTime[-1]) # np.random.uniform(self._vCookedTime[1], self._vCookedTime[-1])
+#         self._vLastTime = (self._vCookedTime[1] + self.now) % int(self._vCookedTime[-1]) # np.random.uniform(self._vCookedTime[1], self._vCookedTime[-1])
         self._vAgent.start(startedAt)
 
 #=============================================
@@ -108,6 +173,11 @@ class Simple():
     def _rAddToBuffer(self, req, simIds = None):
         if self._vDead: return
         self._vAgent._rAddToBufferInternal(req, simIds)
+
+#=============================================
+    def getTimeRequredToDownload(self, start, clen):
+        dur, dlStat = self._vTraceProc.getDLTime(start, clen)
+        return dur
 
 #=============================================
     def _rFetchNextSeg(self, nextSegId, nextQuality, extraData=None):
@@ -130,45 +200,46 @@ class Simple():
 
         clen = self._vVideoInfo.fileSizes[nextQuality][nextSegId]
 
-        curCookedTime = self._vLastTime + sleepTime
-        while curCookedTime >= self._vCookedTime[-1]:
-            curCookedTime -= self._vCookedTime[-1]
-        self._vLastTime = curCookedTime
-
-        bwPtr = 1
-        while curCookedTime > self._vCookedTime[bwPtr]:
-            bwPtr += 1
-            assert bwPtr < len(self._vCookedTime)
-
-        downloadData = [[0, 0]]
-
-        sentSize = 0
-        time = 0
-        while True:
-            assert curCookedTime <= self._vCookedTime[bwPtr]
-            dur = self._vCookedTime[bwPtr] - curCookedTime
-            throughput = self._vCookedBW[bwPtr]
-            pktpyld = throughput * (1024 * 1024 / 8) * dur * 0.95
-            if sentSize + pktpyld >= clen:
-                fracTime = dur * ( clen - sentSize ) / pktpyld
-                time += fracTime
-                if fracTime > 0:
-                    downloadData += [[time, clen]]
-                break
-            time += dur
-            sentSize += pktpyld
-            downloadData += [[time, sentSize]] #I may not use it now
-            bwPtr += 1
-            if bwPtr >= len(self._vCookedBW):
-                curCookedTime = 0
-                bwPtr = 1
-
-
-        time += 0.08 #delay
-        time *= np.random.uniform(0.9, 1.1)
-        timeChangeRatio = time/downloadData[-1][0]
-
-        downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
+#         curCookedTime = self._vLastTime + sleepTime
+#         while curCookedTime >= self._vCookedTime[-1]:
+#             curCookedTime -= self._vCookedTime[-1]
+#         self._vLastTime = curCookedTime
+#
+#         bwPtr = 1
+#         while curCookedTime > self._vCookedTime[bwPtr]:
+#             bwPtr += 1
+#             assert bwPtr < len(self._vCookedTime)
+#
+#         downloadData = [[0, 0]]
+#
+#         sentSize = 0
+#         time = 0
+#         while True:
+#             assert curCookedTime <= self._vCookedTime[bwPtr]
+#             dur = self._vCookedTime[bwPtr] - curCookedTime
+#             throughput = self._vCookedBW[bwPtr]
+#             pktpyld = throughput * (1024 * 1024 / 8) * dur * 0.95
+#             if sentSize + pktpyld >= clen:
+#                 fracTime = dur * ( clen - sentSize ) / pktpyld
+#                 time += fracTime
+#                 if fracTime > 0:
+#                     downloadData += [[time, clen]]
+#                 break
+#             time += dur
+#             sentSize += pktpyld
+#             downloadData += [[time, sentSize]] #I may not use it now
+#             bwPtr += 1
+#             if bwPtr >= len(self._vCookedBW):
+#                 curCookedTime = 0
+#                 bwPtr = 1
+#
+#
+#         time += 0.08 #delay
+#         time *= np.random.uniform(0.9, 1.1)
+#         timeChangeRatio = time/downloadData[-1][0]
+#
+#         downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
+        time, downloadData = self._vTraceProc.getDLTime(now, clen)
 
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, clen, simIds, extraData, self._vNextDownloadId)
         self._vWorkingStatus = (now, time, nextSegId, clen, downloadData, simIds, self._vNextDownloadId)
@@ -198,9 +269,9 @@ class Simple():
         req = SegmentRequest(ql, startedAt, now, dur, segId, clen, self, extraData)
         self._vWorkingTimes += [(now, req.throughput, segId)]
         self._vCdn.add(startedAt, now, req.throughput)
-        self._vLastTime += time
-        while self._vLastTime >= self._vCookedTime[-1]:
-            self._vLastTime -= self._vCookedTime[-1]
+#         self._vLastTime += time
+#         while self._vLastTime >= self._vCookedTime[-1]:
+#             self._vLastTime -= self._vCookedTime[-1]
         self._rAddToBuffer(req, simIds)
 
 #=============================================
@@ -214,9 +285,9 @@ class Simple():
         req = SegmentRequest(0, startedAt, now, dur, segId, downloaded, self)
         self._vWorkingTimes += [(now, req.throughput, segId)]
         self._vCdn.add(startedAt, now, req.throughput)
-        self._vLastTime += time
-        while self._vLastTime >= self._vCookedTime[-1]:
-            self._vLastTime -= self._vCookedTime[-1]
+#         self._vLastTime += time
+#         while self._vLastTime >= self._vCookedTime[-1]:
+#             self._vLastTime -= self._vCookedTime[-1]
 
 #         assert simIds
 #         self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
@@ -259,6 +330,7 @@ def experimentSimple(traces, vi, network, abr = None):
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished
+        print(a._vAgent._vSegIdPlaybackTime, "="*35, sep="\n", end="\n\n")
     return ags
 
 

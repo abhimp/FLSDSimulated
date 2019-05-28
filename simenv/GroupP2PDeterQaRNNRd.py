@@ -44,13 +44,19 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
     def _rGetMyQualityFailSafe(self, nextQl, segId, rnnkey):
         super()._rGetMyQuality(nextQl, segId, rnnkey)
 
+#=============================================
+    def _rGetDealine(self, segId):
+        deadLine = segId*self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
+        if self._vGroupNodes and len(self._vGroupNodes) >= 1:
+            deadLine = segId*self._vVideoInfo.segmentDuration - max([n._vAgent.playbackTime for n in self._vGroupNodes])
+        return deadLine
 
 #=============================================
     def _rGetMyQuality(self, nextQl, segId, rnnkey):
         if not rnnkey:
             return nextQl #handle this
 
-        deadLine = segId*self._vVideoInfo.segmentDuration - max([n._vAgent.playbackTime for n in self._vGroupNodes])
+        deadLine = self._rGetDealine(segId)
 
         lastQl = [0]*5 + [x[1] for x in self._vDownloadQl[-5:]]
         clens = [ql[segId]/BYTES_IN_MB for ql in self._vVideoInfo.fileSizes]
@@ -89,10 +95,40 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
                 self.gossipSend(self._rDownloadingUsing, segId, ql)
                 self._rDownloadingUsing(segId, ql)
 
-            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg})
+            deadLine = self._rGetDealine(segId)
+            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg, "deadLine":deadLine})
             self._vDownloadPending = True
             self._vDownloadPendingRnnkey = rnnkey
             break
+
+#=============================================
+    def _rFindOptimalQualityLevel(self, req):
+        if req.syncSeg:
+            return None
+        if req.downloader != self:
+            return None
+
+        startedAt = req.downloadStarted
+
+        clens = [ql[req.segId] for ql in self._vVideoInfo.fileSizes]
+
+        durations = [self.getTimeRequredToDownload(startedAt, clen) for clen in clens]
+
+
+        lastPlaybackInfo = self._vAgent._vSegIdPlaybackTime.get(req.segId - 1, None) #it have to be None as 0 != None
+        if lastPlaybackInfo == None:
+            return None
+        lastSegPlaybackStartedAt, lastReq = lastPlaybackInfo
+        lastSegPlaybackEndedAt = lastSegPlaybackStartedAt + self._vVideoInfo.segmentDuration
+
+        stallTimes = [max(startedAt + dur - lastSegPlaybackEndedAt, 0) for dur in durations]
+        print(stallTimes)
+
+        bitrates = self._vVideoInfo.bitrates
+        qoes = [bitrates[i]/BYTES_IN_MB - abs(bitrates[i] - bitrates[lastReq.qualityIndex])/BYTES_IN_MB - 4.3*st for i, st in enumerate(stallTimes)]
+        bestQl = np.argmax(qoes)
+        return bestQl, qoes[bestQl]
+
 
 #=============================================
     def _rAddToAgentBuffer(self, req, simIds=None):
@@ -121,19 +157,16 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             rebuf = (self._vAgent._vTotalStallTime - lastStalls)/10
             qoe = qls[1] / BYTES_IN_MB - diff - 4.3 * rebuf
 
+            ret = self._rFindOptimalQualityLevel(req)
+            if ret == None:
+                return
 
-            reward = -rebuf
-            rnnkey, outofbound = rnnkey
-            reward -= outofbound
-#             uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
-#             contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
-#             reward -= contri
+            bestQl, bestQoE = ret
 
-            reward = 0.7 * qoe + 0.3 * reward
-            #call rnn obj for working
-#             self._vPensieveAgentLearner.addReward(rnnkey, reward)
+            reward = qoe - bestQoE
 
-            self._vPensieveQualityLearner.addReward(rnnkey, qoe)
+
+            self._vPensieveQualityLearner.addReward(rnnkey, reward)
             #add reward
 
 #=============================================
