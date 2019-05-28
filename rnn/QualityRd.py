@@ -15,8 +15,8 @@ import traceback as tb
 S_INFO = 14  # bit_rate, buffer_size, next_chunk_size, bandwidth_measurement(throughput and time), chunk_til_video_end
 S_LEN = 8  # take how many frames in the past
 A_DIM = 6
-ACTOR_LR_RATE = 0.0001
-CRITIC_LR_RATE = 0.001
+ACTOR_LR_RATE = 0.01
+CRITIC_LR_RATE = 0.1
 TRAIN_SEQ_LEN = 100  # take as a train batch
 MODEL_SAVE_INTERVAL = 100
 M_IN_K = 1000.0
