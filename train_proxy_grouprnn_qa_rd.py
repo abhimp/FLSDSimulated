@@ -189,6 +189,11 @@ def runSlave(pq, sq, slvId):
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 1
 
+FULL_TEST_ENV=True
+if os.environ.get("EXP_ENV", "PROD") == "TEST":
+    FULL_TEST_ENV = False
+    MULTI_PROC = False
+
 EMAIL_PASS = None
 
 def main():
@@ -298,8 +303,8 @@ def main():
 
         print("Started", started)
         started += 1
-#         if finished >= 1:
-#             break
+        if finished >= 1 and not FULL_TEST_ENV:
+            break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
         status = procQueue.get()

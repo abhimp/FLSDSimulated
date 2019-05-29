@@ -221,7 +221,7 @@ class PensiveLearner():
         dt = self.recv.get(timeout=60)
         if not dt.get("st", False):
             myprint(dt.get("trace", ""))
-            raise Exception()
+            raise Exception(dt.get("trace", ""))
         return dt["res"]
 
     def cleanupInstance(self, *arg, **kwarg):
