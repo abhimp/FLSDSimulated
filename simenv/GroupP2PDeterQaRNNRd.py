@@ -102,6 +102,14 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             break
 
 #=============================================
+    def _rQoE(self, curBitrate, lastBitrate, stall):
+        alpha = 1.5
+        beta = 0.5
+        gamma = 4.3
+
+        return alpha*curBitrate - beta*abs(curBitrate - lastBitrate) - gamma*stall
+
+#=============================================
     def _rFindOptimalQualityLevel(self, req):
         if req.syncSeg:
             return None
@@ -125,7 +133,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 #         print(stallTimes)
 
         bitrates = self._vVideoInfo.bitrates
-        qoes = [1.1 * bitrates[i]/BYTES_IN_MB - abs(bitrates[i] - bitrates[lastReq.qualityIndex])/BYTES_IN_MB - 4.3*st for i, st in enumerate(stallTimes)]
+        qoes = [self._rQoE(bitrates[i]/BYTES_IN_MB, bitrates[lastReq.qualityIndex]/BYTES_IN_MB, st) for i, st in enumerate(stallTimes)]
         bestQl = np.argmax(qoes)
         return bestQl, qoes[bestQl]
 
@@ -153,9 +161,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             qls = self._vAgent.bitratePlayed[-2:]
 
-            diff = abs(qls[0] - qls[1])/BYTES_IN_MB
-            rebuf = (self._vAgent._vTotalStallTime - lastStalls)/10
-            qoe = 1.1*qls[1] / BYTES_IN_MB - diff - 4.3 * rebuf
+            rebuf = (self._vAgent._vTotalStallTime - lastStalls)
+            qoe = self._rQoE(qls[1] / BYTES_IN_MB, qls[0]/BYTES_IN_MB, rebuf)
 
             ret = self._rFindOptimalQualityLevel(req)
             if ret == None:
