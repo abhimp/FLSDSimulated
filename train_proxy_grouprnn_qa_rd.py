@@ -232,8 +232,7 @@ def main():
 
     finished = 0
     started = 0
-    with open(RESULT_DIR+"/progress", "w") as fp:
-        print("finished: ", finished, "of", total, file=fp)
+    print("finished: ", finished, "of", total)
 
 
 #     for vidPath, netPath, tc in expParams:
@@ -259,9 +258,7 @@ def main():
                 slaveProcs[slvId].join()
                 if EMAIL_PASS:
                     sendErrorMail("Slave crashed expId:" + str(expId) + ", slaveIds:" + str(slvId) + "", "it crashed expId:" + str(expId) + ", slaveIds:" + str(slvId) + "<br>\n" + str(status.get("tb", "")), EMAIL_PASS)
-                with open("/tmp/testproc", "a") as fp:
-                    print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
-                    print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
+                print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
@@ -272,8 +269,7 @@ def main():
                 print("waiting to join")
                 slaveProcs[slvId].join()
                 print("joined")
-                with open("/tmp/testproc", "a") as fp:
-                    print("killed one child with id", slvId, "ExpId:", expId, "and respwaned", file=fp)
+                print("killed one child with id", slvId, "ExpId:", expId, "and respwaned")
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
@@ -285,8 +281,7 @@ def main():
             print("="*40)
             print("finished: ", finished, "of", total, "expId:", expId)
             print("="*40)
-            with open(RESULT_DIR+"/progress", "w") as fp:
-                print("finished: ", finished, "of", total, file=fp)
+
         slvId = slaveIds.pop()
 
         print("Starting", started, "with", (vidPath, grpSize, traceStart, tc))
@@ -313,15 +308,14 @@ def main():
         if not status["status"]:
             slvQs[slvId].put(True)
             slaveProcs[slvId].join()
-            with open("/tmp/testproc", "a") as fp:
-                print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
-            movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
+            print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
+#             movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
         else:
             slvQs[slvId].put("quit")
             slaveProcs[slvId].join()
         slaveIds.append(slvId)
-        with open(RESULT_DIR+"/progress", "w") as fp:
-            print("finished: ", finished, "of", total, file=fp)
+#         with open(RESULT_DIR+"/progress", "w") as fp:
+        print("finished: ", finished, "of", total)
 
     if MULTI_PROC:
         print("Turning off central server")
