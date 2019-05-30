@@ -103,9 +103,9 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 #=============================================
     def _rQoE(self, curBitrate, lastBitrate, stall):
-        alpha = 5
+        alpha = 10
         beta = 1
-        gamma = 0.43
+        gamma = 4.3
 
         return alpha*curBitrate - beta*abs(curBitrate - lastBitrate) - gamma*stall
 
