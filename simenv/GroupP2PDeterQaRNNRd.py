@@ -110,6 +110,27 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         return alpha*curBitrate - beta*abs(curBitrate - lastBitrate) - gamma*stall
 
 #=============================================
+    def _rQoEAll(self):
+        alpha = 10
+        beta = 1
+        gamma = 4.3
+        qa, st = self._vAgent._vQualitiesPlayed, self._vAgent._vTotalStallTime
+        qa = [self._vVideoInfo.bitrates[x]/BYTES_IN_MB for x in qa]
+        if len(qa) == 0:
+            return 1
+        if len(qa) == 1:
+            return alpha*qa[0]
+        avQaVa = [abs(qa[x-1]-qa[x]) for x, _ in enumerate(qa)]
+        avQaVa = sum(avQaVa)/len(avQaVa)
+        avQa = sum(qa)/len(qa)
+
+        stall = st/10 if st < 30 else st
+
+        qoe = alpha*avQa - beta*avQaVa - gamma*stall
+        myprint("qoe =", qoe)
+        return qoe
+
+#=============================================
     def _rFindOptimalQualityLevel(self, req):
         if req.syncSeg:
             return None
@@ -153,6 +174,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             self.runAfter(playableIn, self._rAddToAgentBuffer, req, 0)
             return
         lastStalls = self._vAgent._vTotalStallTime
+        lastQoE = self._rQoEAll()
         self._vAgent._rAddToBufferInternal(req)
         if req.segId in self._vSegIdRNNKeyMap:
             rnnkey = self._vSegIdRNNKeyMap[req.segId]
@@ -163,17 +185,18 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             rebuf = (self._vAgent._vTotalStallTime - lastStalls)
             qoe = self._rQoE(qls[1] / BYTES_IN_MB, qls[0]/BYTES_IN_MB, rebuf)
-
+            qoe = self._rQoEAll()
+            reward = qoe - lastQoE
             ret = self._rFindOptimalQualityLevel(req)
             if ret == None:
                 return
 
             bestQl, bestQoE = ret
 
-            reward = qoe - bestQoE
+#             reward = qoe - bestQoE
 
             rnnkey, outofbound = rnnkey
-            self._vPensieveQualityLearner.addReward(rnnkey, reward)
+            self._vPensieveQualityLearner.addReward(rnnkey, qoe)
             #add reward
 
 #=============================================
