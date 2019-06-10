@@ -127,7 +127,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         stall = st/10 if st < 30 else st
 
         qoe = alpha*avQa - beta*avQaVa - gamma*stall
-        myprint("qoe =", qoe)
+#         myprint("qoe =", qoe)
         return qoe
 
 #=============================================
