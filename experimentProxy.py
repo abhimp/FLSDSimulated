@@ -24,6 +24,9 @@ from abr.RobustMPC import AbrRobustMPC
 from abr.BOLA import BOLA
 from util.cdnUsages import CDN
 
+from util.proxyGroup import ProxyGroupManager as GroupManager
+from util.proxyGroup import ProxyP2PNetwork
+
 # from simenv.GroupP2PTimeoutRNNTest import GroupP2PTimeoutRNN
 # from abrPensiev import AbrPensieve
 # from simenv.GroupP2PTimeoutIncRNN import GroupP2PTimeoutIncRNN
@@ -39,15 +42,15 @@ RESULT_DIR = "./results/GenPlots"
 BUFFER_LEN_PLOTS = "results/bufferlens"
 STALLTIME_IDLETIME_PLOTS = "results/stall-idle"
 
-def getPMF(x):
-    x = [y for y in x]
-    freq = list(cl.Counter(x).items())
-    elements = zip(*freq)
-    s = sum(elements[1])
-    pdf = [(k[0],float(k[1])/s) for k in freq]
-    # pdf.sort
-    return pdf
 
+def getPMF(elements):
+    x = [y for y in elements]
+    freq = list(cl.Counter(x).items())
+    freq.sort(key = lambda x:x[0])
+    x,y = zip(*freq)
+    s = sum(y)
+    pmf = [(p, float(y[i])/s) for i, p in enumerate(x)]
+    return pmf
 
 def getCMF(elements):
     x = [y for y in elements]
@@ -134,13 +137,20 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, lonePeers = []):
         plt.plot(Xs, Ys, label=name)
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
-#     plt.xlabel(xlabel)
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
-#     x,l = plt.xticks()
-#     plt.xticks(x, l, rotation=20)
     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
-#     plt.show()
+#     ===================================
+#     plt.clf()
+#     for name, Ys in pltData.items():
+#         Xs, Ys = list(zip(*getPMF(Ys)))
+#         plt.plot(Xs, Ys, ".-", label=name)
+#     plt.legend(ncol = 2, loc = "upper center")
+#     plt.title(pltTitle)
+#     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
+#     plt.savefig(dpath + "_pmf.eps", bbox_inches="tight")
+#     plt.savefig(dpath + "_pmf.png", bbox_inches="tight")
+#     ===================================
     plt.clf()
     plt.rc('font', **font)
     plt.figure(figsize=figsize, dpi=150)
@@ -151,6 +161,37 @@ def plotAgentsData(results, attrib, pltTitle, xlabel, lonePeers = []):
     plt.xticks(x, l, rotation=20)
     plt.savefig(dpath + "_box.png", bbox_inches="tight")
     plt.savefig(dpath + "_box.eps", bbox_inches="tight")
+
+def plotQualityLevelPlayed(results):
+    pltTitle = "Average bitrate played"
+    font = {'family' : 'normal',
+            'weight' : 'bold',
+            'size'   : 22}
+
+    figsize=(7, 5)
+    plt.clf()
+    plt.rc('font', **font)
+    plt.figure(figsize=figsize, dpi=150)
+    pltData = {}
+    for name, res in results.items():
+        Ys = []
+        for x, ag in enumerate(res):
+            Ys += ag._vAgent.bitratePlayed
+        pltData[name] = Ys
+#     ===================================
+
+    width = 0.35
+#     fig, ax = plt.subplots()
+
+    for name, Ys in pltData.items():
+        Xs, Ys = list(zip(*getPMF(Ys)))
+        plt.plot(Xs, Ys, ".-", label=name)
+    plt.legend(ncol = 2, loc = "upper center")
+    plt.title(pltTitle)
+    dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
+    plt.savefig(dpath + "_pmf.eps", bbox_inches="tight")
+    plt.savefig(dpath + "_pmf.png", bbox_inches="tight")
+
 
 def plotCDNData(cdns):
     font = {'family' : 'normal',
@@ -217,9 +258,9 @@ GLOBAL_STARTS_AT = 5
 def getDict(**kws):
     return kws
 
-def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
+def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None, grpSize=4):
     simulator = Simulator()
-    grp = GroupManager(4, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
+    grp = GroupManager(grpSize, len(vi.bitrates)-1, vi, network)#np.random.randint(len(vi.bitrates)))
 
     deadAgents = []
     ags = []
@@ -302,7 +343,7 @@ def main():
 #     vi = video.loadVideoTime("./videofilesizes/sizes_penseive.py")
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
-    network = P2PNetwork()
+    network = ProxyP2PNetwork(4) #P2PNetwork()
 #     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
     testCB = getTestObj(traces, vi, network)
     results = {}
@@ -331,6 +372,8 @@ def main():
     plotAgentsData(results, "idleTime", "IdleTime", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.avgBitrateVariation", "Average Bitrate Variation", "Player Id", lonePeers)
     plotAgentsData(results, "totalWorkingTime", "workingTime", "Player Id", lonePeers)
+
+    plotQualityLevelPlayed(results)
 
     plotCDNData(cdns)
 

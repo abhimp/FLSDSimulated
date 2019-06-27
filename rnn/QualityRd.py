@@ -334,11 +334,13 @@ class PensiveLearnerProc():
         self.keyedSBatch = {}
         self.keyedActionProb = {}
         self.keyedAction = {}
+        self.keyedInputParam = {}
 
     def getNextAction(self, rnnkey, state): #peerId and segId are Identifier
 
 #         state = (deadLine, lastReq.timetaken, lastReq.throughput/BYTES_IN_MB, lastQl[-1], clens, self._vAgent.bufferLeft/self._vVideoInfo.segmentDuration)
         deadLine, dur, thrpt, ql, clens, buf = state
+        inputset = state
 
         # reward is video quality - rebuffer penalty - smooth penalty
         # retrieve previous state
@@ -369,6 +371,7 @@ class PensiveLearnerProc():
             self.keyedSBatch[rnnkey] = state
             self.keyedActionProb[rnnkey] = action_prob
             self.keyedAction[rnnkey] = action
+            self.keyedInputParam[rnnkey] = inputset
 
         return self._vActionset[action]
 
@@ -381,9 +384,11 @@ class PensiveLearnerProc():
         action_prob = self.keyedActionProb[rnnkey]
         action = self.keyedAction[rnnkey]
 
+        myprint("Training dataset:", {"input" : self.keyedInputParam[rnnkey], "action" : self._vActionset[self.keyedAction[rnnkey]], "key" : rnnkey, "reward": reward})
         del self.keyedSBatch[rnnkey]
         del self.keyedActionProb[rnnkey]
         del self.keyedAction[rnnkey]
+        del self.keyedInputParam[rnnkey]
 
         self.r_batch.append(reward)
 
