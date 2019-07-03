@@ -216,6 +216,7 @@ def main():
     centralLearnerQua = None
     centralLearnerAge = None
     expParams = [(vidPath, grpSize, traceStart, t) for grpSize in [2, 3, 4, 5] for vidPath in videos[:10] for traceStart in range(len(traces)) for t in ["tc1", "tc2", "tc3"]]
+    expParams = [(vidPath, grpSize, traceStart, t) for grpSize in [2, 3, 4, 5] for vidPath in videos[:10] for traceStart in range(len(traces)) for t in ["tc1"]]
     total = len(expParams)
 #     print("total", total)
 #     return 0

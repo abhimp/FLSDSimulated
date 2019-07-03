@@ -105,7 +105,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
     def _rQoE(self, curBitrate, lastBitrate, stall):
         alpha = 10
         beta = 1
-        gamma = 4.3
+        gamma = .43
 
         return alpha*curBitrate - beta*abs(curBitrate - lastBitrate) - gamma*stall
 
@@ -113,7 +113,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
     def _rQoEAll(self):
         alpha = 10
         beta = 1
-        gamma = 4.3
+        gamma = .43
         qa, st = self._vAgent._vQualitiesPlayed, self._vAgent._vTotalStallTime
         qa = [self._vVideoInfo.bitrates[x]/BYTES_IN_MB for x in qa]
         if len(qa) == 0:
@@ -185,7 +185,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             rebuf = (self._vAgent._vTotalStallTime - lastStalls)
             qoe = self._rQoE(qls[1] / BYTES_IN_MB, qls[0]/BYTES_IN_MB, rebuf)
-            qoe = self._rQoEAll()
+#             qoe = self._rQoEAll()
             reward = qoe - lastQoE
             ret = self._rFindOptimalQualityLevel(req)
             if ret == None:

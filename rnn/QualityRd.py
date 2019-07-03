@@ -198,6 +198,7 @@ class PensiveLearner():
                 trace = sys.exc_info()
                 simpTrace = getTraceBack(trace)
                 send.put({"st": False, "trace": simpTrace})
+
     @staticmethod
     def cleanup(*arg, **kwarg):
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
