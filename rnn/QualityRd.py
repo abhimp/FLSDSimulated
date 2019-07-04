@@ -48,6 +48,7 @@ class PensiveLearnerCentralAgent():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None):
 
         assert summary_dir
+        myprint("Central init Params:", actionset, infoDept, log_path, summary_dir, nn_model)
         self.summary_dir = os.path.join(summary_dir, "rnnQuality")
         self.nn_model = nn_model
 
@@ -257,6 +258,7 @@ class PensiveLearnerProc():
     def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None, ipcQueue=None, ipcId=None):
         assert summary_dir
         assert (not ipcQueue and not ipcId) or (ipcQueue and ipcId)
+        myprint("Pensieproc init Params:", actionset, infoDept, log_path, summary_dir, nn_model)
 
         self.ipcQueue = ipcQueue
         self.pid = os.getpid()
@@ -385,7 +387,7 @@ class PensiveLearnerProc():
         action_prob = self.keyedActionProb[rnnkey]
         action = self.keyedAction[rnnkey]
 
-        myprint("Training dataset:", {"input" : self.keyedInputParam[rnnkey], "action" : self._vActionset[self.keyedAction[rnnkey]], "key" : rnnkey, "reward": reward})
+        myprint("Training dataset:", {"input" : self.keyedInputParam[rnnkey], "action" : self._vActionset[self.keyedAction[rnnkey]], "key" : rnnkey, "reward": reward, "action_prob" : action_prob})
         del self.keyedSBatch[rnnkey]
         del self.keyedActionProb[rnnkey]
         del self.keyedAction[rnnkey]
@@ -499,7 +501,7 @@ def slavecleanup():
 
 
 def getPensiveLearner(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
-    assert not CENTRAL_ACTION_SET or CENTRAL_ACTION_SET == actionset
+#     assert not CENTRAL_ACTION_SET or CENTRAL_ACTION_SET == actionset
     p = PensiveLearner.getInstance(actionset, infoDept, log_path, summary_dir, *kw, ipcQueue=PENSIEVE_SLAVE_QUEUE, ipcId=PENSIEVE_SLAVE_ID, **kws)
     assert p._vActionset == actionset and p._vInfoDept == infoDept
     return p

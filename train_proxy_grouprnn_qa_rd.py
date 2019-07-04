@@ -188,11 +188,13 @@ def runSlave(pq, sq, slvId):
 
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 1
+NUM_SLAVE = 10
 
 FULL_TEST_ENV=True
 if os.environ.get("EXP_ENV", "PROD") == "TEST":
     FULL_TEST_ENV = False
-    MULTI_PROC = False
+    NUM_SLAVE = 1
+#     MULTI_PROC = False
 
 EMAIL_PASS = None
 
@@ -202,7 +204,7 @@ def main():
         EMAIL_PASS = open("emailpass.txt").read().strip()
 
     modelPath = "ResModelPathRNNQa"
-    numSlave = 10
+    numSlave = NUM_SLAVE
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
     slvExpCnt = {x:0 for x in slaveIds}
