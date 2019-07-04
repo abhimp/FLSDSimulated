@@ -61,7 +61,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         lastQl = [0]*5 + [x[1] for x in self._vDownloadQl[-5:]]
         clens = [ql[segId]/BYTES_IN_MB for ql in self._vVideoInfo.fileSizes]
         lastReq = self._vDownloadedReqByItSelf[-1]
-        ql = self._vVideoInfo.bitrates[lastQl[-1]] / self._vVideoInfo.bitrates[-1]
+        ql = self._vVideoInfo.bitrates[lastQl[-1]] / BYTES_IN_MB #self._vVideoInfo.bitrates[-1]
         state = (deadLine, lastReq.timetaken, lastReq.throughput/BYTES_IN_MB, ql, clens, self._vAgent.bufferLeft/self._vVideoInfo.segmentDuration)
 
         self._vSegIdRNNKeyMap[segId] = rnnkey
@@ -107,6 +107,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         beta = 1
         gamma = .43
 
+        stall = stall/10 if stall < 8 else stall
+
         return alpha*curBitrate - beta*abs(curBitrate - lastBitrate) - gamma*stall
 
 #=============================================
@@ -120,9 +122,9 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             return 1
         if len(qa) == 1:
             return alpha*qa[0]
-        avQaVa = [abs(qa[x-1]-qa[x]) for x, _ in enumerate(qa)]
-        avQaVa = sum(avQaVa)/len(avQaVa)
-        avQa = sum(qa)/len(qa)
+        avQaVa = [abs(qa[x-1]-qa[x]) for x, _ in enumerate(qa) if x > 0]
+        avQaVa = sum(avQaVa)
+        avQa = sum(qa)
 
         stall = st/10 if st < 30 else st
 
@@ -179,7 +181,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         if req.segId in self._vSegIdRNNKeyMap:
             rnnkey = self._vSegIdRNNKeyMap[req.segId]
             del self._vSegIdRNNKeyMap[req.segId]
-            qoe = self._vAgent.QoE
+#             qoe = self._vAgent.QoE
 
             qls = self._vAgent.bitratePlayed[-2:]
 
@@ -193,10 +195,10 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             bestQl, bestQoE = ret
 
-#             reward = qoe - bestQoE
+            reward = qoe - bestQoE
 
             rnnkey, outofbound = rnnkey
-            self._vPensieveQualityLearner.addReward(rnnkey, qoe)
+            self._vPensieveQualityLearner.addReward(rnnkey, reward)
             #add reward
 
 #=============================================
