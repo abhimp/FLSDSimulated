@@ -40,6 +40,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 #         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates) -1, -1, -1)), \
                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
+#         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
+#                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
 #=============================================
     def _rGetMyQualityFailSafe(self, nextQl, segId, rnnkey):
         super()._rGetMyQuality(nextQl, segId, rnnkey)
@@ -96,7 +98,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
                 self._rDownloadingUsing(segId, ql)
 
             deadLine = self._rGetDealine(segId)
-            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg, "deadLine":deadLine})
+            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg, "deadLine":deadLine, "started": self.now})
             self._vDownloadPending = True
             self._vDownloadPendingRnnkey = rnnkey
             break
@@ -138,8 +140,6 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             return None
         if req.downloader != self:
             return None
-
-        startedAt = req.downloadStarted
 
         clens = [ql[req.segId] for ql in self._vVideoInfo.fileSizes]
 
@@ -183,6 +183,14 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             del self._vSegIdRNNKeyMap[req.segId]
 #             qoe = self._vAgent.QoE
 
+            startedAt = req.extraData.get("started", req.downloadStarted)
+            deadLine = req.extraData["deadLine"]
+            shouldFinished = startedAt + deadLine
+            finishedAt = req.downloadFinished
+
+            idle = abs(shouldFinished - finishedAt)
+            idleFrac = idle/deadLine
+
             qls = self._vAgent.bitratePlayed[-2:]
 
             rebuf = (self._vAgent._vTotalStallTime - lastStalls)
@@ -196,6 +204,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             bestQl, bestQoE = ret
 
             reward = qoe - bestQoE
+
+            reward = qoe - idleFrac
 
             rnnkey, outofbound = rnnkey
             self._vPensieveQualityLearner.addReward(rnnkey, reward)
