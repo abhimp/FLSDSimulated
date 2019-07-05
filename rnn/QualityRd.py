@@ -10,6 +10,7 @@ import glob
 import re
 import sys
 import traceback as tb
+import math
 
 
 S_INFO = 14  # bit_rate, buffer_size, next_chunk_size, bandwidth_measurement(throughput and time), chunk_til_video_end
@@ -162,7 +163,10 @@ class PensiveLearner():
     @staticmethod
     def getInstance(*arg, **karg):
         if PensiveLearner.__instance == None:
-            PensiveLearner(*arg, **karg)
+            if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+                PensiveLearner.__instance = PensiveLearnerProc(*arg, **karg)
+            else:
+                PensiveLearner(*arg, **karg)
         return PensiveLearner.__instance
 
     def __init__(self, actionset = [], infoDept=S_LEN, *arg, **kwarg):
@@ -202,6 +206,8 @@ class PensiveLearner():
 
     @staticmethod
     def cleanup(*arg, **kwarg):
+        if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+            return
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
         if not PensiveLearner.__instance.proc:
@@ -213,6 +219,8 @@ class PensiveLearner():
 
     @staticmethod
     def finish(*arg, **kwarg):
+        if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+            return
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
         PensiveLearner.__instance.finishInstance(*arg, **kwarg)
@@ -368,6 +376,8 @@ class PensiveLearnerProc():
         action_cumsum = np.cumsum(action_prob)
         myprint("action cumsum:", action_cumsum)
         action = (action_cumsum > np.random.randint(1, RAND_RANGE) / float(RAND_RANGE)).argmax()
+        for x in action_prob[0]:
+            assert not math.isnan(x)
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
 
