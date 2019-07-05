@@ -141,6 +141,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         if req.downloader != self:
             return None
 
+        startedAt = req.downloadStarted
+
         clens = [ql[req.segId] for ql in self._vVideoInfo.fileSizes]
 
         durations = [self.getTimeRequredToDownload(startedAt, clen) for clen in clens]
