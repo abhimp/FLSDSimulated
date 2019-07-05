@@ -191,7 +191,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             finishedAt = req.downloadFinished
 
             idle = abs(shouldFinished - finishedAt)
-            idleFrac = idle/deadLine
+            idleFrac = idle/deadLine if deadLine != 0 else 1
+
 
             qls = self._vAgent.bitratePlayed[-2:]
 
