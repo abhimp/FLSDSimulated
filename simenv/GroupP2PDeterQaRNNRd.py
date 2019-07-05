@@ -193,6 +193,12 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             idle = abs(shouldFinished - finishedAt)
             idleFrac = idle/deadLine if deadLine != 0 else 1
 
+            totalIdle = self._vTotalIdleTime
+            totalPlayable = self._vAgent._vTotalPlayableTime
+
+            idleFrac = totalIdle/totalPlayable if totalPlayable > 0 else 1
+            idleFrac = min(idleFrac, 1)
+
 
             qls = self._vAgent.bitratePlayed[-2:]
 
@@ -209,6 +215,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             reward = qoe - bestQoE
 
             reward = qoe - idleFrac
+
 
             rnnkey, outofbound = rnnkey
             self._vPensieveQualityLearner.addReward(rnnkey, reward)

@@ -58,6 +58,7 @@ class Agent():
         self._vStartUpCallback = []
         self._vTimeSlipage = [(0,0,0)]
         self._vSyncSegment = -1
+        self._vTotalPlayableTime = 0
 
         self._vSegIdPlaybackTime = {}
 
@@ -225,6 +226,7 @@ class Agent():
 
 #=============================================
     def _rStoreSegmentPlaybackTime(self, req):
+        self._vTotalPlayableTime += req.segmentDuration
         segId = req
         curPlaybackTime = self._vPlaybacktime
         segPlaybackStartTime = req.segId*self._vVideoInfo.segmentDuration
