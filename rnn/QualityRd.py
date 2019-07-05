@@ -366,6 +366,7 @@ class PensiveLearnerProc():
 
         action_prob = self.actor.predict(np.reshape(state, (1, self._vInfoDim, self._vInfoDept)))
         action_cumsum = np.cumsum(action_prob)
+        myprint("action cumsum:", action_cumsum)
         action = (action_cumsum > np.random.randint(1, RAND_RANGE) / float(RAND_RANGE)).argmax()
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
