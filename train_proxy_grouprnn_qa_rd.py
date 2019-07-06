@@ -226,7 +226,8 @@ def main():
     if MULTI_PROC:
         if not centralLearnerQua and not centralLearnerAge:
             vi = video.loadVideoTime(videos[0])
-            centralLearnerQua = rnnQuality.runCentralServer(slaveIds, list(range(len(vi.bitrates))), summary_dir = modelPath)
+            actions = list(range(len(vi.bitrates)))
+            centralLearnerQua = rnnQuality.runCentralServer(slaveIds, actions, summary_dir = modelPath)
 #             centralLearnerAge = rnnAgent.runCentralServer(slaveIds, list(range(5)), summary_dir = modelPath) #assuming max 5 player in a group
         for x in slaveIds:
             p = mp.Process(target=runSlave, args = (procQueue, slvQs[x], x))
@@ -301,7 +302,7 @@ def main():
 
         print("Started", started)
         started += 1
-        if finished >= 1 and not FULL_TEST_ENV:
+        if finished >= 20 and not FULL_TEST_ENV:
             break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
