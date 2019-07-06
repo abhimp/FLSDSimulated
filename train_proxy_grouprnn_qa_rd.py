@@ -8,6 +8,7 @@ from util import randStateInit
 import pdb
 import time
 import traceback as tb
+import argparse
 
 import util.videoInfo as video
 # from simenv.GroupP2PRNN import GroupP2PRNN
@@ -189,6 +190,7 @@ def runSlave(pq, sq, slvId):
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 1
 NUM_SLAVE = 10
+EXIT_ON_CRASH = False
 
 FULL_TEST_ENV=True
 if os.environ.get("EXP_ENV", "PROD") == "TEST":
@@ -202,6 +204,8 @@ def main():
     global EMAIL_PASS
     if os.path.isfile("emailpass.txt"):
         EMAIL_PASS = open("emailpass.txt").read().strip()
+
+    slaveCrashed = 0
 
     modelPath = "ResModelPathRNNQa"
     numSlave = NUM_SLAVE
@@ -267,6 +271,7 @@ def main():
                 p.start()
                 slaveProcs[slvId] = p
                 slvExpCnt[slvId] = 0
+                slaveCrashed += 1
             if slvExpCnt[slvId] >= NUM_EXP_PER_SLV:
                 print("Quting a slv")
                 slvQs[slvId].put("quit")
@@ -302,7 +307,7 @@ def main():
 
         print("Started", started)
         started += 1
-        if finished >= 20 and not FULL_TEST_ENV:
+        if (finished >= 20 and not FULL_TEST_ENV) or (EXIT_ON_CRASH and slaveCrashed > 0):
             break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
@@ -330,8 +335,15 @@ def main():
         print("finished")
 
 
+def parseArg():
+    global EXIT_ON_CRASH
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--exit-on-crash',  help='Program will exit after first crash', action="store_true")
+    args = parser.parse_args()
+    EXIT_ON_CRASH = args.exit_on_crash
 
 if __name__ == "__main__":
+    parseArg()
     try:
         main()
         if EMAIL_PASS:
