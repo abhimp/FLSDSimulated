@@ -17,8 +17,8 @@ from termcolor import colored
 S_LEN = 8  # take how many frames in the past
 S_INFO = 6
 
-ACTOR_LR_RATE = 0.01
-CRITIC_LR_RATE = 0.1
+ACTOR_LR_RATE = 0.0001
+CRITIC_LR_RATE = 0.001
 TRAIN_SEQ_LEN = 100  # take as a train batch
 MODEL_SAVE_INTERVAL = 100
 M_IN_K = 1000.0
