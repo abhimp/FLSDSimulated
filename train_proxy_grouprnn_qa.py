@@ -8,6 +8,7 @@ from util import randStateInit
 import pdb
 import time
 import traceback as tb
+import argparse
 
 import util.videoInfo as video
 # from simenv.GroupP2PRNN import GroupP2PRNN
@@ -188,6 +189,14 @@ def runSlave(pq, sq, slvId):
 
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 1
+NUM_SLAVE = 10
+EXIT_ON_CRASH = False
+
+FULL_TEST_ENV=True
+if os.environ.get("EXP_ENV", "PROD") == "TEST":
+    FULL_TEST_ENV = False
+    NUM_SLAVE = 1
+#     MULTI_PROC = False
 
 EMAIL_PASS = None
 
@@ -196,8 +205,10 @@ def main():
     if os.path.isfile("emailpass.txt"):
         EMAIL_PASS = open("emailpass.txt").read().strip()
 
+    slaveCrashed = 0
+
     modelPath = "ResModelPathRNNQa"
-    numSlave = 10
+    numSlave = NUM_SLAVE
     slaveIds = ["slv%d"%(x+1) for x in range(numSlave)]
     slvQs = {x:mp.Queue() for x in slaveIds}
     slvExpCnt = {x:0 for x in slaveIds}
@@ -210,7 +221,8 @@ def main():
     traces = list(zip(*traces))
     centralLearnerQua = None
     centralLearnerAge = None
-    expParams = [(vidPath, grpSize, traceStart, "tc1") for grpSize in [2, 3, 4, 5] for vidPath in videos[:10] for traceStart in range(len(traces))]
+    expParams = [(vidPath, grpSize, traceStart, t) for grpSize in [2, 3, 4, 5] for vidPath in videos[:10] for traceStart in range(len(traces)) for t in ["tc1", "tc2", "tc3"]]
+    expParams = [(vidPath, grpSize, traceStart, t) for grpSize in [2, 3, 4, 5] for vidPath in videos[:10] for traceStart in range(len(traces)) for t in ["tc1"]]
     total = len(expParams)
 #     print("total", total)
 #     return 0
@@ -218,7 +230,8 @@ def main():
     if MULTI_PROC:
         if not centralLearnerQua and not centralLearnerAge:
             vi = video.loadVideoTime(videos[0])
-            centralLearnerQua = rnnQuality.runCentralServer(slaveIds, list(range(len(vi.bitrates))), summary_dir = modelPath)
+            actions = list(range(len(vi.bitrates)))
+            centralLearnerQua = rnnQuality.runCentralServer(slaveIds, actions, summary_dir = modelPath)
 #             centralLearnerAge = rnnAgent.runCentralServer(slaveIds, list(range(5)), summary_dir = modelPath) #assuming max 5 player in a group
         for x in slaveIds:
             p = mp.Process(target=runSlave, args = (procQueue, slvQs[x], x))
@@ -227,8 +240,7 @@ def main():
 
     finished = 0
     started = 0
-    with open(RESULT_DIR+"/progress", "w") as fp:
-        print("finished: ", finished, "of", total, file=fp)
+    print("finished: ", finished, "of", total)
 
 
 #     for vidPath, netPath, tc in expParams:
@@ -254,21 +266,19 @@ def main():
                 slaveProcs[slvId].join()
                 if EMAIL_PASS:
                     sendErrorMail("Slave crashed expId:" + str(expId) + ", slaveIds:" + str(slvId) + "", "it crashed expId:" + str(expId) + ", slaveIds:" + str(slvId) + "<br>\n" + str(status.get("tb", "")), EMAIL_PASS)
-                with open("/tmp/testproc", "a") as fp:
-                    print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
-                    print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
+                print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
                 slvExpCnt[slvId] = 0
+                slaveCrashed += 1
             if slvExpCnt[slvId] >= NUM_EXP_PER_SLV:
                 print("Quting a slv")
                 slvQs[slvId].put("quit")
                 print("waiting to join")
                 slaveProcs[slvId].join()
                 print("joined")
-                with open("/tmp/testproc", "a") as fp:
-                    print("killed one child with id", slvId, "ExpId:", expId, "and respwaned", file=fp)
+                print("killed one child with id", slvId, "ExpId:", expId, "and respwaned")
                 p = mp.Process(target=runSlave, args = (procQueue, slvQs[slvId], slvId))
                 p.start()
                 slaveProcs[slvId] = p
@@ -280,8 +290,7 @@ def main():
             print("="*40)
             print("finished: ", finished, "of", total, "expId:", expId)
             print("="*40)
-            with open(RESULT_DIR+"/progress", "w") as fp:
-                print("finished: ", finished, "of", total, file=fp)
+
         slvId = slaveIds.pop()
 
         print("Starting", started, "with", (vidPath, grpSize, traceStart, tc))
@@ -298,8 +307,8 @@ def main():
 
         print("Started", started)
         started += 1
-#         if finished >= 1:
-#             break
+        if (finished >= 20 and not FULL_TEST_ENV) or (EXIT_ON_CRASH and slaveCrashed > 0):
+            break
 
     while len(slaveIds) < numSlave and MULTI_PROC:
         status = procQueue.get()
@@ -308,15 +317,14 @@ def main():
         if not status["status"]:
             slvQs[slvId].put(True)
             slaveProcs[slvId].join()
-            with open("/tmp/testproc", "a") as fp:
-                print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId, file=fp)
-            movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
+            print("permission to crash for slv", slvId, "pid:", slaveProcs[slvId].pid, "expId:", expId)
+#             movecore("./cores/", slvId, slaveProcs[slvId].pid, expId)
         else:
             slvQs[slvId].put("quit")
             slaveProcs[slvId].join()
         slaveIds.append(slvId)
-        with open(RESULT_DIR+"/progress", "w") as fp:
-            print("finished: ", finished, "of", total, file=fp)
+#         with open(RESULT_DIR+"/progress", "w") as fp:
+        print("finished: ", finished, "of", total)
 
     if MULTI_PROC:
         print("Turning off central server")
@@ -327,8 +335,15 @@ def main():
         print("finished")
 
 
+def parseArg():
+    global EXIT_ON_CRASH
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--exit-on-crash',  help='Program will exit after first crash', action="store_true")
+    args = parser.parse_args()
+    EXIT_ON_CRASH = args.exit_on_crash
 
 if __name__ == "__main__":
+    parseArg()
     try:
         main()
         if EMAIL_PASS:
