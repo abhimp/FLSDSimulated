@@ -133,7 +133,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 #=============================================
     def _rQoEAll(self):
-        alpha = 10
+        alpha = 1
         beta = 1
         gamma = .43
         qa, st = self._vAgent._vQualitiesPlayed, self._vAgent._vTotalStallTime
@@ -236,7 +236,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 
             rnnkey, outofbound = rnnkey
-            self._vPensieveQualityLearner.addReward(rnnkey, reward)
+            self._vPensieveQualityLearner.addReward(rnnkey, qoe)
             #add reward
 
 #=============================================

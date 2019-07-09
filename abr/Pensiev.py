@@ -138,16 +138,19 @@ class AbrPensieveClass:
                     send.put({"st": True, "res": res})
                 elif func == "cleanup":
                     send.put({"st": True, "res":"exit"})
+                    myprint("proc cleanup")
                     recv = None
                     send = None
                     return
                 else:
                     send.put({"st": True, "res":None})
+                    myprint("unknown:", func, args, kwargs)
 
             except:
                 trace = sys.exc_info()
                 simpTrace = getTraceBack(trace)
                 send.put({"st": False, "trace": simpTrace})
+                myprint(simpTrace)
 
     def _rSend(self, dt):
         self.send.put(dt)
