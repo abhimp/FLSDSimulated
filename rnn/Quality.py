@@ -381,7 +381,7 @@ class PensiveLearnerProc():
         action_prob = self.actor.predict(reshapedInput)
         action_cumsum = np.cumsum(action_prob)
         action = (action_cumsum > np.random.randint(1, RAND_RANGE) / float(RAND_RANGE)).argmax()
-        myprint("action:", action,"action cumsum:", action_cumsum, "reshapedInput:", reshapedInput)
+        myprint("action:", action,"action cumsum:", action_cumsum.tolist(), "reshapedInput:", reshapedInput.tolist())
 
 #         for i, x in enumerate(state):
 #             if np.count_nonzero(x) <= 0:
@@ -412,7 +412,7 @@ class PensiveLearnerProc():
         action_prob = self.keyedActionProb[rnnkey]
         action = self.keyedAction[rnnkey]
 
-        myprint("Training dataset:", {"input" : self.keyedInputParam[rnnkey], "action" : self._vActionset[self.keyedAction[rnnkey]], "key" : rnnkey, "reward": reward, "action_prob": action_prob})
+        myprint("Training dataset:", {"input" : self.keyedInputParam[rnnkey], "action" : self._vActionset[self.keyedAction[rnnkey]], "key" : rnnkey, "reward": reward, "action_prob": action_prob.tolist()})
         del self.keyedSBatch[rnnkey]
         del self.keyedActionProb[rnnkey]
         del self.keyedAction[rnnkey]
