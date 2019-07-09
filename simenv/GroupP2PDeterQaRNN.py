@@ -125,7 +125,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
     def _rQoE(self, curBitrate, lastBitrate, stall):
         alpha = 10
         beta = 1
-        gamma = .43
+        gamma = 4.3
 
         stall = stall/10 if stall < 8 else stall
 
@@ -133,9 +133,9 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 #=============================================
     def _rQoEAll(self):
-        alpha = 1
+        alpha = 10
         beta = 1
-        gamma = .43
+        gamma = 4.3
         qa, st = self._vAgent._vQualitiesPlayed, self._vAgent._vTotalStallTime
         qa = [self._vVideoInfo.bitrates[x]/BYTES_IN_MB for x in qa]
         if len(qa) == 0:
