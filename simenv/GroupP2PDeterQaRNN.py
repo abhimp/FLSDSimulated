@@ -217,7 +217,6 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             idleFrac = totalIdle/totalPlayable if totalPlayable > 0 else 1
             idleFrac = min(idleFrac, 1)
 
-
             qls = self._vAgent.bitratePlayed[-2:]
 
             rebuf = (self._vAgent._vTotalStallTime - lastStalls)
@@ -233,7 +232,6 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             reward = qoe - bestQoE
 
             reward = qoe - idleFrac
-
 
             rnnkey, outofbound = rnnkey
             self._vPensieveQualityLearner.addReward(rnnkey, qoe)

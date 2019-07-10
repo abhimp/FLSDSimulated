@@ -368,7 +368,7 @@ class PensiveLearnerProc():
         # dequeue history record
         state = np.roll(state, -1, axis=1)
 
-	for i,x in enumerate(inputset):
+        for i,x in enumerate(inputset):
             x = np.array(x).reshape(-1)
             assert issubclass(x.dtype.type, np.number) and self._vInfoDept >= len(x)
             state[i, :len(x)] = x
