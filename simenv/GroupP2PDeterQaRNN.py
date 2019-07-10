@@ -123,7 +123,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 #=============================================
     def _rQoE(self, curBitrate, lastBitrate, stall):
-        alpha = 10
+        alpha = 5
         beta = 1
         gamma = 4.3
 
@@ -133,7 +133,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 #=============================================
     def _rQoEAll(self):
-        alpha = 10
+        alpha = 5
         beta = 1
         gamma = 4.3
         qa, st = self._vAgent._vQualitiesPlayed, self._vAgent._vTotalStallTime

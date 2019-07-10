@@ -368,13 +368,22 @@ class PensiveLearnerProc():
         # dequeue history record
         state = np.roll(state, -1, axis=1)
 
-        state[ 0, :len(thrpt_)]         = thrpt_
-        state[ 1, :len(lastQl_)]        = lastQl_
-        state[ 2, :len(lastClens_)]     = lastClens_
-        state[ 3, :len(clens_)]         = clens_
-        state[ 4, -1]                  = wthrghpt
-        state[ 5, -1]                  = buf
-        state[ 6, -1]                  = deadline
+	for i,x in enumerate(inputset):
+            x = np.array(x).reshape(-1)
+            assert issubclass(x.dtype.type, np.number) and self._vInfoDept >= len(x)
+            state[i, :len(x)] = x
+#             if len(x) > 1:
+#                 state[i, :len(x)] = x
+#             else:
+#                 state[i, :-1] = x
+
+#         state[ 0, :len(thrpt_)]         = thrpt_
+#         state[ 1, :len(lastQl_)]        = lastQl_
+#         state[ 2, :len(lastClens_)]     = lastClens_
+#         state[ 3, :len(clens_)]         = clens_
+#         state[ 4, -1]                  = wthrghpt
+#         state[ 5, -1]                  = buf
+#         state[ 6, -1]                  = deadline
 
 
         reshapedInput = np.reshape(state, (1, self._vInfoDim, self._vInfoDept))
