@@ -231,10 +231,10 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             reward = qoe - bestQoE
 
-            reward = qoe - idleFrac
+#             reward = qoe - idleFrac
 
             rnnkey, outofbound = rnnkey
-            self._vPensieveQualityLearner.addReward(rnnkey, qoe)
+            self._vPensieveQualityLearner.addReward(rnnkey, reward)
             #add reward
 
 #=============================================
