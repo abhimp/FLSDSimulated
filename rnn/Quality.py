@@ -12,6 +12,7 @@ import sys
 import traceback as tb
 import math
 from termcolor import colored
+from util.misc import getTraceBack
 
 
 S_INFO = 14  # bit_rate, buffer_size, next_chunk_size, bandwidth_measurement(throughput and time), chunk_til_video_end
@@ -152,12 +153,6 @@ class PensiveLearnerCentralAgent():
     def getParams(self):
         return self.actor.get_network_params(), self.critic.get_network_params()
 
-
-def getTraceBack(exc_info):
-    error = str(exc_info[0]) + "\n"
-    error += str(exc_info[1]) + "\n\n"
-    error += "\n".join(tb.format_tb(exc_info[2]))
-    return error
 
 class PensiveLearner():
     __instance = None

@@ -14,6 +14,7 @@ import tensorflow as tf
 from util import a3c
 from util.myprint import myprint
 import traceback as tb
+from util.misc import getTraceBack
 
 from util.calculateMetric import measureQoE
 # from util.multiprocwrap import Process, Pipe
@@ -190,12 +191,6 @@ class AbrPensieveClass:
     def cleanup(self):
         while self.count > 0:
             self.stopAbr()
-
-def getTraceBack(exc_info):
-    error = str(exc_info[0]) + "\n"
-    error += str(exc_info[1]) + "\n\n"
-    error += "\n".join(tb.format_tb(exc_info[2]))
-    return error
 
 class AbrPensieveClassProc:
     def __init__(self, videoInfo, agent, log_file_path=LOG_FILE, *kw, **kws):

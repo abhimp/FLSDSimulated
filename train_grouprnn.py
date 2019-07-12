@@ -20,6 +20,7 @@ import util.multiprocwrap as mp
 from util import graphs
 import gc
 from util.email import sendErrorMail
+from util.misc import getTraceBack
 
 RESULT_DIR = "results"
 VIDEO_FILES = [
@@ -150,12 +151,6 @@ def movecore(dest, slvId, pid, x):
     except:
         print("not core found", file=sys.stderr)
         pass
-
-def getTraceBack(exc_info):
-    error = str(exc_info[0]) + "\n"
-    error += str(exc_info[1]) + "\n\n"
-    error += "\n".join(tb.format_tb(exc_info[2]))
-    return error
 
 def runSlave(pq, sq, slvId):
     rnnAgent.setSlaveId(slvId)
