@@ -174,11 +174,13 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
         stallTimes = [max(startedAt + dur - lastSegPlaybackEndedAt, 0) for dur in durations]
 #         print(stallTimes)
+        qls = self._vAgent.bitratePlayed[-2:]
 
         bitrates = self._vVideoInfo.bitrates
-        qoes = [self._rQoE(bitrates[i]/BYTES_IN_MB, bitrates[lastReq.qualityIndex]/BYTES_IN_MB, st) for i, st in enumerate(stallTimes)]
+        qoes = [self._rQoE(bitrates[i]/BYTES_IN_MB, qls[0]/BYTES_IN_MB, st) for i, st in enumerate(stallTimes)]
+
         bestQl = np.argmax(qoes)
-        return bestQl, qoes[bestQl]
+        return bestQl, qoes[bestQl], qoes[req.qualityIndex]
 
 
 #=============================================
@@ -195,8 +197,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         if playableIn > 0:
             self.runAfter(playableIn, self._rAddToAgentBuffer, req, 0)
             return
-        lastStalls = self._vAgent._vTotalStallTime
-        lastQoE = self._rQoEAll()
+
         self._vAgent._rAddToBufferInternal(req)
         if req.segId in self._vSegIdRNNKeyMap:
             rnnkey = self._vSegIdRNNKeyMap[req.segId]
@@ -217,19 +218,17 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             idleFrac = totalIdle/totalPlayable if totalPlayable > 0 else 1
             idleFrac = min(idleFrac, 1)
 
-            qls = self._vAgent.bitratePlayed[-2:]
 
-            rebuf = (self._vAgent._vTotalStallTime - lastStalls)
-            qoe = self._rQoE(qls[1] / BYTES_IN_MB, qls[0]/BYTES_IN_MB, rebuf)
-#             qoe = self._rQoEAll()
-            reward = qoe - lastQoE
+#             qoe = self._rQoE(qls[1] / BYTES_IN_MB, qls[0]/BYTES_IN_MB, rebuf)
             ret = self._rFindOptimalQualityLevel(req)
             if ret == None:
                 return
 
-            bestQl, bestQoE = ret
+            bestQl, bestQoE, qoe = ret
 
-            reward = qoe - bestQoE
+            reward = max(qoe - bestQoE, -50)
+            assert reward <= 0
+            reward = (reward + 50)/50.0
 
 #             reward = qoe - idleFrac
 
