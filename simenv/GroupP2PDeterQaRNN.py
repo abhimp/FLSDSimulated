@@ -227,7 +227,8 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             bestQl, qoes = ret
             optQl = req.extraData["optQl"]
             reward = max(qoes[req.qualityIndex] - qoes[optQl], -50)
-            reward = min(reward, 50)
+            reward = -abs(min(reward, 50))
+            reward = reward/50.0
 
             rnnkey, outofbound = rnnkey
             self._vPensieveQualityLearner.addReward(rnnkey, reward)
