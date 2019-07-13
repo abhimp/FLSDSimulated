@@ -108,6 +108,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             return
         while len(self._vDownloadQueue):
             segId, ql, rnnkey, syncSeg = self._vDownloadQueue.pop(0)
+            optQl = ql
             if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
                 continue
             if segId >= self._vGroupStartedFromSegId and self._vGroupStarted:
