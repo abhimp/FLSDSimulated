@@ -184,7 +184,7 @@ def runSlave(pq, sq, slvId):
 
 MULTI_PROC = True
 NUM_EXP_PER_SLV = 1
-NUM_SLAVE = 10
+NUM_SLAVE = 20
 EXIT_ON_CRASH = False
 
 FULL_TEST_ENV=True

@@ -227,7 +227,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
             reward = max(qoe - bestQoE, -50)
             assert reward <= 0
-            reward = (reward + 50)/50.0
+            reward = (reward)/50.0
 
 #             reward = qoe - idleFrac
 
