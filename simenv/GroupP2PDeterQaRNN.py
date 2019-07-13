@@ -174,10 +174,9 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
         stallTimes = [max(startedAt + dur - lastSegPlaybackEndedAt, 0) for dur in durations]
 #         print(stallTimes)
-        qls = self._vAgent.bitratePlayed[-2:]
 
         bitrates = self._vVideoInfo.bitrates
-        qoes = [self._rQoE(bitrates[i]/BYTES_IN_MB, qls[0]/BYTES_IN_MB, st) for i, st in enumerate(stallTimes)]
+        qoes = [self._rQoE(bitrates[i]/BYTES_IN_MB, bitrates[lastReq.qualityIndex]/BYTES_IN_MB, st) for i, st in enumerate(stallTimes)]
 
         bestQl = np.argmax(qoes)
         return bestQl, qoes[bestQl], qoes[req.qualityIndex]
