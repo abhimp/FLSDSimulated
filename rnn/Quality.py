@@ -259,7 +259,7 @@ class PensiveLearner():
 
 
 class PensiveLearnerProc():
-    def __init__(self, actionset = [], infoDept=S_LEN, infoDim=S_INFO, log_path=None, summary_dir=None, nn_model=None, ipcQueue=None, ipcId=None):
+    def __init__(self, actionset = [], infoDept=S_LEN, infoDim=S_INFO, log_path=None, summary_dir=None, nn_model=None, ipcQueue=None, ipcId=None, readOnly=False):
         assert summary_dir
         assert (not ipcQueue and not ipcId) or (ipcQueue and ipcId)
         myprint("Pensieproc init Params:", actionset, infoDept, log_path, summary_dir, nn_model)
@@ -275,6 +275,8 @@ class PensiveLearnerProc():
 
         self._vInfoDim = infoDim
         self._vInfoDept = infoDept
+
+        self._vReadOnly = readOnly
 
 
         if not os.path.exists(self.summary_dir):
@@ -399,7 +401,7 @@ class PensiveLearnerProc():
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
 
-        if not self.nn_model: #i.e. only for training
+        if not self.nn_model or self._vReadOnly: #i.e. only for training
             self.keyedSBatch[rnnkey] = state
             self.keyedActionProb[rnnkey] = action_prob
             self.keyedAction[rnnkey] = action
@@ -408,7 +410,7 @@ class PensiveLearnerProc():
         return self._vActionset[action]
 
     def addReward(self, rnnkey, reward):
-        if self.nn_model: #i.e. no training
+        if self.nn_model or self._vReadOnly: #i.e. no training
             return
         assert rnnkey in self.keyedSBatch and rnnkey in self.keyedActionProb
 
@@ -437,6 +439,8 @@ class PensiveLearnerProc():
             self.saveModel()
 
     def saveModel(self, end_of_video=False):
+        if self._vReadOnly:
+            return
         if self.ipcQueue:
             self.ipcQueue[0].put({"id":self.ipcId, "cmd": IPC_CMD_UPDATE, "pid": self.pid, "data": [self.s_batch, self.a_batch, self.r_batch, self.entropy_record, end_of_video]})
             res = None

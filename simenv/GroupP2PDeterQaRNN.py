@@ -103,6 +103,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
 
 #=============================================
     def _rDownloadFromDownloadQueue(self):
+        optQl = None
         if self._vDownloadPending:
             return
         while len(self._vDownloadQueue):
@@ -110,13 +111,14 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
                 continue
             if segId >= self._vGroupStartedFromSegId and self._vGroupStarted:
+                optQl = super()._rGetMyQuality(ql, segId, rnnkey) # handle rnnkey == None
                 ql = self._rGetMyQuality(ql, segId, rnnkey) # handle rnnkey == None
                 assert ql < len(self._vVideoInfo.fileSizes)
                 self.gossipSend(self._rDownloadingUsing, segId, ql)
                 self._rDownloadingUsing(segId, ql)
 
             deadLine = self._rGetDealine(segId)
-            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg, "deadLine":deadLine, "started": self.now})
+            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg, "deadLine":deadLine, "started": self.now, "optQl":optQl})
             self._vDownloadPending = True
             self._vDownloadPendingRnnkey = rnnkey
             break
@@ -179,7 +181,7 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         qoes = [self._rQoE(bitrates[i]/BYTES_IN_MB, bitrates[lastReq.qualityIndex]/BYTES_IN_MB, st) for i, st in enumerate(stallTimes)]
 
         bestQl = np.argmax(qoes)
-        return bestQl, qoes[bestQl], qoes[req.qualityIndex]
+        return bestQl, qoes
 
 
 #=============================================
@@ -201,7 +203,6 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
         if req.segId in self._vSegIdRNNKeyMap:
             rnnkey = self._vSegIdRNNKeyMap[req.segId]
             del self._vSegIdRNNKeyMap[req.segId]
-#             qoe = self._vAgent.QoE
 
             startedAt = req.extraData.get("started", req.downloadStarted)
             deadLine = req.extraData["deadLine"]
@@ -218,18 +219,14 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
             idleFrac = min(idleFrac, 1)
 
 
-#             qoe = self._rQoE(qls[1] / BYTES_IN_MB, qls[0]/BYTES_IN_MB, rebuf)
             ret = self._rFindOptimalQualityLevel(req)
             if ret == None:
                 return
 
-            bestQl, bestQoE, qoe = ret
-
-            reward = max(qoe - bestQoE, -50)
-            assert reward <= 0
-            reward = (reward)/50.0
-
-#             reward = qoe - idleFrac
+            bestQl, qoes = ret
+            optQl = req.extraData["optQl"]
+            reward = max(qoes[req.qualityIndex] - qoes[optQl], -50)
+            reward = min(reward, 50)
 
             rnnkey, outofbound = rnnkey
             self._vPensieveQualityLearner.addReward(rnnkey, reward)
