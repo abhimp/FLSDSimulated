@@ -10,6 +10,8 @@ import glob
 import re
 import sys
 import traceback as tb
+import math
+from termcolor import colored
 from util.misc import getTraceBack
 
 
@@ -46,9 +48,10 @@ def guessSavedSession(summary_dir):
 
 
 class PensiveLearnerCentralAgent():
-    def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None):
+    def __init__(self, actionset = [], infoDept=S_LEN, infoDim=S_INFO, log_path=None, summary_dir=None, nn_model=None):
 
         assert summary_dir
+        myprint("Central init Params:", actionset, infoDept, log_path, summary_dir, nn_model)
         self.summary_dir = os.path.join(summary_dir, "rnnAgent")
         self.nn_model = nn_model
 
@@ -156,7 +159,10 @@ class PensiveLearner():
     @staticmethod
     def getInstance(*arg, **karg):
         if PensiveLearner.__instance == None:
-            PensiveLearner(*arg, **karg)
+            if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+                PensiveLearner.__instance = PensiveLearnerProc(*arg, **karg)
+            else:
+                PensiveLearner(*arg, **karg)
         return PensiveLearner.__instance
 
     def __init__(self, actionset = [], infoDept=S_LEN, *arg, **kwarg):
@@ -193,8 +199,11 @@ class PensiveLearner():
                 trace = sys.exc_info()
                 simpTrace = getTraceBack(trace)
                 send.put({"st": False, "trace": simpTrace})
+
     @staticmethod
     def cleanup(*arg, **kwarg):
+        if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+            return
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
         if not PensiveLearner.__instance.proc:
@@ -206,6 +215,8 @@ class PensiveLearner():
 
     @staticmethod
     def finish(*arg, **kwarg):
+        if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+            return
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
         PensiveLearner.__instance.finishInstance(*arg, **kwarg)
@@ -216,7 +227,7 @@ class PensiveLearner():
         dt = self.recv.get(timeout=60)
         if not dt.get("st", False):
             myprint(dt.get("trace", ""))
-            raise Exception()
+            raise Exception(dt.get("trace", ""))
         return dt["res"]
 
     def cleanupInstance(self, *arg, **kwarg):
@@ -248,9 +259,10 @@ class PensiveLearner():
 
 
 class PensiveLearnerProc():
-    def __init__(self, actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, nn_model=None, ipcQueue=None, ipcId=None):
+    def __init__(self, actionset = [], infoDept=S_LEN, infoDim=S_INFO, log_path=None, summary_dir=None, nn_model=None, ipcQueue=None, ipcId=None, readOnly=False):
         assert summary_dir
         assert (not ipcQueue and not ipcId) or (ipcQueue and ipcId)
+        myprint("Pensieproc init Params:", actionset, infoDept, log_path, summary_dir, nn_model)
 
         self.ipcQueue = ipcQueue
         self.pid = os.getpid()
@@ -261,8 +273,10 @@ class PensiveLearnerProc():
         self.a_dim = len(actionset)
         self._vActionset = actionset
 
-        self._vInfoDim = S_INFO
+        self._vInfoDim = infoDim
         self._vInfoDept = infoDept
+
+        self._vReadOnly = readOnly
 
 
         if not os.path.exists(self.summary_dir):
@@ -296,7 +310,7 @@ class PensiveLearnerProc():
 #         nn_model = NN_MODEL
         if self.nn_model is not None and not self.ipcQueue:  # nn_model is the path to file
             self.saver.restore(self.sess, self.nn_model)
-            myprint("Model restored.")
+            myprint("Model restored with `" + self.nn_model + "'")
 
 
         if self.ipcQueue:
@@ -329,13 +343,14 @@ class PensiveLearnerProc():
         self.keyedSBatch = {}
         self.keyedActionProb = {}
         self.keyedAction = {}
+        self.keyedInputParam = {}
 
     def getNextAction(self, rnnkey, state): #peerId and segId are Identifier
 
 #         pendings_, curbufs_, pbdelay_, uploaded_, lastDlAt_, players_, estThrput_, deadline = state
-        uploaded_, players_, idleTimes_, thrpt_, prog_, clens_, deadline = state
-
-        v_dim = len(uploaded_)
+#         uploaded_, players_, idleTimes_, thrpt_, prog_, clens_, deadline = state
+        inputset = state
+#         v_dim = len(uploaded_)
 
         # reward is video quality - rebuffer penalty - smooth penalty
         # retrieve previous state
@@ -347,30 +362,54 @@ class PensiveLearnerProc():
         # dequeue history record
         state = np.roll(state, -1, axis=1)
 
-        state[ 0, :v_dim]       = uploaded_
-        state[ 1, :v_dim]       = players_
-        state[ 2, :v_dim]       = idleTimes_
-        state[ 3, :v_dim]       = thrpt_
-        state[ 4, :v_dim]       = prog_
-        state[ 5, :len(clens_)] = clens_
-        state[ 6, -1]           = deadline
+        for i,x in enumerate(inputset):
+            x = np.array(x).reshape(-1)
+            assert issubclass(x.dtype.type, np.number) and self._vInfoDept >= len(x)
+            state[i, :len(x)] = x
+#             if len(x) > 1:
+#                 state[i, :len(x)] = x
+#             else:
+#                 state[i, :-1] = x
+
+#         state[ 0, :v_dim]       = uploaded_
+#         state[ 1, :v_dim]       = players_
+#         state[ 2, :v_dim]       = idleTimes_
+#         state[ 3, :v_dim]       = thrpt_
+#         state[ 4, :v_dim]       = prog_
+#         state[ 5, :len(clens_)] = clens_
+#         state[ 6, -1]           = deadline
 
 
-        action_prob = self.actor.predict(np.reshape(state, (1, self._vInfoDim, self._vInfoDept)))
+
+        reshapedInput = np.reshape(state, (1, self._vInfoDim, self._vInfoDept))
+        action_prob = self.actor.predict(reshapedInput)
         action_cumsum = np.cumsum(action_prob)
-        action = (action_cumsum > np.random.randint(1, RAND_RANGE) / float(RAND_RANGE)).argmax()
+        action_cdf = (action_cumsum > np.random.randint(1, RAND_RANGE) / float(RAND_RANGE))
+        action = action_cdf.argmax()
+        myprint("action:", action,"action cumsum:", action_cumsum.tolist(), "reshapedInput:", reshapedInput.tolist())
+
+#         for i, x in enumerate(state):
+#             if np.count_nonzero(x) <= 0:
+#                 myprint("Some error=======================================")
+#                 myprint(f"\033[1;31mError in param {i}\033[m")
+
+        for x in action_prob[0]:
+            if math.isnan(x):
+                myprint(inputset, "batch len", len(self.s_batch), "actor out", self.actor.out)
+            assert not math.isnan(x)
         # Note: we need to discretize the probability into 1/RAND_RANGE steps,
         # because there is an intrinsic discrepancy in passing single state and batch states
 
-        if not self.nn_model: #i.e. only for training
+        if not self.nn_model or self._vReadOnly: #i.e. only for training
             self.keyedSBatch[rnnkey] = state
             self.keyedActionProb[rnnkey] = action_prob
             self.keyedAction[rnnkey] = action
+            self.keyedInputParam[rnnkey] = inputset
 
-        return self._vActionset[action]
+        return self._vActionset[action], action_cdf
 
     def addReward(self, rnnkey, reward):
-        if self.nn_model: #i.e. no training
+        if self.nn_model or self._vReadOnly: #i.e. no training
             return
         assert rnnkey in self.keyedSBatch and rnnkey in self.keyedActionProb
 
@@ -378,9 +417,11 @@ class PensiveLearnerProc():
         action_prob = self.keyedActionProb[rnnkey]
         action = self.keyedAction[rnnkey]
 
+        myprint("Training dataset:", {"input" : self.keyedInputParam[rnnkey], "action" : self._vActionset[self.keyedAction[rnnkey]], "key" : rnnkey, "reward": reward, "action_prob": action_prob.tolist()})
         del self.keyedSBatch[rnnkey]
         del self.keyedActionProb[rnnkey]
         del self.keyedAction[rnnkey]
+        del self.keyedInputParam[rnnkey]
 
         self.r_batch.append(reward)
 
@@ -397,6 +438,8 @@ class PensiveLearnerProc():
             self.saveModel()
 
     def saveModel(self, end_of_video=False):
+        if self._vReadOnly:
+            return
         if self.ipcQueue:
             self.ipcQueue[0].put({"id":self.ipcId, "cmd": IPC_CMD_UPDATE, "pid": self.pid, "data": [self.s_batch, self.a_batch, self.r_batch, self.entropy_record, end_of_video]})
             res = None
@@ -489,17 +532,17 @@ def slavecleanup():
     PensiveLearner.cleanup()
 
 
-def getPensiveLearner(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
-    assert not CENTRAL_ACTION_SET or CENTRAL_ACTION_SET == actionset
-    p = PensiveLearner.getInstance(actionset, infoDept, log_path, summary_dir, *kw, ipcQueue=PENSIEVE_SLAVE_QUEUE, ipcId=PENSIEVE_SLAVE_ID, **kws)
-    assert p._vActionset == actionset and p._vInfoDept == infoDept
+def getPensiveLearner(actionset = [], *kw, **kws):
+    assert not CENTRAL_ACTION_SET or len(CENTRAL_ACTION_SET) == len(actionset)
+    p = PensiveLearner.getInstance(actionset, *kw, ipcQueue=PENSIEVE_SLAVE_QUEUE, ipcId=PENSIEVE_SLAVE_ID, **kws)
+    assert p._vActionset == actionset and ("infoDept" not in kws or p._vInfoDept == kws["infoDept"])
     return p
 
 def saveLearner():
         PensiveLearner.finish()
 
-def _runCentralServer(actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
-    centralLearner = PensiveLearnerCentralAgent(actionset, infoDept, log_path, summary_dir)
+def _runCentralServer(actionset = [], *kw, **kws):
+    centralLearner = PensiveLearnerCentralAgent(actionset, *kw, **kws)
     masterQueue, slaveQueues = PENSIEVE_IPC_QUEUES
     while True:
         req = masterQueue.get()
@@ -527,14 +570,14 @@ def quitCentralServer():
     masterQueue.put({"cmd":IPC_CMD_QUIT})
 
 
-def runCentralServer(slaveIds = [], actionset = [], infoDept=S_LEN, log_path=None, summary_dir=None, *kw, **kws):
+def runCentralServer(slaveIds = [], actionset = [], *kw, **kws):
     global CENTRAL_ACTION_SET, PENSIEVE_IPC_QUEUES
     CENTRAL_ACTION_SET = actionset
     masterQueue = mp.Queue()
     slaveQueues = {x:mp.Queue() for x in slaveIds}
     PENSIEVE_IPC_QUEUES = [masterQueue, slaveQueues]
 
-    p = mp.Process(target=_runCentralServer, args=(actionset, infoDept, log_path, summary_dir)+kw, kwargs=kws)
+    p = mp.Process(target=_runCentralServer, args=(actionset, )+kw, kwargs=kws)
     p.start()
     return p
 

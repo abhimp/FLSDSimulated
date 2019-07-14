@@ -38,7 +38,6 @@ class GroupP2PDeterQaRNN(GroupP2PDeter):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
         super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, grp=grp, peerId=peerId, modelPath=modelPath, *kw, **kws)
         actions = list(range(len(self._vVideoInfo.bitrates) -1, -1, -1))
-#         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(actions, summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
 #=============================================
     def _rGetMyQualityFailSafe(self, nextQl, segId, rnnkey):

@@ -10,7 +10,7 @@ import traceback as tb
 
 
 from simenv.Simple import Simple, np, Simulator, load_trace, video, P2PNetwork
-from simenv.GroupP2PDeter import GroupP2PDeter
+from simenv.GroupP2PDeterQaRNN import GroupP2PDeterQaRNN
 from util.email import sendErrorMail
 from util.group import GroupManager
 import util.randStateInit as randstate
@@ -31,49 +31,13 @@ def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError
 
-class GroupP2PRNN(GroupP2PDeter):
+class GroupP2PRNN(GroupP2PDeterQaRNN):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
-        super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
-        self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
-        self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
-                                            summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
-
-#=============================================
-    def _rGetMyQuality(self, nextQl, segId, rnnkey):
-        segIds = [x[0] for x in self._vGroupSegDetails[-5:]]
-        lastPlayerId = [x[1] for x in self._vGroupSegDetails[-5:]]
-        lastQl = [x[1] for x in self._vGroupSegDetails[-5:]]
-
-        lastClens = [0]*5 + [self._vVideoInfo.fileSizes[ql][s] for ql, s in zip(lastQl, segIds)]
-        _, lastPlayerId, lastQl = list(zip(*([(0,0,0), (0,0,0)] + self._vGroupSegDetails[-5:])))
-        lastClens = np.array(lastClens)/BYTES_IN_MB
-
-        lastPlayerId = [0]*5 + list(lastPlayerId)
-        lastQl = [0]*5 + [x[1] for x in self._vDownloadQl[-5:]]
-
-        deadLine = segId*self._vVideoInfo.segmentDuration - max([n._vAgent.playbackTime for n in self._vGroupNodes])
-        curProg = self._rDownloadStatus()
-        prog = len(self._vDownloadQueue) * 100 + (curProg[1] / curProg[2] if curProg[2] else 0)
-
-        targetQl = lastQl[-1] if len(lastQl) > 1 else self._vAgent._vQualitiesPlayed[-1]
-
-        clens = [ql[segId]/BYTES_IN_MB for ql in self._vVideoInfo.fileSizes]
-
-        thrpt = self._vThroughPutData[-5:]
-        if curProg[1] > 0 and curProg[0] > 0:
-            thrpt += [(self.now, curProg[1] * 8 / curProg[0])]
-        thrpt = [x for t, x in thrpt]
-        thrpt = np.array([0]*5 + thrpt)/BYTES_IN_MB/8
-
-        state = (thrpt[-5:], lastQl[-5:], lastClens[-5:], clens, self._vWeightedThroughput/BYTES_IN_MB/8, self._vAgent.bufferLeft/self._vVideoInfo.segmentDuration, deadLine)
-
-        self._vSegIdRNNKeyMap[segId] = rnnkey
-
-        rnnkey, _ = rnnkey
-
-        ql = self._vPensieveQualityLearner.getNextAction(rnnkey, state)
-
-        return ql
+#         super().__init__(vi, traces, simulator, abr, peerId, *kw, **kws)
+        super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, grp=grp, peerId=peerId, modelPath=modelPath, *kw, **kws)
+        self.playerAction = list(range(5))
+        self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(self.playerAction, summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
+#         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(actions, summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
 
 #=============================================
     def _rGetNextDownloaderFailSafe(self, segId, rnnkey=None):
@@ -123,34 +87,21 @@ class GroupP2PRNN(GroupP2PDeter):
         rnnkey = (self.networkId, segId)
 
         state = (uploaded[-5:], players[-5:], idleTimes[-5:], thrpt[-5:], prog[-5:], clens, deadline)
+        state = (uploaded[-5:], idleTimes[-5:], thrpt[-5:], prog[-5:], clens, deadline)
 
-        nextPlayer = self._vPensieveAgentLearner.getNextAction(rnnkey, state)
+        nextPlayer, potentials = self._vPensieveAgentLearner.getNextAction(rnnkey, state)
         #print(rnnkey, state)
 
         penalty = 0
         if nextPlayer >= len(self._vGroupNodes):
-            penalty = -nextPlayer
-            nextPlayer, _ = self._rGetNextDownloaderFailSafe(segId)
+            npotents = potentials[:len(self._vGroupNodes)].argmax()
+            nextPlayer = self.playerAction[npotents]
+
+        assert nextPlayer < len(self._vGroupNodes)
+#             penalty = -nextPlayer
+#             nextPlayer, _ = self._rGetNextDownloaderFailSafe(segId)
 
         return nextPlayer, (rnnkey, penalty)
-#=============================================
-    def _rDownloadFromDownloadQueue(self):
-        if self._vDownloadPending:
-            return
-        while len(self._vDownloadQueue):
-            segId, ql, rnnkey, syncSeg = self._vDownloadQueue.pop(0)
-            if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
-                continue
-            if segId >= self._vGroupStartedFromSegId and self._vGroupStarted and rnnkey:
-                ql = self._rGetMyQuality(ql, segId, rnnkey)
-                assert ql < len(self._vVideoInfo.fileSizes)
-                self.gossipSend(self._rDownloadingUsing, segId, ql)
-                self._rDownloadingUsing(segId, ql)
-
-            self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg})
-            self._vDownloadPending = True
-            self._vDownloadPendingRnnkey = rnnkey
-            break
 
 #=============================================
     def _rAddToAgentBuffer(self, req, simIds=None):
@@ -166,33 +117,50 @@ class GroupP2PRNN(GroupP2PDeter):
         if playableIn > 0:
             self.runAfter(playableIn, self._rAddToAgentBuffer, req, 0)
             return
-        lastStalls = self._vAgent._vTotalStallTime
+
         self._vAgent._rAddToBufferInternal(req)
         if req.segId in self._vSegIdRNNKeyMap:
             rnnkey = self._vSegIdRNNKeyMap[req.segId]
             del self._vSegIdRNNKeyMap[req.segId]
-            qoe = self._vAgent.QoE
 
-            qls = self._vAgent.bitratePlayed[-2:]
+            startedAt = req.extraData.get("started", req.downloadStarted)
+            deadLine = req.extraData["deadLine"]
+            shouldFinished = startedAt + deadLine
+            finishedAt = req.downloadFinished
 
-            diff = abs(qls[0] - qls[1])/BYTES_IN_MB
-            rebuf = (self._vAgent._vTotalStallTime - lastStalls)/10
-            qoe = qls[1] / BYTES_IN_MB - diff - 4.3 * rebuf
+            idle = abs(shouldFinished - finishedAt)
+            idleFrac = idle/deadLine if deadLine != 0 else 1
+
+            totalIdle = self._vTotalIdleTime
+            totalPlayable = self._vAgent._vTotalPlayableTime
+
+            idleFrac = totalIdle/totalPlayable if totalPlayable > 0 else 1
+            idleFrac = min(idleFrac, 1)
 
 
-            reward = -rebuf
+            ret = self._rFindOptimalQualityLevel(req)
+            if ret == None:
+                return
+
+            bestQl, qoes = ret
+            optQl = req.extraData["optQl"]
+            qoe = qoes[req.qualityIndex]
+            reward = max(qoe - qoes[optQl], -50)
+            reward = -abs(min(reward, 50))
+            reward = reward/50.0
+
             rnnkey, outofbound = rnnkey
-            reward -= outofbound
-#             uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
-#             contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
-#             reward -= contri
+            self._vPensieveQualityLearner.addReward(rnnkey, reward)
+
+            uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
+            contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
+            reward = -contri
 
             reward = 0.7 * qoe + 0.3 * reward
             #call rnn obj for working
             self._vPensieveAgentLearner.addReward(rnnkey, reward)
-
-            self._vPensieveQualityLearner.addReward(rnnkey, reward)
             #add reward
+
 #=============================================
 #=============================================
 #=============================================

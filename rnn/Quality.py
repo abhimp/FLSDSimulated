@@ -159,7 +159,7 @@ class PensiveLearner():
     @staticmethod
     def getInstance(*arg, **karg):
         if PensiveLearner.__instance == None:
-            if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+            if os.environ.get("EXP_ENV_LEARN_PROC_QUALITY", "YES") == "NO":
                 PensiveLearner.__instance = PensiveLearnerProc(*arg, **karg)
             else:
                 PensiveLearner(*arg, **karg)
@@ -202,7 +202,7 @@ class PensiveLearner():
 
     @staticmethod
     def cleanup(*arg, **kwarg):
-        if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+        if os.environ.get("EXP_ENV_LEARN_PROC_QUALITY", "YES") == "NO":
             return
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
@@ -215,7 +215,7 @@ class PensiveLearner():
 
     @staticmethod
     def finish(*arg, **kwarg):
-        if os.environ.get("EXP_ENV_LEARN_PROC", "YES") == "NO":
+        if os.environ.get("EXP_ENV_LEARN_PROC_QUALITY", "YES") == "NO":
             return
         if not PensiveLearner.__instance or not PensiveLearner.__instance._vRunning:
             return
