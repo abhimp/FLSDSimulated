@@ -1,5 +1,5 @@
 
-from util.myprint import myprint
+import util.myprint
 import os
 import numpy as np
 import tensorflow as tf
@@ -13,6 +13,9 @@ import traceback as tb
 import math
 from termcolor import colored
 from util.misc import getTraceBack
+
+def myprint(*arg, **kw):
+    util.myprint.myprint("Agent:", *arg, *kw)
 
 
 S_INFO = 14  # bit_rate, buffer_size, next_chunk_size, bandwidth_measurement(throughput and time), chunk_til_video_end

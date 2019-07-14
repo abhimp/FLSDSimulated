@@ -64,16 +64,16 @@ class GroupP2PRNN(GroupP2PDeterQaRNN):
         pendings = [0] * 5
         pendings += [len(n._vDownloadQueue) for n in self._vGroupNodes]
 
-        uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
+        uploaded = [n._vTotalUploadedSegs/self._vVideoInfo.segmentCount for n in self._vGroupNodes]
         uploaded = [0] *5 + [x for x in (np.array(uploaded) - np.mean(uploaded))]
 
-        deadline = segId*self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
+        deadline = self._rGetDealine(segId)/self._vAgent.maxPlayerBufferLen #segId*self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
 
         players = [-1]*5 + [n._vPlayerIdInGrp for n in self._vGroupNodes]
 
         idleTimes = [0]*5 + [ 0 if n._vDownloadPending else self.now - n._vWorkingTimes[-1][0]
                         for n in self._vGroupNodes]
-        idleTimes = np.array(idleTimes)
+        idleTimes = np.array(idleTimes)/100
 
         thrpt = [0]*5 + [n._vWeightedThroughput for n in self._vGroupNodes]
         thrpt = np.array([0]*5 + thrpt)/BYTES_IN_MB/8
@@ -82,7 +82,7 @@ class GroupP2PRNN(GroupP2PDeterQaRNN):
         prog = [0]*5 + [0 if x[2] == 0 else float(x[1])/float(x[2]) for x in prog]
         prog = np.array(prog)
 
-        clens = [ql[segId] for ql in self._vVideoInfo.fileSizes]
+        clens = [ql[segId]/BYTES_IN_MB for ql in self._vVideoInfo.fileSizes]
 
         rnnkey = (self.networkId, segId)
 
@@ -98,8 +98,6 @@ class GroupP2PRNN(GroupP2PDeterQaRNN):
             nextPlayer = self.playerAction[npotents]
 
         assert nextPlayer < len(self._vGroupNodes)
-#             penalty = -nextPlayer
-#             nextPlayer, _ = self._rGetNextDownloaderFailSafe(segId)
 
         return nextPlayer, (rnnkey, penalty)
 
@@ -153,7 +151,7 @@ class GroupP2PRNN(GroupP2PDeterQaRNN):
             self._vPensieveQualityLearner.addReward(rnnkey, reward)
 
             uploaded = [n._vTotalUploadedSegs for n in self._vGroupNodes]
-            contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))
+            contri = abs(self._vTotalUploadedSegs - np.mean(uploaded))/self._vVideoInfo.segmentCount
             reward = -contri
 
             reward = 0.7 * qoe + 0.3 * reward
