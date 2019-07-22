@@ -3,16 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import collections as cl
 import sys
+import argparse
 
 from util import load_trace
 import util.videoInfo as video
 from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
-from simenv.GroupP2PTimeout import GroupP2PTimeout
-from simenv.GroupP2PTimeoutSkip import GroupP2PTimeoutSkip
-from simenv.GroupP2PTimeoutInc import GroupP2PTimeoutInc
-# from simenv.GroupP2PRNNTest import GroupP2PRNN
 from simenv.GroupP2PDeter import GroupP2PDeter
 from simenv.Simple import Simple
 from simenv.DHT import DHT
@@ -24,11 +21,6 @@ from abr.RobustMPC import AbrRobustMPC
 from abr.BOLA import BOLA
 from util.cdnUsages import CDN
 
-# from simenv.GroupP2PTimeoutRNNTest import GroupP2PTimeoutRNN
-# from abrPensiev import AbrPensieve
-# from simenv.GroupP2PTimeoutIncRNN import GroupP2PTimeoutIncRNN
-GroupP2PTimeoutRNN = None
-GroupP2PTimeoutIncRNN = None
 AbrPensieve = None
 GroupP2PRNN = None
 GroupP2PDeterQaRNN = None
@@ -100,7 +92,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GrpDeter", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutRNN", "GroupP2PTimeoutIncRNN"]:
+        if name not in ["GrpDeter", "GroupP2PBasic"]:
             continue
         for ag in res:
             if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
@@ -240,18 +232,10 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def importLearningModules(allowed):
-    global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN, GroupP2PRNN, GroupP2PDeterQaRNN
+    global AbrPensieve, GroupP2PRNN, GroupP2PDeterQaRNN
     if "Penseiv" in allowed and AbrPensieve is None:
         from abr.Pensiev import AbrPensieve as abp
         AbrPensieve = abp
-
-    if "GroupP2PTimeoutRNN" in allowed and GroupP2PTimeoutRNN is None:
-        from simenv.GroupP2PTimeoutRNNTest import GroupP2PTimeoutRNN as gpe
-        GroupP2PTimeoutRNN = gpe
-
-    if "GroupP2PTimeoutIncRNN" in allowed and GroupP2PTimeoutIncRNN is None:
-        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PTimeoutIncRNN as gpe
-        GroupP2PTimeoutIncRNN = gpe
 
     if "GroupP2PRNN" in allowed and GroupP2PRNN is None:
         from simenv.GroupP2PRNNTest import GroupP2PRNN as obj
@@ -273,12 +257,7 @@ def getTestObj(traces, vi, network):
     testCB["RobustMPC"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrRobustMPC)
     testCB["Penseiv"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrPensieve)
     testCB["GroupP2PBasic"] = getDict(envCls=GroupP2PBasic, traces=traces, vi=vi, network=network)
-    testCB["GroupP2PTimeout"] = getDict(envCls=GroupP2PTimeout, traces=traces, vi=vi, network=network)
-    testCB["GroupP2PTimeoutSkip"] = getDict(envCls=GroupP2PTimeoutSkip, traces=traces, vi=vi, network=network)
     testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network)
-    testCB["GroupP2PTimeoutInc"] = getDict(envCls=GroupP2PTimeoutInc, traces=traces, vi=vi, network=network)
-    testCB["GroupP2PTimeoutRNN"] = getDict(envCls=GroupP2PTimeoutRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ModelPath")
-    testCB["GroupP2PTimeoutIncRNN"] = getDict(envCls=GroupP2PTimeoutIncRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ModelPath")
     testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GroupP2PDeterQaRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNQa/")
@@ -286,13 +265,38 @@ def getTestObj(traces, vi, network):
 
     return testCB
 
+def parseArg(experiments):
+    global EXIT_ON_CRASH, MULTI_PROC
+    parser = argparse.ArgumentParser(description='Experiment')
+    parser.add_argument('--exit-on-crash',  help='Program will exit after first crash', action="store_true")
+    parser.add_argument('--no-slave-proc',  help='No new Process will created for slave', action="store_true")
+    parser.add_argument('--no-quality-rnn-proc',  help='Quality rnn will run in same process as parent', action="store_true")
+    parser.add_argument('--no-agent-rnn-proc',  help='Agent rnn will run in same process as parent', action="store_true")
+    parser.add_argument('exp', help=experiments, nargs='+')
+    args = parser.parse_args()
+    EXIT_ON_CRASH = args.exit_on_crash
+    MULTI_PROC = not args.no_slave_proc
+    if "EXP_ENV_LEARN_PROC_QUALITY" in os.environ:
+        del os.environ["EXP_ENV_LEARN_PROC_QUALITY"]
+    if "EXP_ENV_LEARN_PROC_AGENT" in os.environ:
+        del os.environ["EXP_ENV_LEARN_PROC_AGENT"]
+    if args.no_quality_rnn_proc:
+        os.environ["EXP_ENV_LEARN_PROC_QUALITY"] = "NO"
+    elif args.no_agent_rnn_proc:
+        os.environ["EXP_ENV_LEARN_PROC_AGENT"] = "NO"
+
+    return args.exp
+
 
 def main():
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutInc", "GroupP2PTimeoutRNN", "GroupP2PTimeoutIncRNN", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GroupP2PDeterQaRNN", "GroupP2PDeterAgRNN"]
-    if "-h" in sys.argv or len(sys.argv) <= 1:
-        print(" ".join(allowed))
-        return
-    allowed = sys.argv[1:]
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GroupP2PDeterQaRNN", "GroupP2PDeterAgRNN"]
+#     if "-h" in sys.argv or len(sys.argv) <= 1:
+#         print(" ".join(allowed))
+#         return
+#     allowed = sys.argv[1:]
+
+    allowed = parseArg(" ".join([f"'{x}'" for x in allowed]))
+
     importLearningModules(allowed)
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
