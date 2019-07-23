@@ -30,7 +30,6 @@ class GroupP2PDeter(Simple):
         super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, peerId=peerId, *kw, **kws)
         self._vDownloadPending = False
 #         self._vDownloadPendingRnnkey = None
-        self._vSegIdRNNKeyMap = {}
         self._vSegmentDownloading = -1
         self._vGroup = grp
         self._vCatched = {}
@@ -422,17 +421,6 @@ class GroupP2PDeter(Simple):
             return
         lastStalls = self._vAgent._vTotalStallTime
         self._vAgent._rAddToBufferInternal(req)
-        if req.segId in self._vSegIdRNNKeyMap:
-            rnnkey = self._vSegIdRNNKeyMap[req.segId]
-            del self._vSegIdRNNKeyMap[req.segId]
-            qoe = self._vAgent.QoE
-
-            qls = self._vAgent.bitratePlayed[-2:]
-
-            diff = abs(qls[0] - qls[1])/BYTES_IN_MB
-            rebuf = (self._vAgent._vTotalStallTime - lastStalls)/10
-            qoe = qls[1] / BYTES_IN_MB - diff - 4.3 * rebuf
-            #add reward
 
 #=============================================
     def _rAddToBuffer(self, req, simIds = None):
