@@ -21,8 +21,6 @@ GROUP_JOIN_THRESHOLD = 10
 BYTES_IN_MB = 1000000.0
 
 LOG_LOCATION = "./results/"
-# NN_MODEL_QUA = "nn_model_ep_72500.ckpt"
-# NN_MODEL_AGE = "nn_model_ep_72500.ckpt"
 def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError

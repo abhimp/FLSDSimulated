@@ -268,10 +268,31 @@ class Agent():
             if self._vGlobalStartedAt != self._vStartedAt:
                 expectedPlaybackTime = now - self._vGlobalStartedAt
 
+#             if  self._vCanSkip and expectedPlaybackTime - PLAYBACK_DELAY_THRESHOLD > segPlaybackEndTime:
+#                 #need to skip this segment
+#                 expectedSegId = int(expectedPlaybackTime / self._vVideoInfo.segmentDuration) + 1
+#                 self._vSegmentSkiped += expectedSegId - self._vNextSegmentIndex
+#                 self._vNextSegmentIndex = expectedSegId
+#                 if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
+#                     self._vEnv.finishedAfter(1)
+#                     return
+#                 self._rDownloadNextData(0)
+#                 return
+
             if expectedPlaybackTime < segPlaybackStartTime:
                 after = segPlaybackStartTime - expectedPlaybackTime
+#                 print("after:", after)
                 self._vEnv.runAfter(after, self._rAddToBufferInternal, req, simIds)
                 return
+
+#             found = False
+#             for x in range(PLAYBACK_DELAY_THRESHOLD + 1):
+#                 if segPlaybackStartTime <= expectedPlaybackTime - x <= segPlaybackEndTime:
+#                     playbackTime = expectedPlaybackTime - x
+#                     found = True
+#                     break
+#
+#             assert found
 
             self._vIsStarted = True
             self._vStartingPlaybackTime = playbackTime
@@ -299,7 +320,7 @@ class Agent():
 
         if self._vSyncSegment == req.segId:
             skip = playbackTime - self._vPlaybacktime
-#             self._vTotalStallTime += skip #TODO I may need to add skip to totalStallTime
+#             self._vTotalStallTime += skip
             playbackTime = self._vBufferUpto = self._vVideoInfo.segmentDuration * req.segId
 
 
@@ -318,7 +339,6 @@ class Agent():
         self._vLastBitrateIndex = self._vCurrentBitrateIndex
         self._rDownloadNextData(buflen)
 
-#=============================================
     def _rSkipToSegId(self, segId):
         self._vPlaybacktime = self._vBufferUpto = self._vVideoInfo.segmentDuration * segId
         self._vNextSegmentIndex = segId
