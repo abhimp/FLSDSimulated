@@ -30,9 +30,8 @@ def default(o):
 class GroupP2PDeter(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
         super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, peerId=peerId, *kw, **kws)
-#         self._vAgent = Agent(vi, self, abr)
         self._vDownloadPending = False
-        self._vDownloadPendingRnnkey = None
+#         self._vDownloadPendingRnnkey = None
         self._vSegIdRNNKeyMap = {}
         self._vSegmentDownloading = -1
         self._vGroup = grp
@@ -67,9 +66,6 @@ class GroupP2PDeter(Simple):
         self._vNextGroupDLSegId = -1
         self._vWeightedThroughput = 0
         self._vDownloadQl = []
-#         self._vPensieveAgentLearner = None if not self._vModelPath  else rnnAgent.getPensiveLearner(list(range(5)), summary_dir = self._vModelPath, nn_model = NN_MODEL_AGE)
-#         self._vPensieveQualityLearner = None if not self._vModelPath  else rnnQuality.getPensiveLearner(list(range(len(self._vVideoInfo.bitrates))), \
-#                                             summary_dir = self._vModelPath, nn_model = NN_MODEL_QUA)
         self._vMaxSegDownloading = -1
         self._vSyncNow = False
         self._vLastSyncSeg = -1
@@ -102,7 +98,6 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def schedulesChanged(self, changedFrom, nodes, sched):
-#         self._vGroupNodes = nodes
         newNodes = [x for x in nodes if x._vPlayerIdInGrp == -1]
         assert len(newNodes) == 1 #anything else is a disaster
         if newNodes[0] == self:
@@ -114,7 +109,6 @@ class GroupP2PDeter(Simple):
         self._vGrpIds = [n.networkId for n in nodes]
         syncTime = self.now + 1
         self._vSimulator.runAt(syncTime, self._rSyncNow)
-#         self._vSimulator.runAt(syncTime, self._vAgent._rSyncNow)
 
 #=============================================
     def _rGroupStarted(self):
@@ -159,6 +153,7 @@ class GroupP2PDeter(Simple):
         assert s == self and node.__class__ == self.__class__
         func(*argv, **kargv)
 
+#=============================================
     def gossipSend(self, func, *argv, **kargv):
         strfunc = func.__name__
         for node in self._vGroupNodes:
@@ -166,6 +161,7 @@ class GroupP2PDeter(Simple):
                 continue
             self.requestRpc(node.gossipRcv, strfunc, *argv, **kargv)
 
+#=============================================
     def gossipRcv(self, strfunc, *argv, **kargv):
         func = self.__getattribute__(strfunc)
         func(*argv, **kargv)
@@ -365,7 +361,7 @@ class GroupP2PDeter(Simple):
 
             self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg})
             self._vDownloadPending = True
-            self._vDownloadPendingRnnkey = rnnkey
+#             self._vDownloadPendingRnnkey = rnnkey
             break
 
 #=============================================
@@ -443,7 +439,7 @@ class GroupP2PDeter(Simple):
 #=============================================
     def _rAddToBuffer(self, req, simIds = None):
         self._vDownloadPending = False
-        rnnkey = self._vDownloadPendingRnnkey
+#         rnnkey = self._vDownloadPendingRnnkey
         self._rDownloadFromDownloadQueue()
         req.syncSeg = req.extraData.get("syncSeg", False)
         if self._vStarted:
