@@ -98,6 +98,8 @@ ENV/
 env.bak/
 venv.bak/
 
+emailpass.txt
+
 # Spyder project settings
 .spyderproject
 .spyproject
