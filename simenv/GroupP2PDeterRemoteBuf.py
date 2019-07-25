@@ -133,12 +133,21 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def _rFetchCompletePacket(self, req):
+        cacheReq = self._vCatched[req.segId]
+        if cacheReq != req and cacheReq.isComplete:
+            self._vAgent._rBufManAddCompleteReq(req)
+            return
+
         assert req.downloader != self
         assert req.downloader in self._vGroupNodes #Here i found a interesting result. There are certain time when we have better qualityIndex than orig req.
-        self.requestRpc(req.downloader._rSendOrigReq, req, self)
+
+        self.requestRpc(req.downloader._rSendOrigReq, req, self, len(self._vGroupNodes))
 
 #=============================================
-    def _rSendOrigReq(self, req, remote):
+    def _rSendOrigReq(self, req, remote, depth):
+#         if req.segId in self._vCatched and self._vCatched[req.segId].downloader != self:
+#             self._rFetchCompletePacket(self._vCatched[req.segId], depth-1, remote)
+#             return
         assert req.segId in self._vCatched and self._vCatched[req.segId].isComplete
         reqOrig = self._vCatched[req.segId]
         self.requestLongRpc(remote._rRecvOrigReq, reqOrig.clen, reqOrig, self)
