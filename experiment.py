@@ -11,6 +11,7 @@ from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
 from simenv.GroupP2PDeter import GroupP2PDeter
+from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
 from simenv.Simple import Simple
 from simenv.DHT import DHT
 from simulator.simulator import Simulator
@@ -24,7 +25,6 @@ from util.cdnUsages import CDN
 AbrPensieve = None
 GroupP2PRNN = None
 GroupP2PDeterQaRNN = None
-GroupP2PDeterAgRNN = None
 
 
 RESULT_DIR = "./results/GenPlots"
@@ -245,9 +245,6 @@ def importLearningModules(allowed):
         from simenv.GroupP2PDeterQaRNN import GroupP2PDeterQaRNN as obj
         GroupP2PDeterQaRNN = obj
 
-    if "GroupP2PDeterAgRNN" in allowed and GroupP2PDeterAgRNN is None:
-        from simenv.GroupP2PDeterAgRNN import GroupP2PDeterAgRNN as obj
-        GroupP2PDeterAgRNN = obj
 
 def getTestObj(traces, vi, network):
     testCB = {}
@@ -260,8 +257,8 @@ def getTestObj(traces, vi, network):
     testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network)
     testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
+    testCB["GrpDeterRm"] = getDict(envCls=GrpDeterRemote, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
     testCB["GroupP2PDeterQaRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNQa/")
-    testCB["GroupP2PDeterAgRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNAg/")
 
     return testCB
 
@@ -289,11 +286,7 @@ def parseArg(experiments):
 
 
 def main():
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GroupP2PDeterQaRNN", "GroupP2PDeterAgRNN"]
-#     if "-h" in sys.argv or len(sys.argv) <= 1:
-#         print(" ".join(allowed))
-#         return
-#     allowed = sys.argv[1:]
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GrpDeterRm", "GroupP2PDeterQaRNN"]
 
     allowed = parseArg(" ".join([f"'{x}'" for x in allowed]))
 

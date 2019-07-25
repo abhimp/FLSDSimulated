@@ -10,6 +10,25 @@ class SegmentRequest():
         self._downloader = downloader
         self._extraData = extraData
         self._syncSeg = False
+        self._completSeg = True
+
+    def getCopy(self, complete=True):
+        assert self._completSeg or not complete, "Trying to get complete copy from a incomplete object" # it does not make sense to get a complete copy from incomplete object
+        obj = SegmentRequest(
+                qualityIndex = self._qualityIndex,
+                downloadStarted = self._downloadStarted,
+                downloadFinished = self._downloadFinished,
+                segmentDuration = self._segmentDuration,
+                segId = self._segId,
+                clen = self._clen,
+                downloader = self._downloader,
+                extraData = self._extraData,
+            )
+        obj._completSeg = complete
+        return obj
+
+    def getIncompleteCopy(self):
+        return self.getCopy(False)
 
     @property
     def syncSeg(self):
@@ -21,22 +40,27 @@ class SegmentRequest():
 
     @property
     def extraData(self):
+        assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self._extraData
 
     @property
     def qualityIndex(self):
+#         assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self._qualityIndex
 
     @property
     def downloadStarted(self):
+        assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self._downloadStarted
 
     @property
     def downloadFinished(self):
+        assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self._downloadFinished
 
     @property
     def segmentDuration(self):
+#         assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self._segmentDuration
 
     @property
@@ -45,6 +69,7 @@ class SegmentRequest():
 
     @property
     def clen(self):
+        assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self._clen
 
     @property
@@ -53,9 +78,15 @@ class SegmentRequest():
 
     @property
     def timetaken(self):
+        assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self.downloadFinished - self.downloadStarted
 
     @property
     def throughput(self):
+        assert self.isComplete, "Incomplete segment. Attribute is not available."
         return self.clen*8.0/self.timetaken
+
+    @property
+    def isComplete(self):
+        return self._completSeg
 

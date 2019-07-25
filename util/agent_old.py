@@ -4,7 +4,6 @@ import math
 import numpy as np
 from util.group import Group, GroupManager
 from util.calculateMetric import measureQoE
-from util.misc import lineno, getPosition
 
 PLAYBACK_DELAY_THRESHOLD = 4
 M_IN_K = 1000
@@ -41,7 +40,8 @@ class Agent():
         self._vMaxPlayerBufferLen = 50
         self._vTimeouts = []
         self._vRequests = [] # the rquest object
-        self._vAbr = abrClass(videoInfo, self, log_file_path=logpath)
+        self._vAbr = abr = None if not abrClass else abrClass(videoInfo, self, log_file_path=logpath)
+        self._vSetQuality = abr.getNextDownloadTime if abr else self._rWhenToDownload
         self._vStartingPlaybackTime = 0
         self._vStartingSegId = 0
         self._vTotalUploaded = 0
@@ -61,21 +61,6 @@ class Agent():
         self._vTotalPlayableTime = 0
 
         self._vSegIdPlaybackTime = {}
-
-
-        self._vBufManBuffer = {} #segment with multiple options solid segments or not
-        self._vBufManActionPending = False
-        self._vBufManActionId = -1
-        self._vBufManNextSegId = 0
-        self._vBufManRebuffering = True
-        self._vBufManRebufferingFrom = -1
-        self._vBufManFetchIncompeleteSeg = None
-        self._vBufManIncompSegFetching = -1 #segid
-        self._vBufManRemoteBufThresh = 2 # # of segments
-        self._vBufManCurrentPlayinSegId = -1
-        self._vBufManPlayingSegStartedAt = -1
-        self._vBufManRemoteFetchingQueue = {}
-
 
 
     @property
@@ -102,19 +87,17 @@ class Agent():
     @property
     def playbackTime(self):
         now = self._vEnv.getNow()
-        assert self._vBufManPlayingSegStartedAt >= 0
-        timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManCurrentPlayinSegId]["seg"].segmentDuration)
+        timeSpent = now - self._vLastEventTime
 
         playbackTime = self._vPlaybacktime + timeSpent
+        if playbackTime > self.bufferUpto:
+            return self.bufferUpto
         return round(playbackTime, 3)
 
     @property
     def bufferLeft(self):
         now = self._vEnv.getNow()
-        if not self._vIsStarted:
-            return 0
-#         assert self._vBufManPlayingSegStartedAt >= 0
-        timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManCurrentPlayinSegId]["seg"].segmentDuration)
+        timeSpent = now - self._vLastEventTime
 
         playbackTime = self._vPlaybacktime + timeSpent
         if playbackTime > self.bufferUpto:
@@ -124,8 +107,10 @@ class Agent():
     @property
     def stallTime(self):
         now = self._vEnv.getNow()
-        curStall = 0 if self._vBufManRebufferingFrom < 0 else now - self._vBufManRebufferingFrom
-        return self._vTotalStallTime + curStall
+        timeSpent = now - self._vLastEventTime
+
+        playbackTime = self._vPlaybacktime + timeSpent
+        return max(0, playbackTime - self.bufferUpto)
 
 #=============================================
     @property
@@ -144,6 +129,7 @@ class Agent():
     @property
     def avgQualityIndexVariation(self):
         if len(self._vQualitiesPlayed) == 0: return 0
+
         bitratePlayed = self._vQualitiesPlayed
         avgQualityVariation = [abs(bt - bitratePlayed[x - 1]) for x,bt in enumerate(bitratePlayed) if x > 0]
         avgQualityVariation = 0 if len(avgQualityVariation) == 0 else sum(avgQualityVariation)/float(len(avgQualityVariation))
@@ -197,11 +183,46 @@ class Agent():
         return max(0, self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen + round(self.bufferLeft, 3))
 
 #=============================================
-    def _rValidateReq(self, req):
+    def _rNextQuality(self, req):
         if self._vDead: return
 
         assert req.segId == self._vNextSegmentIndex or (req.syncSeg and req.segId > self._vNextSegmentIndex)
         self._vRequests.append(req)
+
+#=============================================
+    def _rWhenToDownload(self, *kw):
+        if self._vDead: return
+
+        if len(self._vRequests) == 0:
+            return 0, 0
+        times, clens = list(zip(*[[req.timetaken, req.clen] for req in self._vRequests[:3]]))
+        avg = sum(clens)*8/sum(times)
+        level = 0
+        for ql, q in enumerate(self._vVideoInfo.bitrates):
+            if q > avg:
+                break
+            level = ql
+#         self._vCurrentBitrateIndex = level
+        buflen = self.bufferUpto - self._vPlaybacktime
+        if (self._vMaxPlayerBufferLen - self._vVideoInfo.segmentDuration) > buflen:
+            return 0, level
+        sleepTime = buflen + self._vVideoInfo.segmentDuration - self._vMaxPlayerBufferLen
+        return sleepTime, level
+
+#=============================================
+    def _rSyncNow(self):
+        now = self._vEnv.getNow()
+        curPlaybackTime = now - self._vGlobalStartedAt
+        curSegId = int(curPlaybackTime + self._vVideoInfo.segmentDuration - 1)/self._vVideoInfo.segmentDuration
+        curSegId = int(curSegId)
+        delay = int(curPlaybackTime)
+        if delay < self._vVideoInfo.segmentDuration * 0.8: #just a random thaught
+            curSegId += 1
+
+        if self._vNextSegmentIndex < curSegId:
+            self._vNextSegmentIndex = curSegId
+            self._vSyncSegment = curSegId
+            self._rDownloadNextData(0)
 
 #=============================================
     def _rStoreSegmentPlaybackTime(self, req):
@@ -215,197 +236,14 @@ class Agent():
         self._vSegIdPlaybackTime[req.segId] = (self._vEnv.now + waitTime, req)
 
 #=============================================
-    def _rAddToBufferToBufferManager(self, req, simIds = None):
-        if self._vDead: return
-        #validate
-        assert req.segId == self._vNextSegmentIndex or (req.syncSeg and req.segId > self._vNextSegmentIndex)
-
-        #setupEnv
-        now = self._vEnv.now
-
-        if not self._vIsStarted:
-            self._rHandleStartup(req)
-            self._rDownloadNextData()
-            return #end this function here are startup is very special and we are handling it differently.
-
-        segId = req.segId
-
-        segBufInfo = self._vBufManBuffer.get(segId, {"hvComplete": False})
-        assert not segBufInfo["hvComplete"], f"Already have complete segment"
-        segBufInfo = {"hvComplete":req.isComplete, "seg": req}
-        self._vBufManBuffer[segId] = segBufInfo
-
-
-        #TODO update parameters like bufferLeft bufferUpto
-        segPlaybackStartTime = segId * self._vVideoInfo.segmentDuration
-        segPlaybackEndTime = segPlaybackStartTime + req.segmentDuration
-        self._vBufferUpto = segPlaybackEndTime
-        self._vNextSegmentIndex = req.segId + 1
-
-        if not req.isComplete:
-            playbackTime = self.playbackTime
-            thresh = self._vBufManRemoteBufThresh * self._vVideoInfo.segmentDuration
-            waitTime = max(0, min(thresh, segPlaybackStartTime - playbackTime - thresh))
-
-            self._rRunAfter(waitTime, self._rBufManIinitRemoteFetch, req)
-            #TODO fetch it from remote and inform
-
-        if req.syncSeg:
-            if self._vBufManActionPending:
-                self._vEnv._vSimulator.cancelTask(self._vBufManActionId)
-                self._vBufManActionId == -1
-            self._vBufManNextSegId = req.segId
-            self._rBufferManager()
-        else:
-            if not self._vBufManActionPending:
-                self._rBufferManager()
-
-        if self._vNextSegmentIndex >= self._vVideoInfo.segmentCount:
-            return
-        self._rDownloadNextData()
-
-#=============================================
-    def _rBufManAddCompleteReq(self, req):
-        assert req.segId in self._vBufManBuffer and not self._vBufManBuffer[req.segId]['seg'].isComplete
-        self._vBufManBuffer[req.segId] = {"hvComplete":req.isComplete, "seg": req}
-        if self._vBufManNextSegId == req.segId and not self._vBufManActionPending:
-            self._rBufferManager()
-
-#=============================================
-    def _rBufManIinitRemoteFetch(self, req):
-        req = self._vBufManBuffer[req.segId].get("seg", None)
-        if req.isComplete:
-            return
-        if req.segId in self._vBufManRemoteFetchingQueue:
-            return
-        self._vBufManRemoteFetchingQueue[req.segId] = "fetching"
-        self._vEnv._rFetchCompletePacket(req)
-
-#=============================================
-    def _rBufferManager(self):
-        nextBufSeg = self._vBufManNextSegId
-        now = self._vEnv.now
-#         assert nextBufSeg in self._vBufManBuffer, f"Next segment does not exists in the buffer during startup: {getPosition()}"
-        assert self._vBufManRebuffering != self._vBufManActionPending #it easy
-
-        bufSegInfo = self._vBufManBuffer.get(nextBufSeg, None)
-        if not bufSegInfo or (not bufSegInfo['seg'].isComplete and bufSegInfo['seg'].segId in self._vBufManRemoteFetchingQueue):
-            if self._vBufManRebuffering:
-                return #it is odd, probably it will never happen
-            self._vBufManRebuffering = True
-            self._vBufManRebufferingFrom = now
-            self._vBufManActionPending = False #it will continue when new seg arrives
-            return
-
-        assert bufSegInfo['seg'].isComplete #it is meaningless and we should debug how this can happen
-        req = bufSegInfo["seg"]
-        segId = req.segId
-        segPlaybackStartTime = segId * self._vVideoInfo.segmentDuration
-        segPlaybackEndTime = segPlaybackStartTime + req.segmentDuration
-
-
-        if self._vBufManRebuffering:
-            assert self._vBufManRebufferingFrom >= 0
-            stallTime = now - self._vBufManRebufferingFrom
-            self._vTotalStallTime += stallTime
-            self._vStallsAt.append((segPlaybackStartTime, stallTime, req.qualityIndex, req.downloader==self._vEnv))
-            self._vBufManRebufferingFrom = -1
-            self._vBufManRebuffering = False
-
-
-        if True:
-            self._vBufManNextSegId = req.segId + 1
-            self._vBufManRebuffering = False
-            self._vBufManRebufferingFrom = -1
-            self._vPlaybacktime = segPlaybackStartTime
-            self._vRequests.append(req)
-            self._vSegIdPlaybackTime[req.segId] = (self._vEnv.now, req)
-            self._vTotalPlayableTime += req.segmentDuration
-
-            self._vQualitiesPlayed += [req.qualityIndex]
-            self._vQualitiesPlayedOverTime += [(now, req.qualityIndex, req.segId)]
-
-            self._vBufferLenOverTime += [(now, req.segmentDuration)]
-            self._vLastBitrateIndex = req.qualityIndex
-
-            self._vBufManActionPending = False
-            self._vBufManActionId = -1
-
-            self._vBufManCurrentPlayinSegId = req.segId
-            self._vBufManPlayingSegStartedAt = now
-
-
-            if self._vBufManNextSegId < self._vVideoInfo.segmentCount:
-                self._rRunBufManAfter(req.segmentDuration)
-            elif self._vBufManNextSegId == self._vVideoInfo.segmentCount:
-                self._vEnv.finishedAfter(req.segmentDuration)
-            else:
-                assert False, "Some issue"
-
-
-
-
-#=============================================
-    def _rHandleStartup(self, req): #unlike old implementation, I don't care about global playback sync in case of live streaming
-        now = self._vEnv.now
-
-        startUpDelay = now - self._vStartedAt
-        segPlaybackStartTime = req.segId * self._vVideoInfo.segmentDuration
-        segPlaybackEndTime = segPlaybackStartTime + req.segmentDuration
-
-        self._vBufferUpto = segPlaybackEndTime
-        self._vBufManNextSegId = req.segId + 1
-        self._vBufManRebuffering = False
-        self._vFirstSegmentDlTime = req.timetaken
-        self._vIsStarted = True
-        self._vNextSegmentIndex = req.segId + 1
-        self._vPlaybacktime = segPlaybackStartTime
-        self._vRequests.append(req)
-        self._vSegIdPlaybackTime[req.segId] = (self._vEnv.now, req)
-        self._vStartingPlaybackTime = segPlaybackStartTime
-        self._vStartingSegId = req.segId
-        self._vStartUpDelay = startUpDelay
-        self._vTotalPlayableTime += req.segmentDuration
-
-        self._vQualitiesPlayed += [req.qualityIndex]
-        self._vQualitiesPlayedOverTime += [(now, req.qualityIndex, req.segId)]
-
-        self._vBufferLenOverTime += [(now, req.segmentDuration)]
-        self._vLastBitrateIndex = req.qualityIndex
-
-        self._vBufManCurrentPlayinSegId = req.segId
-        self._vBufManPlayingSegStartedAt = now
-
-        self._vBufManBuffer[req.segId] = {"hvComplete":req.isComplete, "seg": req}
-
-        self._rRunBufManAfter(req.segmentDuration)
-
-        for cb in self._vStartUpCallback:
-            cb(self)
-        #Previously we wanted to keep all the player in sync in case of live streaming by skipping segments in case of late arrival. However we don't need this accuracy. So, we will ignore. Instead, it will be taken care during group formation.
-
-#=============================================
-    def _rRunBufManAfter(self, sec):
-        assert not self._vBufManActionPending
-        assert self._vBufManActionId == -1
-        self._vBufManActionId = self._rRunAfter(sec, self._rBufferManager)
-        self._vBufManActionPending = True
-
-#=============================================
-    def _rRunAfter(self, *kw, **kwa): #wrapper function for shortcut. args, after(sec), cb, args
-        return self._vEnv.runAfter(*kw, **kwa)
-
-#=============================================
     def _rAddToBufferInternal(self, req, simIds = None):
         if self._vDead: return
-        self._rAddToBufferToBufferManager(req, simIds)
-        return
 
-        self._rValidateReq(req)
-        if self._vNextSegmentIndex <= req.segId and req.syncSeg: #in case of future syncSeg we update _vNextSegmentIndex and seek the playbackTime
+        self._rNextQuality(req)
+        if self._vNextSegmentIndex <= req.segId and req.syncSeg:
             self._vNextSegmentIndex =  self._vSyncSegment = req.segId
 
-        assert (req.segId * self._vVideoInfo.segmentDuration + self._vGlobalStartedAt - (self.bufferLeft * ( 1 - req.syncSeg)) <= self._vEnv.now) #Make sure that player does not play any future video
+        assert (req.segId * self._vVideoInfo.segmentDuration + self._vGlobalStartedAt - (self.bufferLeft * ( 1 - req.syncSeg)) <= self._vEnv.now)
 
         ql, timetaken, segDur, segId, clen = req.qualityIndex, req.timetaken, req.segmentDuration, req.segId, req.clen
 
@@ -481,18 +319,45 @@ class Agent():
         self._rDownloadNextData(buflen)
 
 #=============================================
-    def _rDownloadNextData(self, buflen=0):
+    def _rSkipToSegId(self, segId):
+        self._vPlaybacktime = self._vBufferUpto = self._vVideoInfo.segmentDuration * segId
+        self._vNextSegmentIndex = segId
+
+#=============================================
+    def _rDownloadNextData(self, buflen):
         if self._vDead: return
 
         now = self._vEnv.getNow()
         nextSegId = self._vNextSegmentIndex
         nextQuality = self._vCurrentBitrateIndex
-        sleepTime, nextQuality = self._vAbr.getNextDownloadTime(self._vMaxPlayerBufferLen, \
+        sleepTime, nextQuality = self._vSetQuality(self._vMaxPlayerBufferLen, \
             self.bufferUpto, self._vPlaybacktime, now, self._vNextSegmentIndex)
         self._vCurrentBitrateIndex = nextQuality
         self._vEnv._rDownloadNextData(nextSegId, nextQuality, sleepTime)
 
+#=============================================
+#     def _rTimeoutEvent(self, simIds, lastBandwidthPtr, sleepTime):
+#         if self._vDead: return
+#
+#         if simIds != None and REQUESTION_SIMID_KEY in simIds:
+#             self._vSimulator.cancelTask(simIds[REQUESTION_SIMID_KEY])
+#
+#         self._vLastBandwidthPtr = lastBandwidthPtr
+#         self._vTimeouts.append((self._vNextSegmentIndex, self._vCurrentBitrateIndex))
+#         self._vCurrentBitrateIndex = 0
+#         self._rFetchSegment(self._vNextSegmentIndex, self._vCurrentBitrateIndex, sleepTime)
 
+
+
+#=============================================
+    def _rGetTimeOutTime(self):
+        if self._vDead: return
+
+        timeout = self._vVideoInfo.segmentDuration
+        bufLeft = self.bufferUpto - self._vPlaybacktime
+        if bufLeft - timeout > timeout:
+            timeout = bufLeft - timeout
+        return timeout
 
 #=============================================
     def _rIsAvailable(self, segId):
@@ -504,7 +369,6 @@ class Agent():
         avlUpTo = self._vVideoInfo.globalDelayPlayback + ePlaybackTime
         segStartTime = (segId+1)*self._vVideoInfo.segmentDuration
         return segStartTime - avlUpTo
-
 #=============================================
     def _rCalculateQoE(self):
         if self._vDead: return
@@ -537,7 +401,6 @@ class Agent():
         if startedAt >= 0:
             playbackTime = now - startedAt
             self._vNextSegmentIndex = int((playbackTime)/self._vVideoInfo.segmentDuration)
-            self._vBufManNextSegId = self._vNextSegmentIndex
 #             while (self._vNextSegmentIndex + 1) * self._vVideoInfo.segmentDuratio`n < playbackTime + PLAYBACK_DELAY_THRESHOLD:
 #                 self._vNextSegmentIndex += 1
 #             self._vNextSegmentIndex += 1
