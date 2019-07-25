@@ -243,12 +243,8 @@ class Agent():
         self._vNextSegmentIndex = req.segId + 1
 
         if not req.isComplete:
-            playbackTime = self.playbackTime
-            thresh = self._vBufManRemoteBufThresh * self._vVideoInfo.segmentDuration
-            waitTime = max(0, min(thresh, segPlaybackStartTime - playbackTime - thresh))
-
-            self._rRunAfter(waitTime, self._rBufManIinitRemoteFetch, req)
             #TODO fetch it from remote and inform
+            self._rBufManIinitRemoteFetch(req)
 
         if req.syncSeg:
             if self._vBufManActionPending:
@@ -278,8 +274,14 @@ class Agent():
             return
         if req.segId in self._vBufManRemoteFetchingQueue:
             return
+
+        playbackTime = self.playbackTime
+        segPlaybackStartTime = req.segId * self._vVideoInfo.segmentDuration
+        thresh = self._vBufManRemoteBufThresh * self._vVideoInfo.segmentDuration
+        waitTime = max(0, min(thresh, segPlaybackStartTime - playbackTime - thresh))
+
         self._vBufManRemoteFetchingQueue[req.segId] = "fetching"
-        self._vEnv._rFetchCompletePacket(req)
+        self._rRunAfter(waitTime, self._vEnv._rFetchCompletePacket, req)
 
 #=============================================
     def _rBufferManager(self):

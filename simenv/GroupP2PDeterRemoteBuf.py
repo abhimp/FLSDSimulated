@@ -134,7 +134,7 @@ class GroupP2PDeter(Simple):
 #=============================================
     def _rFetchCompletePacket(self, req):
         assert req.downloader != self
-        assert req.downloader in self._vGroupNodes
+        assert req.downloader in self._vGroupNodes #Here i found a interesting result. There are certain time when we have better qualityIndex than orig req.
         self.requestRpc(req.downloader._rSendOrigReq, req, self)
 
 #=============================================
