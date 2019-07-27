@@ -67,12 +67,10 @@ class Agent():
         self._vBufManActionPending = False
         self._vBufManActionId = -1
         self._vBufManNextSegId = 0
-        self._vBufManRebuffering = True
+        self._vBufManRebuffering = True #Its better this way
         self._vBufManRebufferingFrom = -1
-        self._vBufManFetchIncompeleteSeg = None
-        self._vBufManIncompSegFetching = -1 #segid
         self._vBufManRemoteBufThresh = 2 # # of segments
-        self._vBufManCurrentPlayinSegId = -1
+        self._vBufManPlayinSegId = -1
         self._vBufManPlayingSegStartedAt = -1
         self._vBufManRemoteFetchingQueue = {}
 
@@ -103,7 +101,7 @@ class Agent():
     def playbackTime(self):
         now = self._vEnv.getNow()
         assert self._vBufManPlayingSegStartedAt >= 0
-        timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManCurrentPlayinSegId]["seg"].segmentDuration)
+        timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManPlayinSegId]["seg"].segmentDuration)
 
         playbackTime = self._vPlaybacktime + timeSpent
         return round(playbackTime, 3)
@@ -114,7 +112,7 @@ class Agent():
         if not self._vIsStarted:
             return 0
 #         assert self._vBufManPlayingSegStartedAt >= 0
-        timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManCurrentPlayinSegId]["seg"].segmentDuration)
+        timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManPlayinSegId]["seg"].segmentDuration)
 
         playbackTime = self._vPlaybacktime + timeSpent
         if playbackTime > self.bufferUpto:
@@ -250,6 +248,8 @@ class Agent():
             if self._vBufManActionPending:
                 self._vEnv._vSimulator.cancelTask(self._vBufManActionId)
                 self._vBufManActionId == -1
+
+            self._vPlaybacktime = segPlaybackStartTime
             self._vBufManNextSegId = req.segId
             self._rBufferManager()
         else:
@@ -262,13 +262,18 @@ class Agent():
 
 #=============================================
     def _rBufManAddCompleteReq(self, req):
+        now = self._vEnv.now
+
+        assert req.isComplete
         assert req.segId in self._vBufManBuffer and not self._vBufManBuffer[req.segId]['seg'].isComplete
         self._vBufManBuffer[req.segId] = {"hvComplete":req.isComplete, "seg": req}
+        self._vBufManRemoteFetchingQueue[req.segId] += f" done:{now}"
         if self._vBufManNextSegId == req.segId and not self._vBufManActionPending:
             self._rBufferManager()
 
 #=============================================
     def _rBufManIinitRemoteFetch(self, req):
+        now = self._vEnv.now
         req = self._vBufManBuffer[req.segId].get("seg", None)
         if req.isComplete:
             return
@@ -278,9 +283,10 @@ class Agent():
         playbackTime = self.playbackTime
         segPlaybackStartTime = req.segId * self._vVideoInfo.segmentDuration
         thresh = self._vBufManRemoteBufThresh * self._vVideoInfo.segmentDuration
-        waitTime = max(0, min(thresh, segPlaybackStartTime - playbackTime - thresh))
+        waitTime = max(0, min(thresh, segPlaybackStartTime - playbackTime - thresh)) #waitTime=0 if syncSeg
+        if req.syncSeg: waitTime = 0
 
-        self._vBufManRemoteFetchingQueue[req.segId] = "fetching"
+        self._vBufManRemoteFetchingQueue[req.segId] = f"fetching:{now+waitTime}"
         self._rRunAfter(waitTime, self._vEnv._rFetchCompletePacket, req)
 
 #=============================================
@@ -333,7 +339,7 @@ class Agent():
             self._vBufManActionPending = False
             self._vBufManActionId = -1
 
-            self._vBufManCurrentPlayinSegId = req.segId
+            self._vBufManPlayinSegId = req.segId
             self._vBufManPlayingSegStartedAt = now
 
 
@@ -375,7 +381,7 @@ class Agent():
         self._vBufferLenOverTime += [(now, req.segmentDuration)]
         self._vLastBitrateIndex = req.qualityIndex
 
-        self._vBufManCurrentPlayinSegId = req.segId
+        self._vBufManPlayinSegId = req.segId
         self._vBufManPlayingSegStartedAt = now
 
         self._vBufManBuffer[req.segId] = {"hvComplete":req.isComplete, "seg": req}

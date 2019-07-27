@@ -67,6 +67,7 @@ class GroupP2PDeter(Simple):
         self._vSyncNow = False
         self._vLastSyncSeg = -1
         self._vSleepingSegs = {}
+        self._vSyncSegIds = set()
 
         self._vDeadLines = {}
         self._vDeadLineMissed = []
@@ -130,12 +131,13 @@ class GroupP2PDeter(Simple):
     def _rSyncComplete(self, segId):
         self._vSyncNow = False
         self._vLastSyncSeg = segId
+        self._vSyncSegIds.add(segId)
 
 #=============================================
     def _rFetchCompletePacket(self, req):
         cacheReq = self._vCatched[req.segId]
         if cacheReq != req and cacheReq.isComplete:
-            self._vAgent._rBufManAddCompleteReq(req)
+            self._vAgent._rBufManAddCompleteReq(cacheReq)
             return
 
         assert req.downloader != self
@@ -145,17 +147,22 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def _rSendOrigReq(self, req, remote, depth):
-#         if req.segId in self._vCatched and self._vCatched[req.segId].downloader != self:
-#             self._rFetchCompletePacket(self._vCatched[req.segId], depth-1, remote)
-#             return
+        assert remote != self
+        assert depth
+        if self._vCatched[req.segId].downloader != self:
+            self.requestRpc(self._vCatched[req.segId].downloader._rSendOrigReq, req, remote, depth-1)
+            return
+
         assert req.segId in self._vCatched and self._vCatched[req.segId].isComplete
         reqOrig = self._vCatched[req.segId]
+        assert reqOrig.isComplete
         self.requestLongRpc(remote._rRecvOrigReq, reqOrig.clen, reqOrig, self)
 
 #=============================================
     def _rRecvOrigReq(self, req, node):
+        if req.segId in self._vSyncSegIds:
+            req.syncSeg = True
         self._vAgent._rBufManAddCompleteReq(req)
-
 
 #=============================================
     def requestRpc(self, func, *argv, **kargv):
@@ -316,13 +323,18 @@ class GroupP2PDeter(Simple):
             syncSeg = True
             self._rSetNextDownloader(playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
             return
-        elif segId == self._vLastSyncSeg:
+        elif segId == self._vLastSyncSeg or segId in self._vSyncSegIds:
             syncSeg = True
         elif self._vAgent.nextSegmentIndex > self._vLastSyncSeg:
-            #check if there are bufferAvailable in player
+            #check if there are bufferAvailable in player. This is wrong.
+            waitTimes = []
             segPlaybackTime = self._vVideoInfo.segmentDuration*segId
-            curPlaybackTime = self._vAgent.playbackTime
-            waitTime = max(0, segPlaybackTime - curPlaybackTime - self._vAgent._vMaxPlayerBufferLen)
+            for node in self._vGroupNodes:
+                if not node._vGroupStarted: continue
+                curPlaybackTime = node._vAgent.playbackTime
+                waitTime = max(0, segPlaybackTime - curPlaybackTime - node._vAgent._vMaxPlayerBufferLen + self._vVideoInfo.segmentDuration)
+                waitTimes += [waitTime]
+            waitTime = max(waitTimes)
             if waitTime > 0:
 #                 assert waitTime < 100
                 tmp = self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc2"))
@@ -412,6 +424,8 @@ class GroupP2PDeter(Simple):
             del self._vSleepingSegs[nextSegId]
 
         if nextSegId in self._vCatched:
+            waitTime = max(self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft, 0)
+#             if waitTime >
             self._rAddToAgentBuffer(self._vCatched[nextSegId])
             return
 
@@ -426,7 +440,7 @@ class GroupP2PDeter(Simple):
             self._rDownloadAsTeamPlayer(nextSegId, ql = nextQuality)
             return
 
-        deadLine = (nextSegId-1) * self._vVideoInfo.segmentDuration - self._vAgent.playbackTime
+        deadLine = (nextSegId-1) * self._vVideoInfo.segmentDuration - min([x._vAgent.playbackTime for x in self._vGroupNodes if x._vGroupStarted])
         if deadLine > 0:
             self.runAfter(deadLine, self._rDeadlineReached, nextSegId)
         else:
@@ -434,6 +448,8 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def _rAddToAgentBuffer(self, req, simIds=None):
+        if req.segId in self._vSyncSegIds:
+            req.syncSeg = True
         if self._vAgent.nextSegmentIndex > req.segId:
             return
         assert self._vAgent.nextSegmentIndex == req.segId or req.syncSeg
@@ -451,6 +467,8 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def _rAddToBuffer(self, req, simIds = None):
+        if req.segId in self._vSyncSegIds:
+            req.syncSeg = True
         self._vDownloadPending = False
 #         rnnkey = self._vDownloadPendingRnnkey
         self._rDownloadFromDownloadQueue()

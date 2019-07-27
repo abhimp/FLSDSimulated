@@ -1,5 +1,19 @@
 from simulator.priorityQueue import PriorityQueue
 import random
+import sys
+
+def getStack():
+    frame = sys._getframe().f_back
+    stack = []
+    while frame:
+        line = frame.f_lineno
+        fileName = frame.f_code.co_filename
+        func = frame.f_code.co_name
+        st = f"{func}() at {fileName}:{line}\n"
+        stack += [st]
+        frame = frame.f_back
+    return stack
+
 
 class Simulator():
     def __init__(self):
@@ -16,7 +30,8 @@ class Simulator():
         assert at >= self.now
         tskId = self.taskId
         self.taskId += 1
-        self.queue.insert(at, (at, tskId, callback, args, kw))
+        stack = getStack()
+        self.queue.insert(at, (at, tskId, stack, callback, args, kw))
         return tskId
 
     def getNow(self):
@@ -29,7 +44,7 @@ class Simulator():
 
     def run(self):
         while not self.queue.isEmpty():
-            at, tskId, callback, args, kw = self.queue.extractMin()
+            at, tskId, stack, callback, args, kw = self.queue.extractMin()
             if tskId in self.taskRemoved:
                 self.taskRemoved.remove(tskId)
                 continue

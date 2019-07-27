@@ -20,3 +20,14 @@ def getPosition():
     fileName = frame.f_code.co_filename
     return f"{fileName}:{line}"
 
+def getStack():
+    frame = sys._getframe().f_back
+    stack = []
+    while frame:
+        line = frame.f_lineno
+        fileName = frame.f_code.co_filename
+        func = frame.f_code.co_name
+        st = f"{func} at {fileName}:{line}"
+        stack += [st]
+        frame = frame.f_back
+    return stack
