@@ -73,6 +73,7 @@ class Agent():
         self._vBufManPlayinSegId = -1
         self._vBufManPlayingSegStartedAt = -1
         self._vBufManRemoteFetchingQueue = {}
+        self._vBufManBufferOccupacy = 0
 
 
 
@@ -113,11 +114,17 @@ class Agent():
             return 0
 #         assert self._vBufManPlayingSegStartedAt >= 0
         timeSpent = min(now - self._vBufManPlayingSegStartedAt, self._vBufManBuffer[self._vBufManPlayinSegId]["seg"].segmentDuration)
+        bufOcc = self._vBufManBuffer[self._vBufManPlayinSegId]["seg"].segmentDuration - timeSpent
+        for segId in range(self._vBufManNextSegId, self._vNextSegmentIndex):
+            if self._vBufManBuffer[segId]['hvComplete']:
+                bufOcc += self._vBufManBuffer[segId]["seg"].segmentDuration
 
-        playbackTime = self._vPlaybacktime + timeSpent
-        if playbackTime > self.bufferUpto:
-            return 0.0
-        return self.bufferUpto - playbackTime
+        return bufOcc
+
+#         bufLeft = self._vMaxPlayerBufferLen - bufOcc
+#         assert bufLeft >= 0
+#         return bufLeft
+
 
     @property
     def stallTime(self):
@@ -251,6 +258,7 @@ class Agent():
 
             self._vPlaybacktime = segPlaybackStartTime
             self._vBufManNextSegId = req.segId
+            self._vBufManBufferOccupacy = 0
             self._rBufferManager()
         else:
             if not self._vBufManActionPending:

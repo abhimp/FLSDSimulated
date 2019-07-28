@@ -9,7 +9,7 @@ from util import videoInfo as video
 from simulator.simulator import Simulator
 from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
-from simenv.GroupP2PTimeoutInc import GroupP2PTimeoutInc
+from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GroupP2PDeterRm
 from simenv.GroupP2PDeter import GroupP2PDeter
 from util.group import GroupManager
 # from simenv.SimpleP2P import experimentSimpleP2P
@@ -155,15 +155,11 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
 
 def main():
     global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN
-    allowed = ["GroupP2PTimeoutInc", "GroupP2PEnvTimeoutIncRNN", "GroupP2PEnvRNN", "GrpDeter"]
+    allowed = ["GroupP2PEnvRNN", "GrpDeter", "GrpDeterRm"]
     if "-h" in sys.argv or len(sys.argv) <= 1:
         print(" ".join(allowed))
         return
     allowed = sys.argv[1:]
-    if "GroupP2PEnvTimeoutIncRNN" in allowed and GroupP2PEnvTimeoutIncRNN is None:
-        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PTimeoutIncRNN as gpe
-        GroupP2PEnvTimeoutIncRNN = gpe
-
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
     vi = video.loadVideoTime("./videofilesizes/sizes_0b4SVyP0IqI.py")
@@ -175,10 +171,9 @@ def main():
 
     for grpSz in [3, 4, 5, 6, 7, 8, 9, 10]:
         testCB = {}
-        testCB["GroupP2PTimeoutInc"] = (grpSz, GroupP2PTimeoutInc, traces, vi, network)
-        testCB["GroupP2PEnvTimeoutIncRNN"] = (grpSz, GroupP2PTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
         testCB["GroupP2PEnvRNN"] = (grpSz, GroupP2PRNN, traces, vi, network, BOLA, None, "./ResModelPathRNN/")
         testCB["GrpDeter"] = (grpSz, GroupP2PDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
+        testCB["GrpDeterRm"] = (grpSz, GroupP2PDeterRm, traces, vi, network, BOLA, None, "ResModelPathRNN/")
 
         results = {}
         cdns = {}

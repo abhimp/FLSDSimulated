@@ -228,7 +228,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
         ags.append(env)
     simulator.run()
     for i,a in enumerate(ags):
-        assert a._vAgent._vFinished # or a._vDead
+        assert a._vFinished and a._vAgent._vFinished # or a._vDead
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def importLearningModules(allowed):

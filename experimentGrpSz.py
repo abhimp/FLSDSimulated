@@ -3,16 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import collections as cl
 import sys
+import argparse
 
 from util import load_trace
-from util import videoInfo as video
+import util.videoInfo as video
 from util.p2pnetwork import P2PNetwork
-from util import randStateInit as randstate
+import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
-from simenv.GroupP2PTimeout import GroupP2PTimeout
-from simenv.GroupP2PTimeoutSkip import GroupP2PTimeoutSkip
-from simenv.GroupP2PTimeoutInc import GroupP2PTimeoutInc
 from simenv.GroupP2PDeter import GroupP2PDeter
+from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
 from simenv.Simple import Simple
 from simenv.DHT import DHT
 from simulator.simulator import Simulator
@@ -23,12 +22,9 @@ from abr.RobustMPC import AbrRobustMPC
 from abr.BOLA import BOLA
 from util.cdnUsages import CDN
 
-# from simenv.GroupP2PTimeoutRNNTest import GroupP2PTimeoutRNN
-# from abrPensiev import AbrPensieve
-# from simenv.GroupP2PTimeoutIncRNN import GroupP2PTimeoutIncRNN
-GroupP2PTimeoutRNN = None
-GroupP2PTimeoutIncRNN = None
 AbrPensieve = None
+GroupP2PRNN = None
+GroupP2PDeterQaRNN = None
 
 
 RESULT_DIR_ = "./results/GroupSizePlot"
@@ -97,20 +93,12 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GrpDeter", "GroupP2PBasic", "GroupP2PTimeout", "GroupP2PTimeoutSkip", "GroupP2PTimeoutRNN", "GroupP2PTimeoutIncRNN"]:
+        if name not in ["GrpDeter", "GroupP2PBasic"]:
             continue
-#         x = []
         for ag in res:
             if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) != ag._vGroup.peersPerGroup:
                 p.add(ag.networkId)
     return p
-#               x += [ag.networkId]
-#         if len(x) > 0:
-#             if len(p) > 0:
-#                 assert x == p[-1]
-#             p.append(x)
-#     if len(p): print(p)
-#     return set(p[-1]) if len(p) else []
 
 
 def saveAgentsDataMulitAttrib(grpSz, results, attribs, pltTitle, lonePeers = []):
@@ -135,10 +123,10 @@ def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
             'weight' : 'bold',
             'size'   : 22}
 
-    figsize=(7, 5)
-    plt.clf()
-    plt.rc('font', **font)
-    plt.figure(figsize=figsize, dpi=150)
+#     figsize=(7, 5)
+#     plt.clf()
+#     plt.rc('font', **font)
+#     plt.figure(figsize=figsize, dpi=150)
     assert min([len(res) for name, res in results.items()]) == max([len(res) for name, res in results.items()])
     pltData = {}
     for name, res in results.items():
@@ -154,26 +142,26 @@ def plotAgentsData(grpSz, results, attrib, pltTitle, xlabel, lonePeers = []):
         pltData[name] = Ys
         Xs, Ys = list(zip(*getCMF(Ys)))
         savePlotData(Xs, Ys, name + "_"+str(grpSz) + "_cmf", pltTitle)
-        plt.plot(Xs, Ys, label=name)
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title(pltTitle)
+#         plt.plot(Xs, Ys, label=name)
+#     plt.legend(ncol = 2, loc = "upper center")
+#     plt.title(pltTitle)
 #     plt.xlabel(xlabel)
-    dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
+#     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
 #     x,l = plt.xticks()
 #     plt.xticks(x, l, rotation=20)
-    plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
-    plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
+#     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
+#     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
 #     plt.show()
-    plt.clf()
-    plt.rc('font', **font)
-    plt.figure(figsize=figsize, dpi=150)
-    names, Yss = list(zip(*pltData.items()))
-    plt.boxplot(Yss, labels=names, notch=True)
-    plt.title(pltTitle)
-    x,l = plt.xticks()
-    plt.xticks(x, l, rotation=20)
-    plt.savefig(dpath + "_box.png", bbox_inches="tight")
-    plt.savefig(dpath + "_box.eps", bbox_inches="tight")
+#     plt.clf()
+#     plt.rc('font', **font)
+#     plt.figure(figsize=figsize, dpi=150)
+#     names, Yss = list(zip(*pltData.items()))
+#     plt.boxplot(Yss, labels=names, notch=True)
+#     plt.title(pltTitle)
+#     x,l = plt.xticks()
+#     plt.xticks(x, l, rotation=20)
+#     plt.savefig(dpath + "_box.png", bbox_inches="tight")
+#     plt.savefig(dpath + "_box.eps", bbox_inches="tight")
 
 def plotCDNData(grpSz, cdns):
     font = {'family' : 'normal',
@@ -181,23 +169,29 @@ def plotCDNData(grpSz, cdns):
             'size'   : 22}
 
     figsize=(7, 5)
-    plt.clf()
-    plt.rc('font', **font)
-    plt.figure(figsize=figsize, dpi=150)
+#     plt.clf()
+#     plt.rc('font', **font)
+#     plt.figure(figsize=figsize, dpi=150)
     pltData = {}
     pltTitle = "cdnUploaded"
     for name, res in cdns.items():
         Xs, Ys = list(zip(*res.uploaded))
         savePlotData(Xs, Ys, name + "_"+str(grpSz), pltTitle)
-        plt.plot(Xs, Ys, label=name)
+#         plt.plot(Xs, Ys, label=name)
 
-    plt.legend(ncol = 2, loc = "upper center")
-    plt.title(pltTitle)
-    dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
-    plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
-    plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
+        Xs, Ys = list(zip(*res.uploadRequests))
+        savePlotData(Xs, Ys, name + "_cnt", pltTitle)
+
+#     plt.legend(ncol = 2, loc = "upper center")
+#     plt.title(pltTitle)
+#     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
+#     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
+#     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
 
 GLOBAL_STARTS_AT = 5
+
+def getDict(**kws):
+    return kws
 
 def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None):
     simulator = Simulator()
@@ -218,20 +212,69 @@ def runExperiments(grpSz, envCls, traces, vi, network, abr = BOLA, result_dir=No
         ags.append(env)
     simulator.run()
     for i,a in enumerate(ags):
-        assert a._vFinished # or a._vDead
+        assert a._vFinished and a._vAgent._vFinished # or a._vDead
     return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
-def main():
-    global GroupP2PTimeoutRNN, AbrPensieve, GroupP2PTimeoutIncRNN
-    allowed = ["GrpDeter", "GroupP2PTimeoutInc", "GroupP2PTimeoutIncRNN"]
-    if "-h" in sys.argv or len(sys.argv) <= 1:
-        print(" ".join(allowed))
-        return
-    allowed = sys.argv[1:]
-    if "GroupP2PTimeoutIncRNN" in allowed and GroupP2PTimeoutIncRNN is None:
-        from simenv.GroupP2PTimeoutIncRNNTest import GroupP2PTimeoutIncRNN as gpe
-        GroupP2PTimeoutIncRNN = gpe
+def importLearningModules(allowed):
+    global AbrPensieve, GroupP2PRNN, GroupP2PDeterQaRNN
+    if "Penseiv" in allowed and AbrPensieve is None:
+        from abr.Pensiev import AbrPensieve as abp
+        AbrPensieve = abp
 
+    if "GroupP2PRNN" in allowed and GroupP2PRNN is None:
+        from simenv.GroupP2PRNNTest import GroupP2PRNN as obj
+        GroupP2PRNN = obj
+
+    if "GroupP2PDeterQaRNN" in allowed and GroupP2PDeterQaRNN is None:
+        from simenv.GroupP2PDeterQaRNN import GroupP2PDeterQaRNN as obj
+        GroupP2PDeterQaRNN = obj
+
+
+def getTestObj(traces, vi, network):
+    testCB = {}
+    #envCls, traces, vi, network, abr = BOLA, result_dir=None, modelPath = None, rnnAgentModule=None, rnnQualityModule=None
+    testCB["BOLA"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=BOLA)
+    testCB["FastMPC"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrFastMPC)
+    testCB["RobustMPC"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrRobustMPC)
+    testCB["Penseiv"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrPensieve)
+    testCB["GroupP2PBasic"] = getDict(envCls=GroupP2PBasic, traces=traces, vi=vi, network=network)
+    testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network)
+    testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
+    testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
+    testCB["GrpDeterRm"] = getDict(envCls=GrpDeterRemote, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
+    testCB["GroupP2PDeterQaRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNQa/")
+
+    return testCB
+
+def parseArg(experiments):
+    global EXIT_ON_CRASH, MULTI_PROC
+    parser = argparse.ArgumentParser(description='Experiment')
+    parser.add_argument('--exit-on-crash',  help='Program will exit after first crash', action="store_true")
+    parser.add_argument('--no-slave-proc',  help='No new Process will created for slave', action="store_true")
+    parser.add_argument('--no-quality-rnn-proc',  help='Quality rnn will run in same process as parent', action="store_true")
+    parser.add_argument('--no-agent-rnn-proc',  help='Agent rnn will run in same process as parent', action="store_true")
+    parser.add_argument('exp', help=experiments, nargs='+')
+    args = parser.parse_args()
+    EXIT_ON_CRASH = args.exit_on_crash
+    MULTI_PROC = not args.no_slave_proc
+    if "EXP_ENV_LEARN_PROC_QUALITY" in os.environ:
+        del os.environ["EXP_ENV_LEARN_PROC_QUALITY"]
+    if "EXP_ENV_LEARN_PROC_AGENT" in os.environ:
+        del os.environ["EXP_ENV_LEARN_PROC_AGENT"]
+    if args.no_quality_rnn_proc:
+        os.environ["EXP_ENV_LEARN_PROC_QUALITY"] = "NO"
+    elif args.no_agent_rnn_proc:
+        os.environ["EXP_ENV_LEARN_PROC_AGENT"] = "NO"
+
+    return args.exp
+
+
+def main():
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GrpDeterRm", "GroupP2PDeterQaRNN"]
+
+    allowed = parseArg(" ".join([f"'{x}'" for x in allowed]))
+
+    importLearningModules(allowed)
 #     randstate.storeCurrentState() #comment this line to use same state as before
     randstate.loadCurrentState()
     traces = load_trace.load_trace()
@@ -243,21 +286,17 @@ def main():
     traces = list(zip(*traces))
     network = P2PNetwork()
 #     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
-
-    testCB = {}
-    testCB["GroupP2PTimeoutInc"] = (GroupP2PTimeoutInc, traces, vi, network)
-    testCB["GroupP2PTimeoutIncRNN"] = (GroupP2PTimeoutIncRNN, traces, vi, network, BOLA, None, "ModelPath")
-    testCB["GrpDeter"] = (GroupP2PDeter, traces, vi, network, BOLA, None, "ResModelPathRNN/")
-
+    testCB = getTestObj(traces, vi, network)
     results = {}
     cdns = {}
 
     for grpSz in [3, 4, 5, 6, 7, 8, 9, 10]:
+#     for grpSz in [10]:
         for name in allowed:
             assert name in testCB
             cb = testCB[name]
             randstate.loadCurrentState()
-            ags, cdn = runExperiments(grpSz, *cb)
+            ags, cdn = runExperiments(grpSz = grpSz, **cb)
             results[name] = ags
             cdns[name] = cdn
 

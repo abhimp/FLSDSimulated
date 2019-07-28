@@ -1,8 +1,10 @@
 from simulator.priorityQueue import PriorityQueue
 import random
 import sys
+import os
 
 def getStack():
+#     if os.environ.get("SIMULATOR_MODE", "").upper() != "DEBUG": return None
     frame = sys._getframe().f_back
     stack = []
     while frame:

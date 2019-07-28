@@ -24,6 +24,7 @@ class SegmentRequest():
                 downloader = self._downloader,
                 extraData = self._extraData,
             )
+        obj.syncSeg = self.syncSeg
         obj._completSeg = complete
         return obj
 

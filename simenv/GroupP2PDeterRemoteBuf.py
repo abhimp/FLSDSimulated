@@ -30,10 +30,10 @@ class GroupP2PDeter(Simple):
         super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, peerId=peerId, *kw, **kws)
         self._vDownloadPending = False
 #         self._vDownloadPendingRnnkey = None
-        self._vSegmentDownloading = -1
+#         self._vSegmentDownloading = -1
         self._vGroup = grp
         self._vCatched = {}
-        self._vOtherPeerRequest = {}
+#         self._vOtherPeerRequest = {}
         self._vTotalDownloaded = 0
         self._vTotalUploaded = 0
         self._vTotalUploadedSegs = 0
@@ -130,6 +130,7 @@ class GroupP2PDeter(Simple):
 #=============================================
     def _rSyncComplete(self, segId):
         self._vSyncNow = False
+        assert segId not in self._vCatched
         self._vLastSyncSeg = segId
         self._vSyncSegIds.add(segId)
 
@@ -156,6 +157,9 @@ class GroupP2PDeter(Simple):
         assert req.segId in self._vCatched and self._vCatched[req.segId].isComplete
         reqOrig = self._vCatched[req.segId]
         assert reqOrig.isComplete
+        if reqOrig.isComplete:
+            self._vTotalUploaded += reqOrig.clen
+            self._vTotalUploadedSegs += 1
         self.requestLongRpc(remote._rRecvOrigReq, reqOrig.clen, reqOrig, self)
 
 #=============================================
@@ -340,6 +344,7 @@ class GroupP2PDeter(Simple):
                 tmp = self._vWaitedFor.setdefault(segId, []).append((self.now, waitTime, "loc2"))
                 self.runAfter(waitTime, self._rSetNextDownloader, playerId, segId, rnnkey, lastSegId, lastPlayerId, lastQl)
                 return
+#         elif
 
         self._vNextGroupDownloader = playerId
         self._vNextGroupDLSegId = segId
