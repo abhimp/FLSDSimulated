@@ -75,6 +75,8 @@ class GroupP2PDeter(Simple):
         self._vWaitedFor = {}
         self._vGrpIds = []
 
+        self._vRPCCont = 0
+
 
 #=============================================
     @property
@@ -148,6 +150,11 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def _rSendOrigReq(self, req, remote, depth):
+
+        if os.environ.get("EXPERIMENT_ENVIRON_RTT", None):
+            if remote == self and self._vCatched[req.segId].isComplete: #very special case Just needed to get for the paper
+                remote._rRecvOrigReq(self._vCatched[req.segId], self)
+                return
         assert remote != self
         assert depth
         if self._vCatched[req.segId].downloader != self:
@@ -173,6 +180,7 @@ class GroupP2PDeter(Simple):
         node = func.__self__
         assert node != self
         delay = self._rGetRtt(node)
+        self._vRPCCont += 1
         self.runAfter(delay, node.recvRPC, func, self, *argv, **kargv)
 
 #=============================================
@@ -459,6 +467,11 @@ class GroupP2PDeter(Simple):
             return
         assert self._vAgent.nextSegmentIndex == req.segId or req.syncSeg
         if self._vAgent.nextSegmentIndex == req.segId:
+            if os.environ.get("EXPERIMENT_ENVIRON_RTT", None):
+                if req.segId in self._vCatched and (round(self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft, 3) < self._vVideoInfo.segmentDuration and not req.syncSeg):
+                    wait = self._vVideoInfo.segmentDuration - (self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft)
+                    self.runAfter(wait, self._rAddToAgentBuffer, req)
+                    return
             assert req.segId in self._vCatched and (round(self._vAgent._vMaxPlayerBufferLen - self._vAgent.bufferLeft, 3) >= self._vVideoInfo.segmentDuration or req.syncSeg)
 
         waitTime = self._vAgent.bufferAvailableIn()

@@ -21,6 +21,7 @@ from abr.FastMPC import AbrFastMPC
 from abr.RobustMPC import AbrRobustMPC
 from abr.BOLA import BOLA
 from util.cdnUsages import CDN
+from util.segmentRequest import SegmentUsage
 
 AbrPensieve = None
 GroupP2PRNN = None
@@ -169,13 +170,14 @@ def plotCDNData(cdns):
     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
 
+
 def measureBenefit(results, lonePeers):
-    if "GrpDeter" not in results:
+    if "GrpDeterRm" not in results:
         return
-    dags = {n.networkId:n for n in results["GrpDeter"]}
+    dags = {n.networkId:n for n in results["GrpDeterRm"]}
     RES_PATH = "./results/benefit/"
     for name, res in results.items():
-        if name == "GrpDeter":
+        if name == "GrpDeterRm":
             continue
         ags = {n.networkId:n for n in res}
         benQoE = []
@@ -219,6 +221,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     idxs = [x%len(traces) for x in range(players)] #np.random.randint(len(traces), size=players)
     startsAts = np.random.randint(GLOBAL_STARTS_AT + 1, vi.duration/2, size=players)
     CDN.clear()
+    SegmentUsage.clear()
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
         trace = traces[idx]
@@ -229,7 +232,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     simulator.run()
     for i,a in enumerate(ags):
         assert a._vFinished and a._vAgent._vFinished # or a._vDead
-    return ags, CDN.getInstance() #cdn is singleton, so it is perfectly okay get the instance
+    return ags, CDN.getInstance(), SegmentUsage.getInstance() #cdn is singleton, so it is perfectly okay get the instance
 
 def importLearningModules(allowed):
     global AbrPensieve, GroupP2PRNN, GroupP2PDeterQaRNN
@@ -304,15 +307,17 @@ def main():
     testCB = getTestObj(traces, vi, network)
     results = {}
     cdns = {}
+    segUses = {}
 
 #     for name, cb in testCB.items():
     for name in allowed:
         assert name in testCB
         cb = testCB[name]
         randstate.loadCurrentState()
-        ags, cdn = runExperiments(**cb)
+        ags, cdn, segUse = runExperiments(**cb)
         results[name] = ags
         cdns[name] = cdn
+        segUses[name] = segUse
 
     print("ploting figures")
     print("="*30)
@@ -323,7 +328,7 @@ def main():
     plotAgentsData(results, "_vAgent.avgBitrate", "Average bitrate played", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.avgQualityIndex", "Average quality index played", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.avgQualityIndexVariation", "Average quality index variation", "Player Id", lonePeers)
-    plotAgentsData(results, "_vAgent.totalStallTime", "Stall Time", "Player Id", lonePeers)
+    plotAgentsData(results, "_vAgent.avgStallTime", "Stall Time", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.startUpDelay", "Start up delay", "Player Id", lonePeers)
     plotAgentsData(results, "idleTime", "IdleTime", "Player Id", lonePeers)
     plotAgentsData(results, "_vAgent.avgBitrateVariation", "Average Bitrate Variation", "Player Id", lonePeers)

@@ -1,11 +1,12 @@
 import networkx as nx
 import numpy as np
+import os
 
 class P2PNetwork():
     def  __init__(self, fpath = "./graph/as19990829.txt"):
         self.grp = nx.Graph()
         self.__readPfile(fpath)
-    
+
     def __readPfile(self, fpath):
         with open(fpath) as fp:
             for line in fp:
@@ -36,6 +37,9 @@ class P2PNetwork():
 #         distance = max(2, distance)
 
         rtt = 2**distance
+        extVar = int(os.environ.get("EXPERIMENT_ENVIRON_RTT", "-1"))
+        if extVar > 0:
+            rtt = extVar
         rtt *= np.random.uniform(0.95, 1.05)
         return rtt/1000.0
 

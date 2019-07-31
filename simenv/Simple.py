@@ -272,6 +272,7 @@ class Simple():
 #         self._vLastTime += time
 #         while self._vLastTime >= self._vCookedTime[-1]:
 #             self._vLastTime -= self._vCookedTime[-1]
+        req.markDownloaded()
         self._rAddToBuffer(req, simIds)
 
 #=============================================
