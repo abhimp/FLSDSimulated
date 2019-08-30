@@ -81,7 +81,7 @@ class Simple():
 #         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
 #         self._vLastTime = -1
 #         self._vLastBandwidthTime =
-        self._vAgent = Agent(vi, self, abr, logpath=logpath, resultpath=resultpath)
+        self._vAgent = Agent(videoInfo=vi, env=self, abrClass=abr, logpath=logpath, resultpath=resultpath)
         self._vLogPath = logpath
         self._vResultPath = resultpath
         self._vSimulator = simulator
@@ -313,13 +313,13 @@ class Simple():
         return round(timeElapsed, 3), round(downLoadedTillNow), clen
 
 #=============================================
-def experimentSimple(traces, vi, network, abr = None):
+def experimentSimple(traces, vi, network, abr = BOLA):
     simulator = Simulator()
     ags = []
     for x, nodeId in enumerate(network.nodes()):
         idx = np.random.randint(len(traces))
         trace = traces[idx]
-        env = Simple(vi, trace, simulator, abr)
+        env = Simple(vi=vi, traces=trace, simulator=simulator, abr=abr)
         simulator.runAt(101.0 + x, env.start, 5)
         ags.append(env)
     simulator.run()
@@ -337,7 +337,7 @@ def main():
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     network = P2PNetwork()
-    experimentSimple(traces, vi, network)
+    experimentSimple(traces=traces, vi=vi, network=network)
 
 if __name__ == "__main__":
     for x in range(1):
