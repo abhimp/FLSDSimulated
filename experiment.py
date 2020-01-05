@@ -12,6 +12,7 @@ import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
 from simenv.GroupP2PDeter import GroupP2PDeter
 from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
+from simenv.GroupP2PDeterRemoteBufShared import GroupP2PDeterShared
 from simenv.Simple import Simple
 from simenv.DHT import DHT
 from simulator.simulator import Simulator
@@ -22,6 +23,8 @@ from abr.RobustMPC import AbrRobustMPC
 from abr.BOLA import BOLA
 from util.cdnUsages import CDN
 from util.segmentRequest import SegmentUsage
+
+from test_shared_dl import SharedDownloader
 
 AbrPensieve = None
 GroupP2PRNN = None
@@ -151,11 +154,16 @@ def plotCDNData(cdns):
             'size'   : 22}
 
     figsize=(7, 5)
+
     plt.clf()
     plt.rc('font', **font)
     plt.figure(figsize=figsize, dpi=150)
+
     pltData = {}
     pltTitle = "cdnUploaded"
+    pltCoreTitle = "coreNetworkUsage"
+    pltCoreData = []
+
     for name, res in cdns.items():
         Xs, Ys = list(zip(*res.uploaded))
         savePlotData(Xs, Ys, name, pltTitle)
@@ -164,11 +172,28 @@ def plotCDNData(cdns):
         Xs, Ys = list(zip(*res.uploadRequests))
         savePlotData(Xs, Ys, name + "_cnt", pltTitle)
 
+        Xs, Ys = list(zip(*res.throughputGran(60000)))
+        savePlotData(Xs, Ys, name, pltCoreTitle)
+        pltCoreData += [(Xs, Ys, name)]
+
     plt.legend(ncol = 2, loc = "upper center")
     plt.title(pltTitle)
     dpath = os.path.join(RESULT_DIR, pltTitle.replace(" ", "_"))
     plt.savefig(dpath + "_cmf.eps", bbox_inches="tight")
     plt.savefig(dpath + "_cmf.png", bbox_inches="tight")
+
+    plt.clf()
+    plt.rc('font', **font)
+    plt.figure(figsize=figsize, dpi=150)
+    for x in pltCoreData:
+        plt.plot(x[0], x[1], label=x[2])
+    plt.legend(ncol = 2, loc = "upper center")
+    plt.title(pltCoreTitle)
+    dpath = os.path.join(RESULT_DIR, pltCoreTitle.replace(" ", "_"))
+    plt.savefig(dpath + ".eps", bbox_inches="tight")
+    plt.savefig(dpath + ".png", bbox_inches="tight")
+
+
 
 
 def measureBenefit(results, lonePeers):
@@ -222,11 +247,13 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     startsAts = np.random.randint(GLOBAL_STARTS_AT + 1, vi.duration/2, size=players)
     CDN.clear()
     SegmentUsage.clear()
+
+    sharedLink = SharedDownloader(simulator, linkCapa = 3*len(list(network.nodes()))*1000*1000)
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
         trace = traces[idx]
         startsAt = startsAts[x]
-        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir, modelPath=modelPath)
+        env = envCls(vi = vi, traces = trace, simulator = simulator, grp=grp, peerId=nodeId, abr=abr, logpath=result_dir, modelPath=modelPath, sharedLink=sharedLink)
         simulator.runAt(startsAt, env.start, GLOBAL_STARTS_AT)
         ags.append(env)
     simulator.run()
@@ -261,6 +288,7 @@ def getTestObj(traces, vi, network):
     testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeterRm"] = getDict(envCls=GrpDeterRemote, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
+    testCB["GrpDeterShared"] = getDict(envCls=GroupP2PDeterShared, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
     testCB["GroupP2PDeterQaRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNQa/")
 
     return testCB
@@ -289,7 +317,7 @@ def parseArg(experiments):
 
 
 def main():
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GrpDeterRm", "GroupP2PDeterQaRNN"]
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GrpDeterRm", "GrpDeterShared", "GroupP2PDeterQaRNN"]
 
     allowed = parseArg(" ".join([f"'{x}'" for x in allowed]))
 

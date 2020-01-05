@@ -88,7 +88,7 @@ class AbrPensieve:
 
         post_data = {
                 'lastquality': self.agent._vLastBitrateIndex,
-                'RebufferTime': self.agent._vTotalStallTime,
+                'RebufferTime': self.agent._vTotalStallTime * M_IN_K,
                 'lastChunkFinishTime': req.downloadFinished * M_IN_K,
                 'lastChunkStartTime': req.downloadStarted * M_IN_K,
                 'lastChunkSize': req.clen,

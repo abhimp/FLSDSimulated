@@ -16,7 +16,7 @@ class CDN():
         self.points = []
         self._vThroughput = None
         self._vUploaded = None
-    
+
     @staticmethod
     def clear():
         CDN.__instance = None
@@ -41,6 +41,40 @@ class CDN():
             assert cbw >= 0
             self._vThroughput.append((t, cbw))
         return self._vThroughput
+
+    def throughputGran(self, scale=-1):
+        if scale <= 0:
+            return self.throughput
+        cdnThr = self.throughput
+        grnThr = []
+        transferred = 0
+        lastMark, nextMark = 0, scale
+
+        lt, lbw = 0, 0
+        for i, elm in enumerate(self.throughput):
+            t, bw = elm
+            tdiff = t - lt
+            bw = round(bw, 3)
+            tdiff = round(tdiff, 3)
+            assert tdiff >= 0 and bw >= 0
+            dTrans = bw * tdiff/1000
+
+            while t >= nextMark: #a precaution incase tdiff > scale
+                dTrans = bw * (nextMark - lt) / 1000
+                transferred += dTrans
+                dbw = transferred*1000/scale
+                grnThr += [(lastMark, dbw)]
+
+                dTrans = bw * (t - nextMark) / 100
+                lastMark = nextMark
+                nextMark += scale
+                transferred = 0
+
+            transferred += dTrans
+
+
+            lt, lbw = t, bw
+        return grnThr
 
     @property
     def uploaded(self):

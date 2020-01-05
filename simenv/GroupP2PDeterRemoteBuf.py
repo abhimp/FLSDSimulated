@@ -150,7 +150,6 @@ class GroupP2PDeter(Simple):
 
 #=============================================
     def _rSendOrigReq(self, req, remote, depth):
-
         if os.environ.get("EXPERIMENT_ENVIRON_RTT", None):
             if remote == self and self._vCatched[req.segId].isComplete: #very special case Just needed to get for the paper
                 remote._rRecvOrigReq(self._vCatched[req.segId], self)

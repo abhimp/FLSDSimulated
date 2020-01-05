@@ -200,45 +200,6 @@ class Simple():
 
         clen = self._vVideoInfo.fileSizes[nextQuality][nextSegId]
 
-#         curCookedTime = self._vLastTime + sleepTime
-#         while curCookedTime >= self._vCookedTime[-1]:
-#             curCookedTime -= self._vCookedTime[-1]
-#         self._vLastTime = curCookedTime
-#
-#         bwPtr = 1
-#         while curCookedTime > self._vCookedTime[bwPtr]:
-#             bwPtr += 1
-#             assert bwPtr < len(self._vCookedTime)
-#
-#         downloadData = [[0, 0]]
-#
-#         sentSize = 0
-#         time = 0
-#         while True:
-#             assert curCookedTime <= self._vCookedTime[bwPtr]
-#             dur = self._vCookedTime[bwPtr] - curCookedTime
-#             throughput = self._vCookedBW[bwPtr]
-#             pktpyld = throughput * (1024 * 1024 / 8) * dur * 0.95
-#             if sentSize + pktpyld >= clen:
-#                 fracTime = dur * ( clen - sentSize ) / pktpyld
-#                 time += fracTime
-#                 if fracTime > 0:
-#                     downloadData += [[time, clen]]
-#                 break
-#             time += dur
-#             sentSize += pktpyld
-#             downloadData += [[time, sentSize]] #I may not use it now
-#             bwPtr += 1
-#             if bwPtr >= len(self._vCookedBW):
-#                 curCookedTime = 0
-#                 bwPtr = 1
-#
-#
-#         time += 0.08 #delay
-#         time *= np.random.uniform(0.9, 1.1)
-#         timeChangeRatio = time/downloadData[-1][0]
-#
-#         downloadData = [[round(x[0]*timeChangeRatio, 3), x[1]] for x in downloadData]
         time, downloadData = self._vTraceProc.getDLTime(now, clen)
 
         simIds[REQUESTION_SIMID_KEY] = self._vSimulator.runAfter(time, self._rFetchNextSegReturn, nextQuality, now, nextDur, nextSegId, clen, simIds, extraData, self._vNextDownloadId)
@@ -269,9 +230,6 @@ class Simple():
         req = SegmentRequest(ql, startedAt, now, dur, segId, clen, self, extraData)
         self._vWorkingTimes += [(now, req.throughput, segId)]
         self._vCdn.add(startedAt, now, req.throughput)
-#         self._vLastTime += time
-#         while self._vLastTime >= self._vCookedTime[-1]:
-#             self._vLastTime -= self._vCookedTime[-1]
         req.markDownloaded()
         self._rAddToBuffer(req, simIds)
 
