@@ -30,6 +30,8 @@ AbrPensieve = None
 GroupP2PRNN = None
 GroupP2PDeterQaRNN = None
 
+SHARED_LINK_ENABLED = False
+
 
 RESULT_DIR = "./results/GenPlots"
 BUFFER_LEN_PLOTS = "results/bufferlens"
@@ -248,7 +250,9 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
     CDN.clear()
     SegmentUsage.clear()
 
-    sharedLink = SharedDownloader(simulator, linkCapa = 3*len(list(network.nodes()))*1000*1000)
+    sharedLink = None
+    if SHARED_LINK_ENABLED:
+        sharedLink = SharedDownloader(simulator, linkCapa = 10*len(list(network.nodes()))*1000*1000)
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
         trace = traces[idx]
@@ -294,16 +298,21 @@ def getTestObj(traces, vi, network):
     return testCB
 
 def parseArg(experiments):
-    global EXIT_ON_CRASH, MULTI_PROC
+    global EXIT_ON_CRASH, MULTI_PROC, SHARED_LINK_ENABLED
     parser = argparse.ArgumentParser(description='Experiment')
     parser.add_argument('--exit-on-crash',  help='Program will exit after first crash', action="store_true")
     parser.add_argument('--no-slave-proc',  help='No new Process will created for slave', action="store_true")
     parser.add_argument('--no-quality-rnn-proc',  help='Quality rnn will run in same process as parent', action="store_true")
     parser.add_argument('--no-agent-rnn-proc',  help='Agent rnn will run in same process as parent', action="store_true")
+    parser.add_argument('--shared-link', help="Add link as sharedLink", action="store_true")
     parser.add_argument('exp', help=experiments, nargs='+')
     args = parser.parse_args()
     EXIT_ON_CRASH = args.exit_on_crash
     MULTI_PROC = not args.no_slave_proc
+
+    if args.shared_link:
+        SHARED_LINK_ENABLED = True
+
     if "EXP_ENV_LEARN_PROC_QUALITY" in os.environ:
         del os.environ["EXP_ENV_LEARN_PROC_QUALITY"]
     if "EXP_ENV_LEARN_PROC_AGENT" in os.environ:
@@ -331,7 +340,7 @@ def main():
     assert len(traces[0]) == len(traces[1]) == len(traces[2])
     traces = list(zip(*traces))
     network = P2PNetwork()
-#     network = P2PNetwork("./graph/p2p-Gnutella04.txt")
+#     network = P2PNetwork("/tmp/dummygrp.txt")
     testCB = getTestObj(traces, vi, network)
     results = {}
     cdns = {}

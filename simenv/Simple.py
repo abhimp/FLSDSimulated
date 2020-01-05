@@ -76,7 +76,7 @@ class TraceComputation():
 
 
 class Simple():
-    def __init__(self, vi, traces, simulator, abr = None, peerId = -1, logpath=None, resultpath=None, *kw, **kws):
+    def __init__(self, vi, traces, simulator, abr = None, peerId = -1, logpath=None, resultpath=None, sharedLink=None, *kw, **kws):
         self._vCookedTime, self._vCookedBW, self._vTraceFile = traces
 #         self._vLastBandwidthPtr = int(np.random.uniform(1, len(self._vCookedTime)))
 #         self._vLastTime = -1
@@ -101,6 +101,11 @@ class Simple():
         self._vWorkingStatus = None
         self._vTraceProc = None
         self._vCdn = CDN.getInstance()
+
+        #only for sharedLink
+        self._vSharedLink = sharedLink
+        self._vCurJobId = -1
+        self._vCurDlState = None
 
     @property
     def networkId(self):
@@ -180,7 +185,7 @@ class Simple():
         return dur
 
 #=============================================
-    def _rFetchNextSeg(self, nextSegId, nextQuality, extraData=None):
+    def _rFetchNextSegNonShared(self, nextSegId, nextQuality, extraData=None):
         if self._vDead: return
 
         assert not self._vWorking
@@ -206,6 +211,62 @@ class Simple():
         self._vWorkingStatus = (now, time, nextSegId, clen, downloadData, simIds, self._vNextDownloadId)
         self._vNextDownloadId += 1
                 #useful to calculate downloaded data
+
+#=============================================
+    def _rFetchNextSeg(self, nextSegId, nextQuality, extraData=None):
+        if self._vSharedLink is None:
+            return self._rFetchNextSegNonShared(nextSegId, nextQuality, extraData)
+
+        if self._vDead: return
+
+        assert not self._vWorking
+        self._vWorking = True
+        now = self.now
+
+        sleepTime = now - self._vLastDownloadedAt
+        idleTime = round(sleepTime, 3)
+        self._vIdleTimes += [(now, 0)]
+        if idleTime > 0:
+            self._vTotalIdleTime += idleTime
+            self._vWorkingTimes += [(now, 0, nextSegId)]
+
+        dur = self._vVideoInfo.getSegDuration(nextSegId)
+        clen = self._vVideoInfo.fileSizes[nextQuality][nextSegId]
+        curDlId = self._vNextDownloadId
+        self._vNextDownloadId += 1
+
+        dlState = []
+        state = [nextSegId, nextQuality, extraData, clen, curDlId, dlState, now, dur]
+
+        self._vCurDlState = state
+        self._vCurJobId = self._vSharedLink.addJob(self._rOnUpdate, self._rOnFinish, state, clen, 128*1024)
+        self._vWorkingStatus = (now, None, nextSegId, clen, dlState, None, curDlId)
+
+#=============================================
+    def _rOnUpdate(self, state, downloaded, now, *_):
+        nextSegId, nextQuality, extraData, clen, curDlId, dlState, startedAt, dur = state
+
+        timeSpent = round(now - startedAt, 3)
+        dlState += [(timeSpent, downloaded)]
+
+#=============================================
+    def _rOnFinish(self, state, downloaded, now, *_):
+        if not self._vWorking:# or self._vWorkingStatus[6] != dlId:
+            return
+        assert self._vWorking
+        segId, ql, extraData, clen, curDlId, dlState, startedAt, dur = state
+        self._vWorking = False
+        self._vWorkingStatus = None
+
+        self._vIdleTimes += [(now, 25)]
+        time = now - startedAt
+        self._vLastDownloadedAt = now
+        self._vTotalWorkingTime += time
+        req = SegmentRequest(ql, startedAt, now, dur, segId, clen, self, extraData)
+        self._vWorkingTimes += [(now, req.throughput, segId)]
+        self._vCdn.add(startedAt, now, req.throughput)
+        req.markDownloaded()
+        self._rAddToBuffer(req, None)
 
 #=============================================
     def _rGetWorkingSegid(self):
@@ -234,7 +295,7 @@ class Simple():
         self._rAddToBuffer(req, simIds)
 
 #=============================================
-    def _rStopDownload(self):
+    def _rStopDownloadNonShared(self):
         assert self._vWorking
         now = self.getNow()
         startedAt, dur, segId, clen, downloadData, simIds, dlId = self._vWorkingStatus
@@ -246,7 +307,7 @@ class Simple():
         self._vCdn.add(startedAt, now, req.throughput)
 
 #=============================================
-    def _rDownloadStatus(self):
+    def _rDownloadStatusNonShared(self):
         if not self._vWorking:
             return (0,0,0)
         assert self._vWorking
@@ -269,6 +330,37 @@ class Simple():
                 downLoadedTillNow += 0 if slt == 0 else round(amt*sltSpent/slt, 3)
                 break
         return round(timeElapsed, 3), round(downLoadedTillNow), clen
+
+#=============================================
+    def _rStopDownload(self):
+        if self._vSharedLink is None:
+            return self._rStopDownloadNonShared()
+        assert self._vWorking
+        self._vSharedLink.cancelJob(self._vCurJobId)
+
+        now = self.now
+#         startedAt, dur, segId, clen, downloadData, simIds, dlId = self._vWorkingStatus
+        segId, nextQuality, extraData, clen, curDlId, dlState, startedAt, dur = self._vCurDlState
+        time, downloaded, _ = self._rDownloadStatus()
+        self._vLastDownloadedAt = now
+        self._vTotalWorkingTime += time
+        req = SegmentRequest(0, startedAt, now, dur, segId, downloaded, self)
+        self._vWorkingTimes += [(now, req.throughput, segId)]
+        self._vCdn.add(startedAt, now, req.throughput)
+
+#=============================================
+    def _rDownloadStatus(self):
+        if self._vSharedLink is None:
+            return self._rDownloadStatusNonShared()
+
+        if not self._vWorking:
+            return (0,0,0)
+        assert self._vWorking
+        nextSegId, nextQuality, extraData, clen, curDlId, dlState, startedAt, dur = self._vCurDlState
+        if len(dlState) == 0:
+            return 0, 0, clen
+        ts, dl = dlState[-1]
+        return ts, dl, clen
 
 #=============================================
 def experimentSimple(traces, vi, network, abr = BOLA):
