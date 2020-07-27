@@ -9,7 +9,7 @@ from util import videoInfo as video
 from simulator.simulator import Simulator
 from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
-from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GroupP2PDeterRm
+from simenv.FLiDASH import GroupP2PDeter as GroupP2PDeterRm
 from simenv.GroupP2PDeter import GroupP2PDeter
 from util.group import GroupManager
 # from simenv.SimpleP2P import experimentSimpleP2P

@@ -1,9 +1,9 @@
-from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
+from simenv.FLiDASH import FLiDASH
 from util.segmentRequest import SegmentRequest
 # from test_shared_dl import SharedDownloader
 
 
-class GroupP2PDeterShared(GrpDeterRemote):
+class FLiDASHShared(FLiDASH):
     def __init__(self, *kw, sharedLink=None, **kws):
         super().__init__(*kw, **kws)
         self._vSharedLink = sharedLink
