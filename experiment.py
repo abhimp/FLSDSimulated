@@ -252,7 +252,7 @@ def runExperiments(envCls, traces, vi, network, abr = BOLA, result_dir=None, mod
 
     sharedLink = None
     if SHARED_LINK_ENABLED:
-        sharedLink = SharedDownloader(simulator, linkCapa = 10*len(list(network.nodes()))*1000*1000)
+        sharedLink = SharedDownloader(simulator, linkCapa = 3*len(list(network.nodes()))*1000*1000)
     for x, nodeId in enumerate(network.nodes()):
         idx = idxs[x]
         trace = traces[idx]
@@ -288,7 +288,7 @@ def getTestObj(traces, vi, network):
     testCB["RobustMPC"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrRobustMPC)
     testCB["Penseiv"] = getDict(envCls=Simple, traces=traces, vi=vi, network=network, abr=AbrPensieve)
     testCB["GroupP2PBasic"] = getDict(envCls=GroupP2PBasic, traces=traces, vi=vi, network=network)
-    testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network)
+    testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network, abr=AbrFastMPC)
     testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeterRm"] = getDict(envCls=GrpDeterRemote, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
@@ -328,7 +328,7 @@ def parseArg(experiments):
 def main():
     allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GrpDeterRm", "GrpDeterShared", "GroupP2PDeterQaRNN"]
 
-    allowed = parseArg(" ".join([f"'{x}'" for x in allowed]))
+    allowed = parseArg(" ".join([f"{x}" for x in allowed]))
 
     importLearningModules(allowed)
 #     randstate.storeCurrentState() #comment this line to use same state as before

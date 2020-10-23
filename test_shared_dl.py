@@ -18,6 +18,7 @@ class SharedDownloader:
         self.onGoingJobs = []
 
         self.lastSpeedAdjustedAt = simulator.getNow()
+        self.downloaderRunning = False
 
     @property
     def now(self):
@@ -42,6 +43,7 @@ class SharedDownloader:
                     size = size, #bytes
                     buflen = buflen, #bytes
                     excessDelay = excessDelay, #ms
+                    lastInformedAt = 0
                 )
 
         assert jobId not in self.jobInfos
@@ -49,7 +51,8 @@ class SharedDownloader:
 
         self.onGoingJobs.append(jobId)
 
-        self.adjustJobSpeed()
+        if not self.downloaderRunning:
+            self.adjustJobSpeed()
 
         return jobId
 
@@ -62,7 +65,7 @@ class SharedDownloader:
         job["lastEventAt"] = self.now
         job["finished"] = True
         self.onGoingJobs.remove(jobId)
-        self.adjustJobSpeed()
+#         self.adjustJobSpeed()
         job["updateCB"](job["cbArg1"], job["downloaded"], self.now, job)
 
     def getJobSpeed(self, jobId):
@@ -104,13 +107,15 @@ class SharedDownloader:
         now = self.now
         for id in self.onGoingJobs:
             job = self.jobInfos[id]
-            job["updateCB"](job["cbArg1"], job["downloaded"], now, job)
+            ts = now - job["lastInformedAt"]
+            if ts >= 1:
+                job["lastInformedAt"] = now
+                job["updateCB"](job["cbArg1"], job["downloaded"], now, job)
 
 
     def adjustJobSpeed(self):
         now = self.now
-        if now == self.lastSpeedAdjustedAt:
-            return
+        self.downloaderRunning = True
         self.lastSpeedAdjustedAt = now
         downloaded = {id: self.getDownloaded(id) for id in self.onGoingJobs}
 
@@ -127,6 +132,7 @@ class SharedDownloader:
                 finished.append(id)
 
         if len(self.onGoingJobs) == 0:
+            self.downloaderRunning = False
             self.simulator.runAfter(0.001, self.informFinished, finished)
             self.simulator.runAfter(0.001, self.informStatus)
             return
@@ -134,7 +140,7 @@ class SharedDownloader:
         maxSpeeds = {id: self.getJobSpeed(id) for id in self.onGoingJobs}
         totSpeed = sum(maxSpeeds.values())
         if totSpeed > self.linkCapa and self.linkCapa > 0:
-            print(f"{now} speed suppose to change", file=sys.stderr)
+#             print(f"{now} speed suppose to change", file=sys.stderr)
             maxSpeeds = {id: round((self.linkCapa * maxSpeeds[id] / totSpeed), 3) for id in maxSpeeds}
         finishingIn = {id: self.getExpTimeToFinish(id, downloaded[id], sp) for id,sp in maxSpeeds.items()}
 
@@ -145,7 +151,12 @@ class SharedDownloader:
         for id in self.onGoingJobs:
             self.jobInfos[id]["curSpeed"] = maxSpeeds[id]
 
-        self.simulator.runAfter(minFinishingTime, self.adjustJobSpeed)
+#         if len(self.onGoingJobs) == 0:
+#             self.downloaderRunning = False
+#         else:
+#             self.simulator.runAfter(0.1, self.adjustJobSpeed)
+
+        self.simulator.runAfter(0.01, self.adjustJobSpeed)
         self.simulator.runAfter(0.001, self.informFinished, finished)
         self.simulator.runAfter(0.001, self.informStatus)
 
@@ -163,6 +174,7 @@ def main():
 
     sim.runAt(1, downloader.addJob, updateCB, finishedCB, 1, 25*1024*1024, 1*1024*1024)
     sim.runAt(25, downloader.addJob, updateCB, finishedCB, 2, 25*1024*1024, 1*1024*1024)
+    sim.runAt(110, downloader.addJob, updateCB, finishedCB, 3, 25*1024*1024, 1*1024*1024)
 
     sim.run()
 
