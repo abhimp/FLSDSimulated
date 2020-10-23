@@ -11,7 +11,7 @@ from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
 from simenv.GroupP2PDeter import GroupP2PDeter
-from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
+from simenv.FLiDASH import GroupP2PDeter as GrpDeterRemote
 from simenv.Simple import Simple
 from simenv.DHT import DHT
 from simulator.simulator import Simulator

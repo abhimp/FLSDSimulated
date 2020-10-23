@@ -11,8 +11,8 @@ from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
 from simenv.GroupP2PDeter import GroupP2PDeter
-from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
-from simenv.GroupP2PDeterRemoteBufShared import GroupP2PDeterShared
+from simenv.FLiDASH import FLiDASH as FLiDASH
+from simenv.FLiDASHShared import FLiDASHShared
 from simenv.Simple import Simple
 from simenv.DHT import DHT
 from simulator.simulator import Simulator
@@ -24,7 +24,7 @@ from abr.BOLA import BOLA
 from util.cdnUsages import CDN
 from util.segmentRequest import SegmentUsage
 
-from test_shared_dl import SharedDownloader
+from util.SharedLinkEmulator import SharedDownloader
 
 AbrPensieve = None
 GroupP2PRNN = None
@@ -98,7 +98,7 @@ def plotStoredData(legends, _, pltTitle, xlabel):
 def findIgnorablePeers(results):
     p = set()
     for name, res in results.items():
-        if name not in ["GrpDeter", "GroupP2PBasic"]:
+        if name not in ["FLiDASH", "FLiDASHShared"]:
             continue
         for ag in res:
             if not ag._vGroup or ag._vGroup.isLonepeer(ag) or len(ag._vGroupNodes) <= 1:
@@ -199,12 +199,12 @@ def plotCDNData(cdns):
 
 
 def measureBenefit(results, lonePeers):
-    if "GrpDeterRm" not in results:
+    if "FLiDASH" not in results:
         return
-    dags = {n.networkId:n for n in results["GrpDeterRm"]}
+    dags = {n.networkId:n for n in results["FLiDASH"]}
     RES_PATH = "./results/benefit/"
     for name, res in results.items():
-        if name == "GrpDeterRm":
+        if name == "FLiDASH":
             continue
         ags = {n.networkId:n for n in res}
         benQoE = []
@@ -291,8 +291,8 @@ def getTestObj(traces, vi, network):
     testCB["DHTEnvironment"] = getDict(envCls=DHT, traces=traces, vi=vi, network=network, abr=AbrFastMPC)
     testCB["GroupP2PRNN"] = getDict(envCls=GroupP2PRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
     testCB["GrpDeter"] = getDict(envCls=GroupP2PDeter, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNN/")
-    testCB["GrpDeterRm"] = getDict(envCls=GrpDeterRemote, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
-    testCB["GrpDeterShared"] = getDict(envCls=GroupP2PDeterShared, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
+    testCB["FLiDASH"] = getDict(envCls=FLiDASH, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
+    testCB["FLiDASHShared"] = getDict(envCls=FLiDASHShared, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None)
     testCB["GroupP2PDeterQaRNN"] = getDict(envCls=GroupP2PDeterQaRNN, traces=traces, vi=vi, network=network, abr=BOLA, result_dir=None, modelPath="ResModelPathRNNQa/")
 
     return testCB
@@ -326,7 +326,7 @@ def parseArg(experiments):
 
 
 def main():
-    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHTEnvironment", "GroupP2PRNN", "GrpDeter", "GrpDeterRm", "GrpDeterShared", "GroupP2PDeterQaRNN"]
+    allowed = ["BOLA", "FastMPC", "RobustMPC", "Penseiv", "GroupP2PBasic", "DHT", "GroupP2PRNN", "GrpDeter", "FLiDASH", "FLiDASHShared", "GroupP2PDeterQaRNN"]
 
     allowed = parseArg(" ".join([f"{x}" for x in allowed]))
 

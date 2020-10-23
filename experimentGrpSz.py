@@ -11,7 +11,7 @@ from util.p2pnetwork import P2PNetwork
 import util.randStateInit as randstate
 from simenv.GroupP2PBasic import GroupP2PBasic
 from simenv.GroupP2PDeter import GroupP2PDeter
-from simenv.GroupP2PDeterRemoteBuf import GroupP2PDeter as GrpDeterRemote
+from simenv.FLiDASH import FLiDASH as GrpDeterRemote
 from simenv.Simple import Simple
 from simenv.DHT import DHT
 from simulator.simulator import Simulator
@@ -334,6 +334,9 @@ def main():
         plotAgentsData(grpSz, results, "_vRPCCont", "Small message passing", "Player Id", lonePeers)
         plotAgentsData(grpSz, results, "totalWorkingTime", "workingTime", "Player Id", lonePeers)
         plotAgentsData(grpSz, results, "_vRPCCont", "Small message passing", "Player Id", lonePeers)
+        plotAgentsData(grpSz, results, "downloadCnt", "Normal Download Count", "Player Id", lonePeers)
+        plotAgentsData(grpSz, results, "forceDownloadRatio", "Force Download Ratio", "Player Id", lonePeers)
+        plotAgentsData(grpSz, results, "groupContriCount", "Group Contri Ratio", "Player Id", lonePeers)
 
         plotCDNData(grpSz, cdns)
 

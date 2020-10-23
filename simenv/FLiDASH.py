@@ -25,7 +25,7 @@ def default(o):
     if isinstance(o, np.int64): return int(o)
     raise TypeError
 
-class GroupP2PDeter(Simple):
+class FLiDASH(Simple):
     def __init__(self, vi, traces, simulator, abr = None, grp = None, peerId = None, modelPath=None, *kw, **kws):
         super().__init__(vi=vi, traces=traces, simulator=simulator, abr=abr, peerId=peerId, *kw, **kws)
         self._vDownloadPending = False
@@ -41,7 +41,6 @@ class GroupP2PDeter(Simple):
         self._vFinished = False
         self._vModelPath = modelPath
         self._vRunWhenDownloadCompeltes = []
-        self._vEmailPass = open("emailpass.txt").read().strip()
 
         self._vGroupNodes = None
 
@@ -71,6 +70,8 @@ class GroupP2PDeter(Simple):
 
         self._vDeadLines = {}
         self._vDeadLineMissed = []
+        self._vFailsafeDownloadCnt = 0
+        self._vDownloadCnt = 0
         #Loop debug
         self._vWaitedFor = {}
         self._vGrpIds = []
@@ -82,6 +83,21 @@ class GroupP2PDeter(Simple):
     @property
     def groupId(self):
         return self._vGroup.getId(self)
+
+#=============================================
+    @property
+    def groupContriCount(self):
+        return self._vDownloadCnt/sum([x._vDownloadCnt for x in self._vGroupNodes])
+
+#=============================================
+    @property
+    def forceDownloadRatio(self):
+        return self._vFailsafeDownloadCnt / self._vDownloadCnt if self._vDownloadCnt != 0 else 0
+
+#=============================================
+    @property
+    def downloadCnt(self):
+        return self._vDownloadCnt
 
 #=============================================
     def start(self, startedAt = -1):
@@ -235,7 +251,7 @@ class GroupP2PDeter(Simple):
         if curProg[2] > 0:
             timereq += ((curProg[2] - curProg[1])*8/thrpt)
 
-        for s, q, k, _ in self._vDownloadQueue:
+        for s, q, k, _, _ in self._vDownloadQueue:
             cl = self._vVideoInfo.fileSizes[q][s]
             timereq += cl*8/thrpt
 
@@ -373,19 +389,19 @@ class GroupP2PDeter(Simple):
         return len(thrpt)/sum(thrpt)
 
 #=============================================
-    def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf"), sleepTime = 0, rnnkey = None, syncSeg = False):
+    def _rAddToDownloadQueue(self, nextSegId, nextQuality, position=float("inf"), sleepTime = 0, rnnkey = None, syncSeg = False, failsafeSegment = False):
         if sleepTime > 0:
             self.runAfter(sleepTime, self._rAddToDownloadQueue, nextSegId, nextQuality, position, 0, rnnkey, syncSeg)
             return
         found = False
-        for s, q, k, _ in self._vDownloadQueue:
+        for s, q, k, _, _ in self._vDownloadQueue:
             if s == nextSegId and q == nextQuality:
                 found = True
         position = min(position, len(self._vDownloadQueue))
         if not found:
             if self._vMaxSegDownloading < nextSegId:
                 self._vMaxSegDownloading = nextSegId
-            self._vDownloadQueue.insert(position, (nextSegId, nextQuality, rnnkey, syncSeg))
+            self._vDownloadQueue.insert(position, (nextSegId, nextQuality, rnnkey, syncSeg, failsafeSegment))
         self._rDownloadFromDownloadQueue()
 
 #=============================================
@@ -398,7 +414,7 @@ class GroupP2PDeter(Simple):
         if self._vDownloadPending:
             return
         while len(self._vDownloadQueue):
-            segId, ql, rnnkey, syncSeg = self._vDownloadQueue.pop(0)
+            segId, ql, rnnkey, syncSeg, failsafeSegment = self._vDownloadQueue.pop(0)
             if segId < self._vAgent.nextSegmentIndex: #we are not going to playit anyway.
                 continue
             if segId >= self._vGroupStartedFromSegId and self._vGroupStarted:
@@ -407,6 +423,9 @@ class GroupP2PDeter(Simple):
                 self.gossipSend(self._rDownloadingUsing, segId, ql)
                 self._rDownloadingUsing(segId, ql)
 
+            if failsafeSegment:
+                self._vFailsafeDownloadCnt += 1
+            self._vDownloadCnt += 1
             self._rFetchSegment(segId, ql, extraData={"syncSeg":syncSeg})
             self._vDownloadPending = True
 #             self._vDownloadPendingRnnkey = rnnkey
@@ -423,7 +442,7 @@ class GroupP2PDeter(Simple):
 
         syncSeg = self._vLastSyncSeg == segId
         ql = max(min(lastQl), lastQl[-1])
-        self._rAddToDownloadQueue(segId, ql, position=0, syncSeg=syncSeg)
+        self._rAddToDownloadQueue(segId, ql, position=0, syncSeg=syncSeg, failsafeSegment=True)
 
 #=============================================
     def _rDownloadNextData(self, nextSegId, nextQuality, sleepTime):
@@ -628,7 +647,7 @@ def experimentGroupP2PBig(traces, vi, network):
         idx = trx[x]
         startsAt = startsAts[x]
         trace = traces[idx]
-        env = GroupP2PDeter(vi, trace, simulator, None, grp, nodeId)
+        env = FLiDASH(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startsAt, env.start, 5)
         maxTime = 101.0 + x
         AGENT_TRACE_MAP[nodeId] = idx
@@ -650,7 +669,7 @@ def experimentGroupP2PSmall(traces, vi, network):
 
     for trx, nodeId, startedAt in [( 5, 267, 107), (36, 701, 111), (35, 1800, 124), (5, 2033, 127)]:
         trace = traces[trx]
-        env = GroupP2PDeter(vi, trace, simulator, None, grp, nodeId)
+        env = FLiDASH(vi, trace, simulator, None, grp, nodeId)
         simulator.runAt(startedAt, env.start, 5)
         AGENT_TRACE_MAP[nodeId] = trx
         ags.append(env)
